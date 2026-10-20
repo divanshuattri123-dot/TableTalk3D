@@ -214,7 +214,8 @@ namespace TableTalk
                         var pip = GameObject.CreatePrimitive(PrimitiveType.Sphere); pip.transform.SetParent(surface, false);
                         pip.transform.localPosition = new Vector3((slot % 3 - 1) * .23f, .51f, (slot / 3 - 1) * .23f);
                         pip.transform.localScale = new Vector3(.13f, .025f, .13f); pip.GetComponent<Renderer>().sharedMaterial = dot;
-                        Destroy(pip.GetComponent<Collider>());
+                        // The concrete reference keeps CreatePrimitive's native collider in stripped Web builds.
+                        Destroy(pip.GetComponent<SphereCollider>());
                     }
                 }
             }
