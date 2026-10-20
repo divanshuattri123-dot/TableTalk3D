@@ -50,9 +50,11 @@ request landscape orientation where the browser supports it. Portrait phones
 show a rotate-phone screen; browsers that refuse orientation/fullscreen still
 work after physically rotating the phone. Leaving the table releases the lock.
 
-Mobile prices are a browser-text layer anchored to Unity's projected tile bounds,
-so reduced 3D quality does not blur them. At whole-map scale prices take priority;
-names expand as the player zooms. The in-game ₹ button opens all bank prices and
+Mobile names and prices are a browser-text layer anchored to Unity's projected
+tile bounds, so reduced 3D quality does not blur them. Names stay visible at
+whole-map scale, with prices on the inner tile edge instead of occupying the name
+area. Complete names wrap to fit without ellipses; type grows as the player zooms.
+The in-game ₹ button opens all bank prices and
 links to the full deed inspector. Canvas resolution tracks resizing and quality
 changes without restarting the room or Unity player. See Unity's supported
 [manual canvas sizing](https://docs.unity3d.com/Manual/webgl-canvas-size.html).
