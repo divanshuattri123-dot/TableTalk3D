@@ -1,76 +1,64 @@
-# TableTalk3D — Unity graphics project
+# TableTalk3D
 
-Editor: **Unity 6000.6.6f1**. Template: **Universal 3D / URP 17.6.0**.
-Primary target: **WebGL**, with the Mobile quality tier selected.
-Source control: local Git only. No remote repository or Unity Cloud project is linked.
+Unity rendering project for the TableTalk multiplayer property game.
 
-## Open and inspect
+- Editor: Unity **6000.6.6f1** with URP **17.6.0**
+- Main target: **WebGL**, tuned from a mobile quality profile
+- Entry scene: `Assets/TableTalk/Scenes/TableTalk.unity`
 
-1. Open this folder in Unity Hub, or open `Assets/TableTalk/Scenes/TableTalk.unity` in the installed editor.
-2. Press **Play**. The scene creates the board and player tokens at runtime.
-3. Use **Whole board**, **Follow player**, **Token motion**, and **Jail transfer**.
-4. Tap a board tile to show its full name/price and ease the camera toward it.
+## Open the project
 
-The preview uses fixed sample data. The motion button is an animation demonstration,
-not a dice roll or a substitute rules engine. Jail transfer demonstrates a direct
-arc and the supplied cage geometry rather than moving around the perimeter.
+Open this folder in Unity Hub, load `Assets/TableTalk/Scenes/TableTalk.unity`, and
+press **Play**. The Unity scene can also be used on its own to inspect the board,
+camera controls, supplied 3D pieces and jail animation.
 
-## Included
+## Role in the game
 
-- Five correctly assembled native city meshes: 82,180 triangles, with the native palette and UVs.
-- Thirteen supplied model files, including nine token models, Paris dice, house/hotel and jail bars.
-- A near-overhead perspective camera, easing and close-up inspection.
-- Soft directional lighting, ACES tonemapping, low quarter-resolution bloom,
-  modest colour adjustments and a subtle vignette.
-- Screen-space uGUI/TextMeshPro controls, not runtime IMGUI.
-- Data-driven 40/48/56/64-space board geometry and an expanding jail corner.
-- JSON snapshot DTOs in `Assets/TableTalk/Runtime/BoardLayout.cs` and the
-  presentation entry point `GamePresentation.ApplySnapshot(string)`.
-- Repeatable editor-side layout, rendered-map and motion checks in `AgentScripts/`.
+This repository holds the 3D board renderer. The React/TypeScript game and its
+authoritative room server are in the separate browser project. Unity receives full
+game snapshots and presentation events through `GamePresentation.ApplySnapshot`
+and `TableTalkWebBridge`; game rules and dice values remain outside the renderer.
 
-The chosen template supplies URP, Input System, uGUI/TextMeshPro and the test dependencies.
-`com.unity.pipeline` 0.8.0-exp.1 allows local editor control. No paid multiplayer,
-ads, purchases, accounts, cloud-save or analytics service SDK was added to the game.
+The current scene and WebGL bridge support the supplied city meshes and pieces,
+40/48/56/64-space layouts, player positions and property state, dice and token
+motion, jail presentation, building markers, camera focus, and streamed models.
+Presentation animation frames can report completion to the browser client so a
+tile landing can be resolved by the game reducer after movement finishes.
 
-## Relationship to the browser game
+This project is the visual client rather than the complete game: the browser
+project supplies the rules, room flow and action controls. WebGL hosting and real
+phone-browser performance still require end-to-end checks on the target devices.
 
-This is the **graphics foundation / preview**, not a finished Unity replacement for
-the multiplayer browser game. The existing React/TypeScript pure reducer and
-authoritative room server remain in the separate browser project. Do not port the
-rules into this component or introduce random dice inside the reducer.
+## Included assets and project features
 
-Still to connect: the WebGL build and JavaScript room bridge, real dice presentation,
-full deed/purchase screens, live auctions/trades, rent/tax/card events, construction,
-mortgage, bankruptcy and victory choreography. All supplied assets are preserved in
-the original asset archive and browser collection; only the relevant subset is
-included in this first Unity scene. Original animation rigs/shaders have not been
-recovered merely by importing OBJ geometry.
+- Five assembled city meshes with their palette and UVs: 82,180 triangles.
+- Thirteen supplied model files, including tokens, Paris dice, houses, a hotel and
+  jail bars.
+- Near-overhead perspective camera, easing, close-up inspection, and touch/pointer
+  navigation.
+- URP lighting, tone mapping, bloom and responsive screen-space UI.
+- JSON snapshot DTOs in `Assets/TableTalk/Runtime/BoardLayout.cs`.
+- Editor-side layout, rendered-map and motion checks in `AgentScripts/`.
 
-No new frontend deployment was published as part of this project setup. Editor
-screenshots and advancing frames do not establish real phone/Safari performance;
-the WebGL build still needs browser and physical-device testing.
+## Build and verify
 
-## Browser settings
+In Unity, select **WebGL** as the build target and build the project. The generated
+`Build/` folder is intentionally not part of this repository. The browser host must
+serve Unity's compressed files with the matching `Content-Encoding` and the
+WebAssembly MIME type.
 
-- Active target WebGL; Linear colour space; Mobile quality tier; 2× MSAA.
-- HDR/post-processing enabled on the active mobile URP asset and camera.
-- Brotli and browser data caching remain enabled; decompression fallback is off.
-- Medium managed stripping, size-oriented IL2CPP, 128 MB initial / 512 MB maximum memory.
-- Runtime uses browser-driven frame pacing (`targetFrameRate = -1`, vSync 0).
+For editor checks, use the installed Unity CLI to run `AgentScripts/VerificationTools.cs`
+through `run_script`:
 
-When a WebGL build is hosted, verify the host sends the matching `Content-Encoding`
-and WebAssembly MIME headers. These settings alone do not prove a smooth browser game.
+- `VerificationTools.CheckLayouts` — board-layout assertions.
+- `VerificationTools.SetGameView` — fixed-resolution desktop/phone preview with
+  `[width,height]` arguments.
+- `VerificationTools.CheckRenderedMaps` — rendered tile counts and jail placement.
+- `MotionVerification.Run` — preview controls, intermediate token positions,
+  advancing frames, completion and jail cage.
+- `WebIntegration.Prepare` and `WebIntegration.VerifyMotion` — WebGL bridge setup
+  and Unity-side event/movement checks.
 
-## Repeat the editor checks
-
-With the project open, use the installed Unity CLI to run `AgentScripts/VerificationTools.cs`
-through the editor's `run_script` command. Entry points:
-
-- `VerificationTools.CheckLayouts` — pure layout assertions.
-- `VerificationTools.SetGameView` — fixed-resolution desktop/phone preview, with `[width,height]` arguments.
-- `VerificationTools.CheckRenderedMaps` — Play mode, rendered tile counts and jail placement.
-- `MotionVerification.Run` — fresh Play mode, verifies the two preview-button bindings,
-  intermediate token positions, advancing frames, completion and the jail cage.
-
-Keep `Assets/` and every `.meta` file together. `Library/`, `Temp/`, `Logs/`, build
-outputs and `UserSettings/` are generated and excluded from local Git history.
+Keep `Assets/` and its `.meta` files together when changing the project. Unity
+generates `Library/`, `Temp/`, `Logs/`, `Data/`, build output, and `UserSettings/`;
+these directories are ignored because they are local or platform-specific output.

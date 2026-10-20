@@ -7,7 +7,7 @@ using UnityEngine.InputSystem;
 
 namespace TableTalk
 {
-    public class TableTalkPresentation : MonoBehaviour
+    public partial class TableTalkPresentation : MonoBehaviour
     {
         public TokenAsset[] tokens;
         public TextAsset previewSnapshot;
@@ -23,9 +23,11 @@ namespace TableTalk
         BoardSnapshot shown;
         Transform boardRoot, tokenRoot, propertyRoot;
         readonly Dictionary<string, Transform> pieces = new Dictionary<string, Transform>();
+        readonly Dictionary<string, string> pieceModels = new Dictionary<string, string>();
         readonly Dictionary<int, Transform> tiles = new Dictionary<int, Transform>();
         readonly Queue<BoardSnapshot> pending = new Queue<BoardSnapshot>();
         readonly List<Material> ownedMaterials = new List<Material>();
+        readonly Dictionary<string, Material> materialCache = new Dictionary<string, Material>();
         Coroutine cameraMove, presentation;
         Vector2 pressedAt;
         bool dragging;
@@ -38,7 +40,11 @@ namespace TableTalk
         {
             Application.targetFrameRate = -1;
             QualitySettings.vSyncCount = 0;
+#if UNITY_WEBGL && !UNITY_EDITOR
+            BeginWeb();
+#else
             if (previewSnapshot != null && shown == null) ApplySnapshot(previewSnapshot.text);
+#endif
         }
 
         public void ApplySnapshot(string json)
@@ -80,7 +86,7 @@ namespace TableTalk
             if (tokenRoot != null) Destroy(tokenRoot.gameObject);
             if (propertyRoot != null) Destroy(propertyRoot.gameObject);
             foreach (var material in ownedMaterials) Destroy(material);
-            ownedMaterials.Clear(); pieces.Clear(); tiles.Clear();
+            ownedMaterials.Clear(); materialCache.Clear(); pieces.Clear(); pieceModels.Clear(); tiles.Clear();
             boardRoot = new GameObject("Readable board").transform;
             tokenRoot = new GameObject("Player tokens").transform;
             propertyRoot = new GameObject("Ownership and buildings").transform;
@@ -124,36 +130,19 @@ namespace TableTalk
                 if (!pieces.TryGetValue(player.id, out var piece))
                 {
                     piece = new GameObject(player.name + " token").transform; piece.SetParent(tokenRoot);
-                    var asset = tokens.FirstOrDefault(t => t.id == player.tokenId) ?? tokens.FirstOrDefault();
-                    if (asset?.prefab != null)
-                    {
-                        var model = Instantiate(asset.prefab, piece);
-                        var bounds = BoundsOf(model); float size = Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z, .001f);
-                        model.transform.localScale *= .68f / size;
-                        model.transform.localPosition = new Vector3(-bounds.center.x, -bounds.min.y, -bounds.center.z) * (.68f / size);
-                        var silver = Material(ColorOf("#d7e4ee"), .75f, .55f);
-                        foreach (var render in model.GetComponentsInChildren<MeshRenderer>()) { render.sharedMaterial = silver; render.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On; }
-                    }
                     var plinth = GameObject.CreatePrimitive(PrimitiveType.Cylinder); plinth.name = "Player colour";
                     plinth.transform.SetParent(piece, false); plinth.transform.localPosition = new Vector3(0, -.045f, 0);
                     plinth.transform.localScale = new Vector3(.6f, .035f, .6f);
                     plinth.GetComponent<Renderer>().sharedMaterial = Material(ColorOf(player.color), .15f, .45f);
                     Destroy(plinth.GetComponent<Collider>()); pieces[player.id] = piece;
                 }
+                UpdateTokenModel(piece, player);
                 piece.gameObject.SetActive(!player.bankrupt);
                 piece.position = BoardLayout.Point(player.position, state.boardSize);
                 int overlap = System.Array.FindIndex(state.players, p => p.id == player.id);
                 piece.position += new Vector3((overlap % 3 - 1) * .19f, 0, (overlap / 3) * .22f);
             }
-            foreach (Transform child in propertyRoot) Destroy(child.gameObject);
-            foreach (var tile in state.tiles.Where(t => !string.IsNullOrEmpty(t.ownerId)))
-            {
-                var owner = state.players.FirstOrDefault(p => p.id == tile.ownerId);
-                if (owner == null) continue;
-                var point = BoardLayout.Point(tile.id, state.boardSize);
-                var outward = new Vector3(point.x, 0, point.z).normalized;
-                Box(propertyRoot, tile.name + " owner", point + outward * .76f, new Vector3(.35f, .08f, .2f), ColorOf(tile.mortgaged ? "#c92d3e" : owner.color));
-            }
+            SyncProperties(state);
             if (jailBars != null)
             {
                 jailBars.transform.position = BoardLayout.Point(state.boardSize / 4, state.boardSize) + jailMeshOffset;
@@ -164,6 +153,52 @@ namespace TableTalk
                 var active = state.players.FirstOrDefault(p => p.id == state.activePlayerId);
                 statusText.text = state.roomCode == "STUDIO" ? "Graphics studio · animation preview, not a live match" : (active?.name ?? "Room") + " · " + state.phase;
             }
+        }
+
+        void SyncProperties(BoardSnapshot state)
+        {
+            foreach (Transform child in propertyRoot) Destroy(child.gameObject);
+            foreach (var tile in state.tiles)
+                if (tiles.TryGetValue(tile.id, out var surface)) surface.GetComponent<Renderer>().sharedMaterial = Material(ColorOf(tile.mortgaged ? "#d75b62" : "#cee8cd"), .04f, .26f);
+            foreach (var tile in state.tiles.Where(t => !string.IsNullOrEmpty(t.ownerId)))
+            {
+                var owner = state.players.FirstOrDefault(p => p.id == tile.ownerId);
+                if (owner == null) continue;
+                var point = BoardLayout.Point(tile.id, state.boardSize);
+                var outward = new Vector3(point.x, 0, point.z).normalized;
+                Box(propertyRoot, tile.name + " owner", point + outward * .76f, new Vector3(.35f, .08f, .2f), ColorOf(tile.mortgaged ? "#c92d3e" : owner.color));
+                int count = tile.houses == 5 ? 1 : tile.houses;
+                for (int i = 0; i < count; i++)
+                {
+                    var mesh = tile.houses == 5 ? hotelMesh : houseMesh;
+                    if (mesh == null) continue;
+                    var obj = new GameObject(tile.houses == 5 ? "Hotel" : "House", typeof(MeshFilter), typeof(MeshRenderer));
+                    obj.transform.SetParent(propertyRoot, false); obj.GetComponent<MeshFilter>().sharedMesh = mesh;
+                    float scale = (tile.houses == 5 ? .42f : .22f) / Mathf.Max(mesh.bounds.size.x, mesh.bounds.size.y, mesh.bounds.size.z, .001f);
+                    obj.transform.localScale = Vector3.one * scale;
+                    obj.transform.position = point - mesh.bounds.center * scale + Vector3.up * .12f;
+                    if (tile.houses != 5) obj.transform.position += new Vector3((i % 2 - .5f) * .28f, 0, (i / 2 - .5f) * .28f);
+                    var renderer = obj.GetComponent<MeshRenderer>(); renderer.sharedMaterial = Material(ColorOf(tile.houses == 5 ? "#ed3446" : "#24b66d"), .1f, .35f);
+                    renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+                }
+            }
+        }
+
+        void UpdateTokenModel(Transform piece, PlayerSnapshot player)
+        {
+            var asset = tokens.FirstOrDefault(t => t.id == player.tokenId) ?? tokens.FirstOrDefault();
+            if (asset?.prefab == null || (pieceModels.TryGetValue(player.id, out var id) && id == asset.id)) return;
+            var position = piece.position; var facing = piece.rotation;
+            piece.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            var old = piece.Find("Token visual"); if (old != null) Destroy(old.gameObject);
+            var model = Instantiate(asset.prefab, piece); model.name = "Token visual"; model.SetActive(true);
+            var bounds = BoundsOf(model); float size = Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z, .001f);
+            model.transform.localScale *= .68f / size;
+            model.transform.localPosition = new Vector3(-bounds.center.x, -bounds.min.y, -bounds.center.z) * (.68f / size);
+            var silver = Material(ColorOf("#d7e4ee"), .75f, .55f);
+            foreach (var render in model.GetComponentsInChildren<MeshRenderer>()) { render.enabled = true; render.sharedMaterial = silver; render.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On; }
+            piece.SetPositionAndRotation(position, facing);
+            pieceModels[player.id] = asset.id;
         }
 
         IEnumerator Move(Transform piece, int from, int to, int size, bool directJail)
@@ -243,6 +278,7 @@ namespace TableTalk
                 if (UnityEngine.EventSystems.EventSystem.current != null && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()) return;
                 if (Physics.Raycast(boardCamera.ScreenPointToRay(point), out var hit) && hit.collider.TryGetComponent<TilePick>(out var selected))
                 {
+                    EmitWeb("select", selected.position.ToString());
                     var tile = shown.tiles.FirstOrDefault(t => t.id == selected.position);
                     if (tile != null && statusText != null)
                     {
@@ -261,11 +297,13 @@ namespace TableTalk
         }
         Material Material(Color color, float metallic, float smoothness)
         {
+            string key = ColorUtility.ToHtmlStringRGBA(color) + ":" + metallic + ":" + smoothness;
+            if (materialCache.TryGetValue(key, out var cached)) return cached;
             var shader = Shader.Find("Universal Render Pipeline/Lit");
             if (shader == null) throw new System.InvalidOperationException("URP/Lit is unavailable.");
             var material = new Material(shader); material.color = color;
             material.SetFloat("_Metallic", metallic); material.SetFloat("_Smoothness", smoothness);
-            ownedMaterials.Add(material); return material;
+            ownedMaterials.Add(material); materialCache[key] = material; return material;
         }
         static Bounds BoundsOf(GameObject obj)
         {
@@ -275,7 +313,12 @@ namespace TableTalk
         }
         static float Smooth(float t) => t * t * (3 - 2 * t);
         static Color ColorOf(string hex) => ColorUtility.TryParseHtmlString(hex, out var color) ? color : Color.white;
-        void OnDestroy() { foreach (var material in ownedMaterials) if (material != null) Destroy(material); }
+        void OnDestroy()
+        {
+            foreach (var material in ownedMaterials) if (material != null) Destroy(material);
+            foreach (var model in streamedModels) if (model != null) Destroy(model);
+            foreach (var mesh in streamedMeshes) if (mesh != null) Destroy(mesh);
+        }
     }
     public class TilePick : MonoBehaviour { public int position; }
 }
