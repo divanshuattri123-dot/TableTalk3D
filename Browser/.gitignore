@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.partykit/
+.wrangler/
+.vercel/
+.env
+.env.local
+.env.*.local
+work/
+
+.vercel
+.env*

@@ -2,6 +2,13 @@
 
 Unity rendering project for the TableTalk multiplayer property game.
 
+The browser game is published at
+<https://divanshuattri123-dot.github.io/TableTalk3D/>. Its React/Vite source,
+engine, tests and automatic GitHub Pages workflow live in [`Browser/`](Browser/).
+The site uses the free Cloudflare Worker at
+`table-talk-realtime.divanshuattri123.workers.dev` for multiplayer rooms and
+large game assets; GitHub Pages hosts the static website only.
+
 - Editor: Unity **6000.6.6f1** with URP **17.6.0**
 - Main target: **WebGL**, tuned from a mobile quality profile
 - Entry scene: `Assets/TableTalk/Scenes/TableTalk.unity`

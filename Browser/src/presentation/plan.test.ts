@@ -1,0 +1,83 @@
+import { describe, expect, it } from "vitest";
+import { createInitialState, reduceGame } from "../engine/reducer";
+import { planPresentation, routeBetween, shouldSendMove } from "./plan";
+import type { GameState } from "../engine/types";
+
+const start = () => [
+  { type: "JOIN", player: { id: "a", name: "Asha", color: "#00f" } },
+  { type: "JOIN", player: { id: "b", name: "Bryn", color: "#f00" } },
+  { type: "START", playerId: "a", firstPlayerId: "a" }
+].reduce((s, a) => reduceGame(s, a as Parameters<typeof reduceGame>[1]), createInitialState("TEST"));
+const at = (state: GameState, position: number) => ({ ...state, players: state.players.map(p => p.id === "a" ? { ...p, position } : p) });
+
+describe("pure presentation planning", () => {
+  it("does not replay a match on load, echo or stale snapshot", () => {
+    const state = start();
+    expect(planPresentation(undefined, state)).toEqual([]);
+    expect(planPresentation(state, structuredClone(state))).toEqual([]);
+    expect(planPresentation(state, createInitialState("TEST"))).toEqual([]);
+  });
+  it("waits for the dice presentation before allowing MOVE_RESULT", () => {
+    const state = start(), rolled = reduceGame(state, { type: "ROLL", playerId: "a", dice: [3, 4] });
+    expect(planPresentation(state, rolled).map(f => f.kind)).toEqual(["dice"]);
+    expect(shouldSendMove(rolled, "a", true)).toBe(false);
+    expect(shouldSendMove(rolled, "b", false)).toBe(false);
+    expect(shouldSendMove(rolled, "a", false)).toBe(true);
+  });
+  it("walks to a property before revealing the purchase controls", () => {
+    const rolled = reduceGame(start(), { type: "ROLL", playerId: "a", dice: [1, 2] });
+    const landed = reduceGame(rolled, { type: "MOVE_RESULT", playerId: "a" });
+    expect(planPresentation(rolled, landed)[0]?.route).toEqual([1, 2, 3]);
+    expect(landed.phase).toBe("awaitingBuy");
+  });
+  it("shows the card before its backwards-three route, not 37 spaces", () => {
+    const rolled = reduceGame(at(start(), 29), { type: "ROLL", playerId: "a", dice: [3, 4] });
+    const landed = reduceGame(rolled, { type: "MOVE_RESULT", playerId: "a", cardDraws: [{ deck: "chance", index: 3 }, { deck: "community", index: 1 }] });
+    expect(routeBetween(36, 33, 40, true)).toEqual([35, 34, 33]);
+    const frames = planPresentation(rolled, landed);
+    expect(frames.map(f => f.kind)).toEqual(["move", "card", "move", "card", "money"]);
+    expect(frames[2]).toMatchObject({ route: [35, 34, 33], backwards: true });
+  });
+  it("walks to Go To Jail then transfers directly to the jail corner", () => {
+    const rolled = reduceGame(at(start(), 23), { type: "ROLL", playerId: "a", dice: [3, 4] });
+    const landed = reduceGame(rolled, { type: "MOVE_RESULT", playerId: "a" });
+    const frames = planPresentation(rolled, landed);
+    expect(frames.map(f => f.kind)).toEqual(["move", "jail"]);
+    expect(frames[0]?.route).toHaveLength(7);
+    expect(frames[1]?.route).toEqual([10]);
+  });
+  it("three doubles show the dice and direct jail, without walking around GO", () => {
+    const state = { ...at(start(), 38), consecutiveDoubles: 2 };
+    const next = reduceGame(state, { type: "ROLL", playerId: "a", dice: [6, 6] });
+    expect(planPresentation(state, next).map(f => f.kind)).toEqual(["dice", "jail"]);
+  });
+  it("includes the sold result with the real winner, never a fake auction timer", () => {
+    let state = reduceGame(start(), { type: "ROLL", playerId: "a", dice: [1, 2] });
+    state = reduceGame(state, { type: "MOVE_RESULT", playerId: "a" });
+    state = reduceGame(state, { type: "DECLINE_BUY", playerId: "a" });
+    const bid = reduceGame(state, { type: "AUCTION_BID", playerId: "b", amount: 25 });
+    expect(planPresentation(state, bid)[0]?.kind).toBe("bid");
+    const sold = reduceGame(bid, { type: "AUCTION_BID", playerId: "a", pass: true });
+    expect(planPresentation(bid, sold).find(f => f.kind === "sold")).toMatchObject({ playerId: "b", tileId: 3 });
+  });
+  it.each([40, 48, 56, 64])("wraps a route on a %i-space board", size => {
+    expect(routeBetween(size - 2, 2, size)).toEqual([size - 1, 0, 1, 2]);
+  });
+  it("does not mutate either canonical snapshot", () => {
+    const state = start(), next = reduceGame(state, { type: "ROLL", playerId: "a", dice: [1, 2] });
+    const before = JSON.stringify([state, next]); planPresentation(state, next);
+    expect(JSON.stringify([state, next])).toBe(before);
+  });
+  it("uses journal IDs when two friends choose the same display name", () => {
+    const initial = start();
+    const sameName = { ...initial, activePlayerId: "b", players: initial.players.map(p => ({ ...p, name: "Friend" })) };
+    const rolled = reduceGame(sameName, { type: "ROLL", playerId: "b", dice: [1, 2] });
+    const next = reduceGame(rolled, { type: "MOVE_RESULT", playerId: "b" });
+    expect(planPresentation(rolled, next)[0]).toMatchObject({ kind: "move", playerId: "b", tileId: 3 });
+  });
+  it("keeps the community deck when identical card text exists in both decks", () => {
+    const rolled = reduceGame(start(), { type: "ROLL", playerId: "a", dice: [1, 1] });
+    const next = reduceGame(rolled, { type: "MOVE_RESULT", playerId: "a", cardDraws: [{ deck: "community", index: 0 }] });
+    expect(planPresentation(rolled, next).find(f => f.kind === "card")).toMatchObject({ deck: "community" });
+  });
+});

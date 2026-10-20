@@ -1,0 +1,55 @@
+name: Publish TableTalk browser game
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Browser/**"
+      - ".github/workflows/deploy-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Browser/package-lock.json
+      - uses: actions/configure-pages@v5
+      - run: npm ci
+        working-directory: Browser
+      - run: npm test
+        working-directory: Browser
+      - run: npm run build
+        working-directory: Browser
+        env:
+          PAGES_BASE_PATH: /TableTalk3D/
+          VITE_PARTYKIT_HOST: table-talk-realtime.divanshuattri123.workers.dev
+          VITE_ASSET_HOST: https://table-talk-realtime.divanshuattri123.workers.dev
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: Browser/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
