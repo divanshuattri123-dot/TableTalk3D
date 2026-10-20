@@ -22,6 +22,7 @@ import type {
 } from "./engine/types";
 import type { CSSProperties } from "react";
 import { canTradeProperty, netWorth } from "./engine/reducer";
+import { formatRupees } from "./engine/currency";
 import { usePresentation } from "./presentation/usePresentation";
 import { shouldSendMove } from "./presentation/plan";
 import EventStage, { PlayerPortrait } from "./view/EventStage";
@@ -68,7 +69,7 @@ const randomId = (): string =>
     ? crypto.randomUUID()
     : `player-${Math.random().toString(36).slice(2, 10)}`;
 
-const formatMoney = (value: number): string => `$${value.toLocaleString("en-US")}`;
+const formatMoney = formatRupees;
 
 const phaseLabel = (phase: GameState["phase"]): string =>
   ({
@@ -456,27 +457,35 @@ function Board({ game, current, onSelect }: { game: GameState; current?: Player;
           const players = game.players.filter((player) => !player.bankrupt && player.position === tile.position);
           const stripe = isStreetTile(tile) ? GROUP_COLORS[tile.group] : undefined;
           const property = isPurchasableTile(tile) ? game.properties[tile.position] : undefined;
-          const tileStyle = { ...tileGridPosition(tile.position, game.boardSize), "--tile-color": stripe } as CSSProperties;
+          const owner = game.players.find((player) => player.id === property?.ownerId);
+          const sideLength = game.boardSize / 4;
+          const side = tile.position < sideLength ? "bottom" : tile.position < sideLength * 2 ? "left" : tile.position < sideLength * 3 ? "top" : "right";
+          const tileStyle = { ...tileGridPosition(tile.position, game.boardSize), "--tile-color": stripe, "--owner-color": owner?.color } as CSSProperties;
           return (
             <article
               className={`board-tile ${tile.kind} ${property?.ownerId ? "owned" : ""}`}
+              data-side={side}
               key={tile.position}
               style={tileStyle}
-              title={tile.name}
+              title={[tile.name, tile.region, tile.detail].filter(Boolean).join(" · ")}
               role="button"
               tabIndex={0}
-              aria-label={`Inspect ${tile.name}`}
+              aria-label={`Inspect ${tile.name}${tile.region ? `, ${tile.region}` : ""}${tile.detail ? `, ${tile.detail}` : ""}`}
               onClick={() => onSelect(tile.position)}
               onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(tile.position); } }}
             >
               {stripe && <span className="property-strip" />}
-              <span className="tile-name">{tile.name}</span>
+              <span className="tile-copy">
+                <span className="tile-name">{tile.boardLabel ?? tile.name}</span>
+                {tile.region && <small className="tile-region">{tile.region.split(" · ")[0]}</small>}
+              </span>
               {isPurchasableTile(tile) && <span className="tile-price">{formatMoney(tile.price)}</span>}
               {tile.kind === "chance" && <span className="tile-icon">?</span>}
               {tile.kind === "community" && <span className="tile-icon">✦</span>}
-              {tile.kind === "tax" && <span className="tile-icon">$</span>}
+              {tile.kind === "tax" && <span className="tile-icon">₹</span>}
               {tile.kind === "goToJail" && <span className="tile-icon">⇢</span>}
               {property && propertyLabel(property) && <span className="improvement-mark">{propertyLabel(property)}</span>}
+              {owner && <span className="owner-marker" title={`Owned by ${owner.name}`} />}
               <span className="token-stack">
                 {players.map((player) => (
                   <i key={player.id} className="token" style={{ "--token": player.color } as CSSProperties} title={player.name}>
@@ -488,8 +497,9 @@ function Board({ game, current, onSelect }: { game: GameState; current?: Player;
           );
         })}
         <div className="board-centre" style={{ gridColumn: `2 / ${game.boardSize / 4 + 1}`, gridRow: `2 / ${game.boardSize / 4 + 1}` }}>
-          <p className="eyebrow">Live table</p>
+          <p className="eyebrow">Table Talk · India edition</p>
           <h2>{game.roomCode}</h2>
+          <div className="board-seal"><span>✦</span><b>THE GREAT INDIAN<br />PROPERTY TOUR</b><span>✦</span></div>
           <div className="centre-turn">
             <span style={{ background: current?.color ?? "#777" }} />
             <b>{current ? `${current.name}'s turn` : "Waiting to start"}</b>
@@ -579,7 +589,7 @@ function Controls({
         <div className="action-cluster">
           {local.inJail && (
             <div className="jail-options">
-              <button className="secondary-button" type="button" onClick={() => sendAction({ type: "PAY", playerId: local.id, kind: "jailFine" })}>Pay $50</button>
+              <button className="secondary-button" type="button" onClick={() => sendAction({ type: "PAY", playerId: local.id, kind: "jailFine" })}>Pay ₹50</button>
               <button className="secondary-button" type="button" disabled={local.getOutOfJailCards === 0} onClick={() => sendAction({ type: "PAY", playerId: local.id, kind: "jailCard" })}>Use jail card</button>
             </div>
           )}
@@ -592,7 +602,7 @@ function Controls({
       {game.phase === "awaitingMove" && isCurrent && <p className="waiting-note">Your token is moving…</p>}
 
       {game.phase === "awaitingJailPayment" && isCurrent && (
-        <div className="decision-panel"><b>Third failed jail roll</b><p>Pay $50, then move the dice already rolled.</p><button className="primary-button" type="button" onClick={() => sendAction({ type: "PAY", playerId: local.id, kind: "jailFine" })}>Pay and move</button></div>
+        <div className="decision-panel"><b>Third failed jail roll</b><p>Pay ₹50, then move the dice already rolled.</p><button className="primary-button" type="button" onClick={() => sendAction({ type: "PAY", playerId: local.id, kind: "jailFine" })}>Pay and move</button></div>
       )}
 
       {normalTurn && isCurrent && (
@@ -694,7 +704,7 @@ function TradeComposer({ game, local, sendAction }: { game: GameState; local: Pl
     <div className="trade-composer">
       <p className="eyebrow">Write a trade</p>
       <label className="field-label">Trade with<select className="text-input" value={toPlayerId} onChange={(event) => { setToPlayerId(event.target.value); setRequestedIds([]); }}><option value="">Choose player</option>{otherPlayers.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label>
-      <div className="cash-inputs"><label>Give $<input className="text-input" type="number" min="0" value={offeredCash} onChange={(event) => setOfferedCash(event.target.value)} /></label><label>Ask $<input className="text-input" type="number" min="0" value={requestedCash} onChange={(event) => setRequestedCash(event.target.value)} /></label></div>
+      <div className="cash-inputs"><label>Give ₹<input className="text-input" type="number" min="0" value={offeredCash} onChange={(event) => setOfferedCash(event.target.value)} /></label><label>Ask ₹<input className="text-input" type="number" min="0" value={requestedCash} onChange={(event) => setRequestedCash(event.target.value)} /></label></div>
       <PropertyChecks title="Your deeds" properties={mine} selected={offeredIds} toggle={(id) => toggle(id, offeredIds, setOfferedIds)} />
       <PropertyChecks title={`${target?.name ?? "Their"} deeds`} properties={theirs} selected={requestedIds} toggle={(id) => toggle(id, requestedIds, setRequestedIds)} />
       <button className="primary-button" disabled={!toPlayerId} type="button" onClick={sendOffer}>Send trade offer</button>

@@ -273,6 +273,65 @@ button:disabled { opacity: .45; }
   .studio-backdrop { padding: 0; }.asset-studio { width: 100%; height: 100svh; border-radius: 0; border: 0; }.studio-header { padding: 15px 16px; }.studio-header h2 { font-size: 1.4rem; }.studio-header .eyebrow { font-size: .55rem; }.studio-header p:last-child { font-size: .59rem; }.studio-filters { padding: 12px 14px; }.studio-filters label { font-size: .57rem; }.studio-filters label:first-child { max-width: 120px; }.studio-filters input, .studio-filters select { width: 100%; font-size: 16px; padding: 8px; }.studio-content { display: flex; flex-direction: column-reverse; overflow: auto; }.studio-results { overflow: visible; padding: 14px; }.studio-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }.asset-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }.asset-detail { display: grid; grid-template-columns: 125px minmax(0, 1fr); column-gap: 14px; padding: 16px 14px; overflow: visible; border-left: 0; border-bottom: 1px solid #3a4c65; flex-shrink: 0; }.asset-detail > .model-preview, .asset-detail > .image-preview, .asset-detail > .sound-preview, .asset-detail > .data-preview { grid-column: 1; grid-row: 1 / span 5; height: 170px; width: 125px; margin: 0; }.asset-detail > .eyebrow { grid-column: 2; margin: 0; font-size: .52rem; }.asset-detail h3 { grid-column: 2; font-size: 1rem; margin: 4px 0; }.asset-detail .asset-description { grid-column: 2; font-size: .6rem; margin-block: 4px; }.asset-use-actions { grid-column: 2; gap: 7px; margin-top: 8px; }.asset-use-actions .primary-button, .asset-use-actions .secondary-button { font-size: .6rem; min-height: 36px; padding: 8px; }.asset-use-actions .quiet-button, .asset-download { font-size: .57rem; padding: 5px; min-height: 28px; }.sound-preview > span { font-size: 3.3rem; }.sound-preview audio { width: 120px; }.asset-tile { padding: 7px; }.asset-tile b { font-size: .59rem; }.asset-tile small { font-size: .49rem; }.asset-glyph { font-size: 1.9rem; }.asset-pagination { padding-bottom: 16px; }
   .rules-modal, .tile-inspector { padding: 22px; }.modal-backdrop { padding: 14px; }.rules-modal, .tile-inspector { max-height: calc(100svh - 28px); }
 }
+
+/* The deed track keeps the familiar square-board rhythm while its place names and typography belong to the India edition. */
+.board-wrap { padding: clamp(5px, 1vw, 10px); border: 1px solid #d5b45f; border-radius: 12px; background: linear-gradient(145deg, #285c50, #153a3b); box-shadow: 0 20px 48px #030b1680, inset 0 0 0 2px #f0cc73; }
+.board { padding: 3px; border: 2px solid #d6b863; background: #f6eed7; box-shadow: inset 0 0 0 2px #285c50, 0 5px 18px #08172655; }
+.board::before { inset: 8.8%; border: 2px solid #b79b55; outline: 1px solid #fff7df; outline-offset: 4px; }
+.board-centre { background: radial-gradient(circle at center, #f8f1df 0%, #efe1bc 64%, #e2d0a3 100%); border: 1px solid #c8aa61; box-shadow: inset 0 0 0 7px #f6eed7, inset 0 0 0 8px #bda15e; }
+.board-centre h2 { color: #bd4034; font-family: Georgia, "Times New Roman", serif; text-shadow: 0 1px #fff7e5; }
+.board-centre .eyebrow { color: #385c54; font-size: clamp(.43rem, 1.1vw, .62rem); }
+.board-seal { display: flex; align-items: center; gap: 9px; color: #254f4a; font: 800 clamp(.4rem, 1vw, .65rem)/1.35 Georgia, serif; letter-spacing: .16em; }
+.board-seal span { color: #c64435; font-size: 1.05em; }
+.board-tile { border-color: #665b43; color: #21363a; background: #fffaf0; box-shadow: inset 0 0 0 1px #ffffff7a; }
+.board-tile.go, .board-tile.jail, .board-tile.freeParking, .board-tile.goToJail { background: #f0e0b2; }
+.board-tile.chance { background: #ffdf91; }
+.board-tile.community { background: #c3e4d7; }
+.board-tile.tax { background: #f4c9ac; }
+.tile-copy { display: grid; justify-items: center; gap: 2px; }
+.tile-name { text-align: center; font-size: clamp(.31rem, .72vw, .62rem); letter-spacing: .015em; }
+.tile-region { max-width: 100%; overflow: hidden; color: #67746a; font-size: clamp(.25rem, .48vw, .38rem); font-weight: 700; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
+.property-strip { margin: 0; flex: 0 0 clamp(4px, .82vw, 8px); box-shadow: inset 0 1px #ffffff80, inset 0 -1px #00000020; }
+.board-tile[data-side="bottom"] .property-strip { position: absolute; inset: 0 0 auto; width: auto; height: clamp(4px, .82vw, 8px); }
+.board-tile[data-side="top"] .property-strip { position: absolute; inset: auto 0 0; width: auto; height: clamp(4px, .82vw, 8px); }
+.board-tile[data-side="left"] .property-strip { position: absolute; inset: 0 0 0 auto; width: clamp(4px, .82vw, 8px); height: auto; }
+.board-tile[data-side="right"] .property-strip { position: absolute; inset: 0 auto 0 0; width: clamp(4px, .82vw, 8px); height: auto; }
+.board-tile.owned { box-shadow: inset 0 0 0 2px var(--owner-color), inset 0 0 0 3px #fff8e7; }
+.owner-marker { position: absolute; z-index: 1; top: 2px; right: 2px; width: clamp(5px, .65vw, 8px); aspect-ratio: 1; border: 1px solid #fffdf3; border-radius: 50%; background: var(--owner-color); box-shadow: 0 0 0 1px #25404a; }
+.improvement-mark { position: relative; z-index: 1; border-radius: 3px; padding: 1px 2px; color: #fffaf0; background: #2f6e4e; font-size: clamp(.26rem, .5vw, .43rem); }
+.board-tile .tile-icon { color: #984433; }
+.board-centre .centre-turn { color: #203b44; }
+.board-centre .centre-turn small { color: #586d68; }
+.landing-ribbon { border: 1px solid #b59653; border-top: 4px solid #d3ad53; background: linear-gradient(110deg, #f8f0da, #e8ddbe); color: #263c42; }
+.landing-ribbon > div > small { color: #776b50; }
+.landing-ribbon > div > b { color: #1f4847; }
+.landing-ribbon > div > span { color: #5e706b; }
+.landing-ribbon > button { border-color: #b6a36d; background: #fff9eb; color: #274e4c; }
+.rules-modal, .tile-inspector { background: #f8f0dc; border: 1px solid #d3b563; border-radius: 10px; color: #33474b; box-shadow: 0 24px 70px #050b1970, inset 0 0 0 4px #fffaf0; }
+.rules-modal h2, .tile-inspector h2 { color: #213f48; }
+.rules-modal .icon-button, .tile-inspector .icon-button { border-color: #c5b58d; background: #eee3c6; color: #29484b; }
+.rules-modal .eyebrow, .tile-inspector .eyebrow { color: #806b3e; }
+.deed-region { margin: -9px 0 12px; color: #8a4937; font-weight: 800; letter-spacing: .035em; }
+.deed-detail { padding: 10px 12px; border-left: 3px solid var(--deed-color); background: #eee4c9; color: #465b59; }
+.deed-summary span { color: #6b7772; }
+.deed-summary b { color: #b04736; }
+.ownership-note { background: #eee4c9; color: #3d5554; }
+.rent-table > div { border-bottom-color: #d9ceb1; color: #455957; }
+.rent-table dd { color: #24574f; }
+.title-deed-region { margin: -8px 12px 0; color: #8d4b37; font-size: .66rem; font-weight: 800; letter-spacing: .035em; text-align: center; }
+.title-deed-detail { margin: 6px 12px 0; color: #66746b; font-size: .62rem; line-height: 1.45; text-align: center; }
+
+@media (max-width: 600px) {
+  .board-wrap { padding: 4px; border-radius: 8px; }
+  .board { padding: 2px; }
+  .tile-region { display: none; }
+  .tile-name { font-size: clamp(.3rem, 1.55vw, .43rem); line-height: 1.03; }
+  .tile-price { display: block; font-size: clamp(.26rem, 1.15vw, .34rem); }
+  .improvement-mark { display: block; }
+  .owner-marker { top: 1px; right: 1px; width: 5px; }
+  .property-strip { margin: 0; }
+  .board-seal { gap: 4px; letter-spacing: .08em; }
+}
 @media (max-width: 350px) { .connection-pill { display: none; }.table-toolbar { gap: 4px; }.table-toolbar > button { padding-inline: 7px; }.view-switch button { padding-inline: 8px; }.welcome-card { padding: 22px; }.board-scale { display: grid; }.board-scale > div { gap: 13px; justify-content: space-between; }.studio-header p:last-child { max-width: 210px; }.asset-detail { grid-template-columns: 105px minmax(0, 1fr); gap: 10px; }.asset-detail > .model-preview, .asset-detail > .image-preview, .asset-detail > .sound-preview, .asset-detail > .data-preview { width: 105px; }.asset-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
   .studio-content { display: grid; grid-template-columns: 1fr; grid-template-rows: auto auto; align-content: start; }

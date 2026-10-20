@@ -1,0 +1,30 @@
+.landing-ribbon {
+  border: 1px solid #b59653;
+  border-top: 4px solid #d3ad53;
+  background: linear-gradient(110deg, #f8f0da, #e8ddbe);
+  color: #263c42;
+}
+
+.landing-ribbon small { color: #776b50; }
+.landing-ribbon b { color: #1f4847; }
+.landing-ribbon span { color: #5e706b; }
+.landing-ribbon button { border-color: #b6a36d; background: #fff9eb; color: #274e4c; }
+
+.title-deed-region {
+  margin: -8px 12px 0;
+  color: #8d4937;
+  font-size: .66rem;
+  font-weight: 800;
+  letter-spacing: .035em;
+  text-align: center;
+}
+
+.title-deed-detail {
+  margin: 6px 12px 0;
+  color: #66746b;
+  font-size: .62rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.board-centre .eyebrow { color: #385c54; }

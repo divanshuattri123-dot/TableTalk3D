@@ -3,11 +3,12 @@ import type { CSSProperties } from "react";
 import { assetUrl, useAssets } from "../assets";
 import { getPurchasableTile, getTile, isStreetTile } from "../engine/board";
 import { calculateRent } from "../engine/reducer";
+import { formatRupees } from "../engine/currency";
 import type { GameAction, GameState, Player } from "../engine/types";
 import type { PresentationFrame } from "../presentation/plan";
 import { GROUP_COLORS } from "./palette";
 
-const money = (value: number) => `$${value.toLocaleString("en-US")}`;
+const money = formatRupees;
 const ART = { presenting: "dba32b5b1a084458", hammer: "bf380b9028ee80ae", waiting: "7e5612f738223164", sold: "3d92b4733d425fa8", jail: "d73b9e891369cc5b", bankrupt: "ff6eb34a6f9e58ff", winner: "5be924bf8411012c", chest: "76a2561bbb2b243c" };
 function Character({ pose, className = "" }: { pose: keyof typeof ART; className?: string }) {
   return <img className={`event-character ${className}`} alt="" src={assetUrl(`assets/images/${ART[pose]}.webp`)} />;
@@ -33,7 +34,9 @@ export function TitleDeed({ game, position, rent }: { game: GameState; position:
     ["Rent", tile.rent[0]], ["Full colour set", tile.rent[0] * 2], ...tile.rent.slice(1).map((value, i) => [i === 4 ? "With HOTEL" : `With ${i + 1} house${i ? "s" : ""}`, value])
   ] : tile.kind === "railroad" ? [["1 railroad", 25], ["2 railroads", 50], ["3 railroads", 100], ["4 railroads", 200]] : [["One utility", "4 × dice"], ["Both utilities", "10 × dice"]];
   return <article className="title-deed" style={{ "--deed-color": stripe } as CSSProperties}>
-    <header><small>TITLE DEED</small><h2>{tile.name}</h2></header>
+    <header><small>{tile.kind === "property" ? `${tile.region?.split(" · ")[0] ?? tile.group} DISTRICT · TITLE DEED` : `${tile.kind.toUpperCase()} · TITLE DEED`}</small><h2>{tile.name}</h2></header>
+    {tile.region && <p className="title-deed-region">{tile.region}</p>}
+    {tile.detail && <p className="title-deed-detail">{tile.detail}</p>}
     <div className="deed-symbol">{tile.kind === "railroad" ? "🚂" : tile.kind === "utility" ? "⚡" : "⌂"}</div>
     <dl>{rows.map(([label, value]) => <div key={label} className={value === rent ? "applicable-rent" : ""}><dt>{label}</dt><dd>{typeof value === "number" ? money(value) : value}</dd></div>)}</dl>
     <footer><p>Mortgage value <b>{money(tile.mortgageValue)}</b></p>{isStreetTile(tile) && <><p>Houses cost <b>{money(tile.houseCost)} each</b></p><p>Hotel costs <b>{money(tile.houseCost)} + 4 houses</b></p></>}<small>{isStreetTile(tile) ? "Own the complete colour set. Build evenly." : tile.kind === "utility" ? "Multiply by the total of the landing dice." : "More railroads mean higher rent."}</small></footer>
@@ -90,7 +93,7 @@ export default function EventStage({ game, frame, busy, localId, sendAction }: {
     {frame.kind === "dice" && <div className="settled-dice">{frame.dice?.map((value, i) => <span key={i}>{value}</span>)}</div>}
     {cinematic && <Character pose={frame.kind === "jail" ? "jail" : frame.kind === "bankrupt" ? "bankrupt" : frame.kind === "winner" ? "winner" : frame.kind === "sold" ? "sold" : "presenting"} />}
     {rent && <div className="rent-preview"><TitleDeed game={game} position={frame.tileId!} rent={calculateRent(game, frame.tileId!, game.lastRoll?.total ?? 0)} /></div>}
-    {frame.kind === "money" && <div className="money-burst"><strong>{money(frame.amount ?? 0)}</strong>{Array.from({ length: 12 }, (_, i) => <i key={i} style={{ "--coin": i } as CSSProperties}>$</i>)}</div>}
+    {frame.kind === "money" && <div className="money-burst"><strong>{money(frame.amount ?? 0)}</strong>{Array.from({ length: 12 }, (_, i) => <i key={i} style={{ "--coin": i } as CSSProperties}>₹</i>)}</div>}
     {frame.kind === "winner" && <div className="winner-sparkles">{Array.from({ length: 30 }, (_, i) => <i key={i} style={{ "--coin": i } as CSSProperties} />)}</div>}
   </div>;
 }

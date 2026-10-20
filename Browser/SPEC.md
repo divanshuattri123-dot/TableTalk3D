@@ -71,6 +71,17 @@ The board is the classic 40-position clockwise loop. Position 0 is GO; 10, 20,
 and 30 are Jail / Just Visiting, Free Parking, and Go To Jail. Purchasable tile
 IDs equal their positions, keeping rendering and ownership lookup aligned.
 
+The India edition uses real Indian landmarks rather than the original US
+street names. Its classic colour districts are Kochi (brown), Chennai (light
+blue), Bengaluru (pink), Kolkata (orange), Hyderabad (red), Jaipur (yellow),
+Delhi (green), and Mumbai (dark blue). The four rail links are CSMT, New Delhi
+Station, Howrah Junction, and Chennai Central; utilities are the City Power
+Grid and Municipal Waterworks. Every deed carries a short board label, city /
+region, and a one-line landmark detail for the inspector and title deed.
+Player-count expansions add real destinations in Ahmedabad, Varanasi, Amritsar,
+Lucknow, Udaipur, Srinagar, Pune, Goa, Mysuru, Rishikesh, Darjeeling, and the
+Andaman Islands. The familiar 40-space order and rent/economy remain intact.
+
 | Tile class | Positions |
 | --- | --- |
 | Color properties | 1, 3, 6, 8, 9, 11, 13, 14, 16, 18, 19, 21, 23, 24, 26, 27, 29, 31, 32, 34, 37, 39 |
@@ -84,12 +95,12 @@ IDs equal their positions, keeping rendering and ownership lookup aligned.
 Every purchasable tile holds its listed price, mortgage value, group, house
 cost where relevant, and rent schedule. Color rents are
 [base, one house, two, three, four, hotel]. Railroads cost
-$25 / $50 / $100 / $200 by count owned. Utilities charge four times the dice
+₹25 / ₹50 / ₹100 / ₹200 by count owned. Utilities charge four times the dice
 total, or ten times it when both utilities have the same owner. An unmortgaged
 complete color group doubles its unimproved base rent.
 
-Players start with $1500, token position 0, no properties, no jail status, and
-no cards. Passing or landing on GO pays $200. Free Parking has no jackpot.
+Players start with ₹1,500, token position 0, no properties, no jail status, and
+no cards. Passing or landing on GO pays ₹200. Free Parking has no jackpot.
 
 ## State model
 
@@ -185,11 +196,11 @@ on another card space.
 
 Jail and doubles details:
 
-1. Before rolling, a jailed player can PAY a $50 fine or use a jail card;
+1. Before rolling, a jailed player can PAY a ₹50 fine or use a jail card;
    either releases them and leaves their roll opportunity.
 2. A jail double releases and moves the player by that roll.
 3. A non-double ends a jailed turn twice. The third failed roll requires the
-   $50 fine; after it, the previously stored dice must be moved.
+   ₹50 fine; after it, the previously stored dice must be moved.
 4. The third consecutive double sends a non-jailed player straight to Jail,
    without movement or GO money.
 5. Go To Jail and matching cards do not award GO money.
@@ -198,7 +209,7 @@ Jail and doubles details:
 
 - An unowned property records a pending purchase for BUY or DECLINE_BUY.
 - An owned unmortgaged property charges rent, except to its own owner.
-- Tax tiles pay the bank: income tax $200 and luxury tax $100.
+- Tax tiles pay the bank: income tax ₹200 and GST / trade duty ₹100.
 - Chance and Community Chest use small fixed decks of movement, money,
   Go To Jail, and Get Out of Jail Free effects.
 - Card text/effect is stored in state.card; dismissing the modal is client UI

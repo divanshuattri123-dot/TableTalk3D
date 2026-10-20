@@ -64,7 +64,7 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
     if (event.text.includes("left Jail") || event.text.includes("leave Jail") || event.text.includes("used a Get Out of Jail")) {
       add("release", event.text, 1400, { playerId }); continue;
     }
-    if (event.text.includes(" bid $") || event.text.includes("passed the auction")) {
+    if (event.text.includes(" bid ₹") || event.text.includes("passed the auction")) {
       add("bid", event.text, 500, { playerId, tileId: next.auction?.propertyId ?? previous.auction?.propertyId }); continue;
     }
     if (event.text.includes(" bought ") || (previous.auction && event.text.includes(" won "))) {
@@ -80,7 +80,7 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
     if (event.text.includes("accepted the trade") || event.text.includes("declined the trade")) { add("trade", event.text, 1500, { playerId }); continue; }
     if (event.text.includes("bankrupt")) { add("bankrupt", event.text, 2200, { playerId }); continue; }
     if (event.kind === "money") {
-      const amount = event.amount ?? Number(event.text.match(/\$(\d+)/)?.[1] ?? 0);
+      const amount = event.amount ?? Number(event.text.match(/[₹$](\d+)/)?.[1] ?? 0);
       const recipient = next.players.find(p => event.text.includes(` to ${p.name} `) || event.text.endsWith(` to ${p.name}.`));
       add("money", event.text, 1500, { playerId, amount, recipientId: event.recipientId ?? recipient?.id, tileId: player ? positions.get(player.id) : undefined });
     }

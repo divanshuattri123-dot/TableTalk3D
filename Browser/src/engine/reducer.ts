@@ -11,6 +11,7 @@ import {
   isPurchasableTile,
   isStreetTile
 } from "./board";
+import { formatRupees } from "./currency";
 import type {
   AuctionState,
   BoardSize,
@@ -271,7 +272,7 @@ const makePayment = (
   }
   next = addEvent(
     next,
-    `${playerName(next, fromPlayerId)} paid $${amount} ${reason}.`,
+    `${playerName(next, fromPlayerId)} paid ${formatRupees(amount)} ${reason}.`,
     "money", { playerId: fromPlayerId, amount, recipientId: target }
   );
   return bankruptPlayer(next, fromPlayerId, target);
@@ -295,7 +296,7 @@ const moveForward = (state: GameState, playerId: string, spaces: number): GameSt
   next = addEvent(next, `${player.name} moved to ${getTile(position, state.boardSize).name}.`, "turn", { playerId, position });
   if (rawPosition >= state.boardSize) {
     next = changeCash(next, playerId, GO_REWARD);
-    next = addEvent(next, `${player.name} passed GO and collected $${GO_REWARD}.`, "money");
+    next = addEvent(next, `${player.name} passed GO and collected ${formatRupees(GO_REWARD)}.`, "money");
   }
   return next;
 };
@@ -311,7 +312,7 @@ const moveTo = (
   next = addEvent(next, `${player.name} moved to ${getTile(position, state.boardSize).name}.`, "turn", { playerId, position });
   if (awardGo === true || (awardGo !== false && position < player.position)) {
     next = changeCash(next, playerId, GO_REWARD);
-    next = addEvent(next, `${player.name} collected $${GO_REWARD} for passing GO.`, "money");
+    next = addEvent(next, `${player.name} collected ${formatRupees(GO_REWARD)} for passing GO.`, "money");
   }
   return next;
 };
@@ -407,7 +408,7 @@ const resolveCard = (
     case "money":
       if (card.effect.amount >= 0) {
         next = changeCash(next, playerId, card.effect.amount);
-        next = addEvent(next, `${playerName(next, playerId)} received $${card.effect.amount}.`, "money");
+        next = addEvent(next, `${playerName(next, playerId)} received ${formatRupees(card.effect.amount)}.`, "money");
       } else {
         next = makePayment(next, playerId, "bank", -card.effect.amount, "for a card");
       }
@@ -595,7 +596,7 @@ const handleRoll = (state: GameState, action: Extract<GameAction, { type: "ROLL"
     if (failedRolls >= 3) {
       return addEvent(
         { ...next, phase: "awaitingJailPayment", pendingRoll: roll },
-        `${player.name} must pay $${JAIL_FINE} before moving.`,
+        `${player.name} must pay ${formatRupees(JAIL_FINE)} before moving.`,
         "turn"
       );
     }
@@ -666,7 +667,7 @@ const handleBuy = (state: GameState, action: Extract<GameAction, { type: "BUY" }
   }));
   next = changeCash(next, action.playerId, -tile.price);
   next = { ...next, phase: "awaitingEndTurn", pendingPurchase: undefined };
-  return addEvent(next, `${player.name} bought ${tile.name} for $${tile.price}.`, "money");
+  return addEvent(next, `${player.name} bought ${tile.name} for ${formatRupees(tile.price)}.`, "money");
 };
 
 const handleDeclineBuy = (
@@ -720,7 +721,7 @@ const finishAuction = (state: GameState, auction: AuctionState): GameState => {
   }));
   next = changeCash(next, winner.id, -auction.currentBid);
   next = { ...next, phase: "awaitingEndTurn", auction: undefined };
-  return addEvent(next, `${winner.name} won ${tile.name} for $${auction.currentBid}.`, "money");
+  return addEvent(next, `${winner.name} won ${tile.name} for ${formatRupees(auction.currentBid)}.`, "money");
 };
 
 const handleAuctionBid = (
@@ -760,7 +761,7 @@ const handleAuctionBid = (
     currentBid: action.amount as number,
     highestBidderId: action.playerId
   };
-  const next = addEvent({ ...state, auction: updated }, `${bidder.name} bid $${action.amount}.`);
+  const next = addEvent({ ...state, auction: updated }, `${bidder.name} bid ${formatRupees(action.amount as number)}.`);
   return auctionIsFinished(updated) ? finishAuction(next, updated) : next;
 };
 
@@ -859,7 +860,7 @@ const handleMortgage = (
     }
     let next = withProperty(state, action.propertyId, (candidate) => ({ ...candidate, mortgaged: true }));
     next = changeCash(next, player.id, tile.mortgageValue);
-    return addEvent(next, `${player.name} mortgaged ${tile.name} for $${tile.mortgageValue}.`, "money");
+    return addEvent(next, `${player.name} mortgaged ${tile.name} for ${formatRupees(tile.mortgageValue)}.`, "money");
   }
   const cost = tile.mortgageValue + Math.ceil(tile.mortgageValue / 10);
   if (!property.mortgaged || player.cash < cost) {
@@ -867,7 +868,7 @@ const handleMortgage = (
   }
   let next = withProperty(state, action.propertyId, (candidate) => ({ ...candidate, mortgaged: false }));
   next = changeCash(next, player.id, -cost);
-  return addEvent(next, `${player.name} unmortgaged ${tile.name} for $${cost}.`, "money");
+  return addEvent(next, `${player.name} unmortgaged ${tile.name} for ${formatRupees(cost)}.`, "money");
 };
 
 const handlePay = (state: GameState, action: Extract<GameAction, { type: "PAY" }>): GameState => {

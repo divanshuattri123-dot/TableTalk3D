@@ -2,6 +2,12 @@
 
 Play: <https://divanshuattri123-dot.github.io/TableTalk3D/>
 
+This is the India edition of a classic property-trading board game: Kochi,
+Chennai, Bengaluru, Kolkata, Hyderabad, Jaipur, Delhi and Mumbai form the main
+colour districts, with more Indian landmarks added to the 4–6 player maps.
+Deeds include Indian locations, region labels, local descriptions and rupee
+prices. The familiar 40-space loop and property-trading rules stay recognizable.
+
 This React/Vite app is published for free with GitHub Pages. It connects to the
 separately hosted Cloudflare Worker for live rooms and the 3D asset catalogue:
 

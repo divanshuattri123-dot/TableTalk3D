@@ -31,6 +31,9 @@ export type Phase =
 export interface BaseTile {
   position: number;
   name: string;
+  boardLabel?: string;
+  region?: string;
+  detail?: string;
 }
 
 export interface StreetTile extends BaseTile {

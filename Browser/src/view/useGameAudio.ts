@@ -42,7 +42,7 @@ export function useGameAudio(game: GameState | undefined, settings: ViewSettings
     else if (text.includes("bought") || text.includes("won") && !text.includes("wins")) play("buy");
     else if (text.includes("accepted the trade")) play("accept");
     else if (text.includes("offered a trade")) play("trade");
-    else if (text.includes("bid $")) play("auction");
+    else if (text.includes("bid ₹")) play("auction");
     else if (text.includes("went to jail")) play("jail");
     else if (text.includes("collected") || text.includes("received")) play("income");
   }, [game?.eventLog, play]);
