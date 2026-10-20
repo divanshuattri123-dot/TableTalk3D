@@ -22,9 +22,10 @@ body.in-game { overflow: hidden; overscroll-behavior: none; }
 .immersive-game .controls-panel .debt-warning { grid-column: 1 / -1; margin: 0; padding: 10px 12px; color: #6c2430; background: #fff0d9; border: 1px solid #c86b5e; border-left: 4px solid #b52f44; border-radius: 9px; font-size: 12px; line-height: 1.5; }
 .debt-warning b { display: block; font-size: 15px; }
 .immersive-game .controls-panel .utility-actions .bankrupt-button { color: #8e2638; border-color: #b9505d; background: #ffe9e1; }
-.bankruptcy-confirm { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border: 2px solid #b52f44; border-radius: 10px; background: #fff8eb; }
-.bankruptcy-confirm p { flex-basis: 100%; margin: 0; font-size: 14px; color: #6c2430; }
-.bankruptcy-confirm button { flex: 1; min-height: 46px; padding: 8px 10px; border: 1px solid #b8c5a6; border-radius: 8px; color: #35533a; background: #e8edda; font-weight: 800; }
+.bankruptcy-backdrop { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; padding: 20px; background: #152c3abd; backdrop-filter: blur(4px); }
+.bankruptcy-confirm { display: flex; flex-wrap: wrap; gap: 12px; width: min(440px, 100%); max-height: calc(100dvh - 40px); overflow: auto; padding: 24px; border: 2px solid #b52f44; border-radius: 16px; background: #fff8eb; box-shadow: 0 18px 60px #061d3866; }
+.bankruptcy-confirm p { flex-basis: 100%; margin: 0 0 8px; font: 800 21px/1.4 "Trebuchet MS", sans-serif; color: #6c2430; }
+.bankruptcy-confirm button { flex: 1 1 40%; min-height: 50px; padding: 10px 12px; border: 1px solid #b8c5a6; border-radius: 8px; color: #35533a; background: #e8edda; font: 800 14px/1.4 "Trebuchet MS", sans-serif; }
 .bankruptcy-confirm button:first-of-type { color: #fff; border-color: #972035; background: #b52f44; }
 .tool-sheet .deed-row { flex-wrap: wrap; align-items: center; }
 .tool-sheet .deed-actions { flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }

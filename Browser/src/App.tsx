@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PartySocket from "partysocket";
+import { createPortal } from "react-dom";
 import {
   getBoard,
   railroadPositions,
@@ -652,7 +653,7 @@ function Controls({
         </div>
       )}
 
-      {confirmBankruptcy && settling && isCurrent && <div className="bankruptcy-confirm" role="alertdialog" aria-label="Confirm bankruptcy"><p>Leave the match and give your assets to the creditor?</p><button type="button" onClick={() => sendAction({ type: "BANKRUPT", playerId: local.id })}>Yes, declare bankruptcy</button><button type="button" onClick={() => setConfirmBankruptcy(false)}>Keep raising money</button></div>}
+      {confirmBankruptcy && settling && isCurrent && createPortal(<div className="bankruptcy-backdrop" onClick={() => setConfirmBankruptcy(false)}><div className="bankruptcy-confirm" role="alertdialog" aria-modal="true" aria-label="Confirm bankruptcy" onClick={event => event.stopPropagation()}><p>Leave the match and give your assets to the creditor?</p><button type="button" onClick={() => sendAction({ type: "BANKRUPT", playerId: local.id })}>Yes, declare bankruptcy</button><button type="button" autoFocus onClick={() => setConfirmBankruptcy(false)}>Keep raising money</button></div></div>, document.body)}
 
       {(showBuild || showTrade) && normalTurn && isCurrent && <div className="tool-sheet"><header><b>{showBuild ? "Manage your property" : "Make a trade"}</b><button type="button" onClick={() => { setShowBuild(false); setShowTrade(false); }} aria-label="Close property tools">×</button></header>{showBuild ? <PropertyTools game={game} player={local} properties={ownProperties} sendAction={sendAction} /> : <TradeComposer game={game} local={local} sendAction={sendAction} />}</div>}
     </section>
