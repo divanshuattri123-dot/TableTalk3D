@@ -24,3 +24,6 @@ Recordings/
 *.log
 .DS_Store
 .env*
+# The performance package writes transient run metadata under Resources.
+Assets/Resources/PerformanceTestRunInfo.json*
+Assets/Resources/PerformanceTestRunSettings.json*
