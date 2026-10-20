@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using TMPro;
 using UnityEditor;
+using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.InputSystem.UI;
@@ -17,6 +18,43 @@ namespace TableTalk.Editor
         [Serializable] class ModelEntry { public string id, label, filename; }
         [Serializable] class Manifest { public ModelEntry[] models; }
         const string Art = "Assets/TableTalk/Art";
+
+        public static void BuildWebGL()
+        {
+            var projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            var outputPath = Path.Combine(projectRoot, "Build", "Web");
+            var args = Environment.GetCommandLineArgs();
+            for (var i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "-buildOutput" && i + 1 < args.Length)
+                {
+                    outputPath = args[++i];
+                    break;
+                }
+                if (args[i].StartsWith("-buildOutput=", StringComparison.Ordinal))
+                {
+                    outputPath = args[i].Substring("-buildOutput=".Length);
+                    break;
+                }
+            }
+
+            if (!Path.IsPathRooted(outputPath)) outputPath = Path.Combine(projectRoot, outputPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
+            var scenes = EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray();
+            if (scenes.Length == 0) throw new InvalidOperationException("Enable at least one scene in Build Settings.");
+
+            var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            {
+                scenes = scenes,
+                locationPathName = outputPath,
+                target = BuildTarget.WebGL,
+                options = BuildOptions.None
+            });
+            if (report.summary.result != BuildResult.Succeeded)
+                throw new InvalidOperationException($"WebGL build failed: {report.summary.result}.");
+
+            Debug.Log($"WebGL build succeeded: {report.summary.totalSize:N0} bytes at {outputPath}.");
+        }
 
         public static string Import(string source)
         {

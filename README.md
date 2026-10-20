@@ -47,6 +47,12 @@ In Unity, select **WebGL** as the build target and build the project. The genera
 serve Unity's compressed files with the matching `Content-Encoding` and the
 WebAssembly MIME type.
 
+The installed Unity CLI can build the same enabled scene with:
+
+```powershell
+unity build --target WebGL --execute-method TableTalk.Editor.SceneBootstrap.BuildWebGL --output-path Build/Web .
+```
+
 For editor checks, use the installed Unity CLI to run `AgentScripts/VerificationTools.cs`
 through `run_script`:
 
