@@ -53,7 +53,7 @@ export interface ViewSettings {
   quality: "auto" | "low" | "high";
   theme: "day" | "night";
   view: "3d" | "2d";
-  renderer: "unity" | "collection";
+  renderer: "collection";
   camera: "perspective" | "top";
   cityId?: string;
   tableArtId?: string;
@@ -61,18 +61,19 @@ export interface ViewSettings {
   sound: boolean;
   volume: number;
 }
-const DEFAULT_SETTINGS: ViewSettings = { quality: "auto", theme: "day", view: "3d", renderer: "unity", camera: "top", sound: true, volume: .35 };
+const DEFAULT_SETTINGS: ViewSettings = { quality: "auto", theme: "day", view: "3d", renderer: "collection", camera: "top", sound: true, volume: .35 };
 export function useViewSettings() {
   const [settings, setSettings] = useState<ViewSettings>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("table-talk-view") ?? "{}");
-      return { ...DEFAULT_SETTINGS, ...saved, camera: saved.schema === 2 ? saved.camera : "top", cityId: saved.schema === 2 ? saved.cityId : undefined };
+      const currentSchema = saved.schema === 2 || saved.schema === 3;
+      return { ...DEFAULT_SETTINGS, ...saved, renderer: "collection", camera: currentSchema ? saved.camera : "top", cityId: currentSchema ? saved.cityId : undefined };
     }
     catch { return DEFAULT_SETTINGS; }
   });
   const update = (patch: Partial<ViewSettings>) => setSettings((previous) => {
-    const next = { ...previous, ...patch };
-    try { localStorage.setItem("table-talk-view", JSON.stringify({ ...next, schema: 2 })); } catch { /* Playing does not depend on storage. */ }
+    const next = { ...previous, ...patch, renderer: "collection" as const };
+    try { localStorage.setItem("table-talk-view", JSON.stringify({ ...next, schema: 3 })); } catch { /* Playing does not depend on storage. */ }
     return next;
   });
   return { settings, update };

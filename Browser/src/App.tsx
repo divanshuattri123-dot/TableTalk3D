@@ -328,9 +328,8 @@ function App() {
 function GameRoom({ session, onLeave }: { session: Session; onLeave: () => void }) {
   const { game, connection, error, sendAction } = useGameRoom(session);
   const [copied, setCopied] = useState(false);
-  const [unityReady, setUnityReady] = useState(false);
   const [sceneUsable, setSceneUsable] = useState(false);
-  const motion = usePresentation(game, unityReady);
+  const motion = usePresentation(game, false);
   const sentMove = useRef("");
 
   const me = game?.players.find((player) => player.id === session.player.id);
@@ -391,7 +390,7 @@ function GameRoom({ session, onLeave }: { session: Session; onLeave: () => void 
       {game.notice && <p className="global-error" role="status">{game.notice}</p>}
 
       <section className="game-layout">
-        <BoardStage game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />
+        <BoardStage game={game} shown={motion.shown ?? game} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />
         <aside className="side-rail" aria-label="Game controls and status">
           {game.phase === "lobby" ? (
             <Lobby game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} />
