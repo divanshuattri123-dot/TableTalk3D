@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { assetUrl, useAssets } from "../assets";
+import type { ViewSettings } from "../assets";
 import type { GameState } from "../engine/types";
 import type { PresentationFrame } from "../presentation/plan";
 import { unitySnapshot } from "../presentation/snapshot";
@@ -9,8 +10,9 @@ interface Release { loaderUrl: string; dataUrl: string; frameworkUrl: string; co
 declare global { interface Window { createUnityInstance?: (canvas: HTMLCanvasElement, options: object, progress: (value: number) => void) => Promise<UnityInstance> } }
 let loader: Promise<void> | undefined;
 
-export default function UnityBoard({ game, target, frame, onSelect, onComplete, onReady, onFallback }: {
+export default function UnityBoard({ game, target, settings, frame, onSelect, onComplete, onReady, onFallback }: {
   game: GameState; target: GameState; frame?: PresentationFrame;
+  settings: ViewSettings;
   onSelect: (position: number) => void; onComplete: (id: string) => void;
   onReady: (ready: boolean) => void; onFallback: () => void;
 }) {
@@ -31,7 +33,7 @@ export default function UnityBoard({ game, target, frame, onSelect, onComplete, 
     };
     window.addEventListener("tabletalk-unity", receive);
     async function start() {
-      const response = await fetch(assetUrl("unity/release.json"));
+      const response = await fetch(assetUrl("unity/release.json"), { cache: "no-store" });
       if (!response.ok || !response.headers.get("Content-Type")?.includes("application/json")) throw new Error("The Unity player is not available on this server yet.");
       const release = await response.json() as Release;
       if (!loader) loader = new Promise<void>((resolve, reject) => {
@@ -66,6 +68,9 @@ export default function UnityBoard({ game, target, frame, onSelect, onComplete, 
     if (ready && frame) instance.current?.SendMessage("GamePresentation", "PresentFrame", JSON.stringify({ ...frame, board: unitySnapshot(target) }));
   }, [frame, ready, target]);
   useEffect(() => {
+    if (ready) instance.current?.SendMessage("GamePresentation", "SetVisualSettings", JSON.stringify({ quality: settings.quality, theme: settings.theme, camera: settings.camera, reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches, mobile: window.matchMedia("(pointer: coarse)").matches }));
+  }, [ready, settings.quality, settings.theme, settings.camera]);
+  useEffect(() => {
     if (!ready) return;
     const ids = new Set(game.players.flatMap(p => [p.tokenId, p.diceId]).filter((id): id is string => Boolean(id)));
     let cancelled = false;
@@ -88,6 +93,6 @@ export default function UnityBoard({ game, target, frame, onSelect, onComplete, 
     {!ready && !failure && <div className="unity-loading"><span className="pulse-token" /><h2>Opening your city</h2><p>Loading the Unity 3D player · {Math.round(progress * 100)}%</p><progress max="1" value={progress} /><small>Only the active city and pieces are loaded, not the entire collection.</small></div>}
     {failure && <div className="unity-loading" role="alert"><h2>3D could not start</h2><p>{failure}</p><button type="button" onClick={onFallback}>Play in 2D</button></div>}
     {assetError && <p className="asset-notice">{assetError}</p>}
-    {ready && <div className="unity-camera-tools"><button type="button" onClick={() => instance.current?.SendMessage("GamePresentation", "WholeBoard")}>Whole board</button><button type="button" onClick={() => instance.current?.SendMessage("GamePresentation", "FocusActive")}>Follow</button><button type="button" aria-label="Zoom in" onClick={() => instance.current?.SendMessage("GamePresentation", "ZoomIn")}>＋</button><button type="button" aria-label="Zoom out" onClick={() => instance.current?.SendMessage("GamePresentation", "ZoomOut")}>−</button></div>}
+    {ready && <><div className="unity-camera-tools"><button type="button" onClick={() => instance.current?.SendMessage("GamePresentation", "WholeBoard")} aria-label="Show whole board">⌂</button><button type="button" onClick={() => instance.current?.SendMessage("GamePresentation", "FocusActive")} aria-label="Follow current player">◎</button><button type="button" aria-label="Zoom in" onClick={() => instance.current?.SendMessage("GamePresentation", "ZoomIn")}>＋</button><button type="button" aria-label="Zoom out" onClick={() => instance.current?.SendMessage("GamePresentation", "ZoomOut")}>−</button></div><p className="touch-guide"><span className="touch-copy">Drag to pan · pinch to zoom · tap a property</span><span className="mouse-copy">Drag to pan · scroll to zoom · click a property</span></p></>}
   </div>;
 }

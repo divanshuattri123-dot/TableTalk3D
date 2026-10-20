@@ -1,0 +1,201 @@
+body.in-game { overflow: hidden; overscroll-behavior: none; }
+.game-page.immersive-game { --hud-paper: #fffaf0ed; --hud-ink: #254536; --hud-edge: #b5c7a5; position: fixed; inset: 0; width: 100%; height: 100dvh; min-height: 0; padding: 0; overflow: hidden; background: #7d9c62; color: var(--hud-ink); font-family: "Segoe UI", sans-serif; }
+.immersive-game button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.immersive-game button:focus-visible { outline: 3px solid #f4c955; outline-offset: 3px; }
+.immersive-game .game-layout { position: absolute; inset: 0; display: block; width: 100%; height: 100%; max-width: none; margin: 0; padding: 0; }
+.immersive-game .board-stage { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.immersive-game .unity-board-shell, .immersive-game .three-board-shell, .immersive-game .scene-loading { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; max-height: none; margin: 0; aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none; }
+.immersive-game .unity-canvas, .immersive-game .three-board-canvas { width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; }
+.immersive-game .board-wrap { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(78vw, 78dvh); }
+.immersive-game .game-header { position: absolute; z-index: 15; inset: max(14px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) auto max(18px, env(safe-area-inset-left)); display: flex; align-items: center; gap: 10px; width: auto; height: 44px; min-height: 44px; max-width: none; margin: 0; padding: 0; border: 0; pointer-events: none; }
+.immersive-game .game-header > * { pointer-events: auto; }
+.immersive-game .game-header .wordmark { display: block; min-height: 42px; padding: 8px 13px; border: 1px solid #ffffffa8; border-radius: 12px; background: var(--hud-paper); box-shadow: 0 3px 12px #2e4b3433; font: 900 18px "Trebuchet MS", sans-serif; color: #284533; }
+.immersive-game .game-header .wordmark i { color: #cf3447; }
+.immersive-game .room-ticket { display: flex; align-items: center; gap: 9px; margin: 0; min-height: 42px; padding: 4px 8px 4px 12px; background: var(--hud-paper); border: 1px solid #ffffffa8; border-radius: 12px; box-shadow: 0 3px 12px #2e4b342b; }
+.immersive-game .room-ticket strong { font-size: 18px; letter-spacing: .1em; color: #274b39; }
+.immersive-game .room-ticket span { font-size: 9px; color: #6b7c60; }
+.immersive-game .room-ticket button { min-height: 32px; padding: 6px 9px; border: 0; border-radius: 7px; background: #e6ecd8; font-size: 10px; color: #465a39; }
+.immersive-game .connection-pill { display: flex; align-items: center; padding: 7px 10px; border-radius: 20px; background: #f8fff1d9; font-size: 10px; }
+.hud-navigation { display: flex; gap: 6px; margin-left: auto; }
+.hud-navigation button { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 9px 12px; color: #2d4939; background: var(--hud-paper); border: 1px solid #ffffffb5; border-radius: 12px; box-shadow: 0 3px 12px #2e4b3433; font-size: 21px; }
+.hud-navigation span { font-size: 11px; font-weight: 800; }
+.immersive-game .play-turn-banner { position: absolute; z-index: 10; top: max(76px, calc(env(safe-area-inset-top) + 62px)); left: max(20px, env(safe-area-inset-left)); display: flex; align-items: center; gap: 9px; min-height: 50px; width: min(390px, calc(100% - 260px)); padding: 9px 14px 9px 10px; border: 1px solid #ffffff8c; border-radius: 12px; background: var(--hud-paper); box-shadow: 0 5px 14px #2e4b3429; }
+.immersive-game .play-turn-banner b { color: #2e4b37; font-size: 15px; }
+.immersive-game .play-turn-banner div > span { color: #607451; font-size: 11px; }
+.immersive-game .play-turn-banner > strong { margin-left: auto; font-size: 16px; }
+.immersive-game .play-turn-dot { width: 7px; height: 29px; border-radius: 4px; box-shadow: none; flex-shrink: 0; }
+.immersive-game .table-toolbar { position: absolute; z-index: 12; top: max(76px, calc(env(safe-area-inset-top) + 62px)); right: max(18px, env(safe-area-inset-right)); left: auto; display: flex; gap: 6px; min-height: 42px; margin: 0; width: auto; }
+.immersive-game .table-toolbar button { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 42px; min-height: 42px; padding: 8px 11px; background: var(--hud-paper); border: 1px solid #ffffffab; border-radius: 11px; color: #36543b; font-size: 20px; box-shadow: 0 3px 12px #2e4b342e; }
+.immersive-game .table-toolbar button span { font-size: 10px; }
+.immersive-game .table-toolbar .collection-button { margin-left: 0; }
+.immersive-game .table-preferences { position: absolute; z-index: 25; left: auto; right: max(18px, env(safe-area-inset-right)); top: max(128px, calc(env(safe-area-inset-top) + 114px)); display: grid; grid-template-columns: 1fr 1fr; width: min(380px, calc(100% - 30px)); max-height: calc(100dvh - 165px); overflow: auto; margin: 0; padding: 18px; color: #2b4e3a; background: #fffaf0fa; border: 1px solid #c3cfae; border-radius: 16px; box-shadow: 0 15px 45px #1d332657; }
+.preferences-title { display: flex; align-items: center; justify-content: space-between; grid-column: 1 / -1; font: 800 20px "Trebuchet MS", sans-serif; }
+.preferences-title button, .hud-drawer > header button, .tool-sheet > header button { min-width: 38px; min-height: 38px; padding: 0; border: 1px solid #c5ceb1; border-radius: 10px; background: #edf0e0; color: #4a6043; font-size: 24px; }
+.immersive-game .table-preferences label { color: #586a48; font-size: 11px; }
+.immersive-game .table-preferences select { min-height: 44px; background: #f3f3e7; border-color: #c2cba9; color: #2d4b37; font-size: 12px; }
+.immersive-game .table-preferences > button { min-height: 44px; background: #edf0dc; border-color: #c2cba9; color: #465b3a; font-size: 11px; }
+.immersive-game .table-preferences p { color: #6b7859; }
+.immersive-game .side-rail { position: absolute; z-index: 15; left: 50%; right: auto; bottom: max(20px, env(safe-area-inset-bottom)); top: auto; transform: translateX(-50%); display: block; width: min(580px, calc(100% - 40px)); height: auto; max-height: none; margin: 0; padding: 0; overflow: visible; pointer-events: none; }
+.immersive-game .side-rail > * { pointer-events: auto; }
+.immersive-game .side-rail > .controls-panel { position: relative; inset: auto; display: grid; grid-template-columns: 138px 1fr; gap: 7px 12px; width: 100%; max-height: none; overflow: visible; margin: 0; padding: 13px 16px; background: #fffaf0f5; border: 1px solid #ffffff; border-top: 4px solid var(--seat-color); border-radius: 17px; box-shadow: 0 5px 0 #4c624e66, 0 14px 34px #253c3b40; }
+.immersive-game .controls-panel .hand-heading { grid-column: 1 / -1; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; margin: 0; }
+.immersive-game .hand-heading b { color: #3b583b; font-size: 12px; }
+.immersive-game .hand-heading span { color: #6b785b; font-size: 11px; }
+.immersive-game .controls-panel .action-cluster { grid-column: 1; margin: 0; display: flex; align-items: center; }
+.immersive-game .controls-panel .roll-button { width: 100%; min-height: 50px; padding: 8px 18px; border: 1px solid #b92537; border-radius: 11px; color: #fffdf2; background: linear-gradient(#ed4858, #d42d40); box-shadow: 0 3px 0 #a11f30; }
+.immersive-game .roll-button span { font: 900 20px "Trebuchet MS", sans-serif; letter-spacing: .06em; }
+.immersive-game .roll-button i { font-size: 10px; }
+.immersive-game .controls-panel .utility-actions { grid-column: 2; display: flex; justify-content: flex-end; align-items: center; gap: 7px; margin: 0; }
+.immersive-game .controls-panel .utility-actions button { flex: 1; min-height: 48px; margin: 0; padding: 8px 12px; font-size: 12px; color: #475e3d; border: 1px solid #b9c79c; background: #e8edda; border-radius: 10px; }
+.immersive-game .controls-panel .utility-actions .primary-button { color: white; border-color: #266747; background: #347e52; box-shadow: 0 2px 0 #1e5737; }
+.immersive-game .controls-panel .utility-actions:only-child { grid-column: 1 / -1; }
+.immersive-game .controls-panel:not(:has(.action-cluster)) .utility-actions { grid-column: 1 / -1; }
+.immersive-game .controls-panel .net-worth-line, .immersive-game .controls-panel > .eyebrow, .immersive-game .controls-panel .cash-line { display: none; }
+.immersive-game .controls-panel .animation-wait, .immersive-game .controls-panel > .waiting-note, .immersive-game .controls-panel > .inline-error, .immersive-game .controls-panel > .decision-panel { grid-column: 1 / -1; font-size: 12px; margin: 0; }
+.immersive-game .controls-panel .animation-wait { order: 2; color: #6b7855; }
+.immersive-game .controls-panel .jail-options { position: absolute; left: 0; bottom: calc(100% + 8px); padding: 10px; border-radius: 12px; background: #fffaf0; box-shadow: 0 5px 20px #29412b44; }
+.immersive-game .controls-panel .jail-card { grid-column: 1 / -1; margin: 0; color: #657444; font-size: 10px; }
+.immersive-game .side-rail > .lobby-panel { position: relative; inset: auto; width: min(380px, 100%); max-height: min(54dvh, 450px); margin: 0 auto; padding: 18px; overflow: auto; background: #fffaf0f2; border: 1px solid white; border-radius: 17px; box-shadow: 0 5px 0 #4c624e66, 0 14px 34px #253c3b40; }
+.immersive-game .lobby-panel h2 { font-size: 21px; margin: 6px 0 12px; }
+.immersive-game .lobby-panel .player-roster { display: grid; grid-template-columns: 1fr; }
+.immersive-game[data-phase="lobby"] .landing-ribbon { display: none; }
+.immersive-game .lobby-panel .map-size-note { display: none; }
+.immersive-game .lobby-panel .player-row { min-height: 48px; grid-template-columns: 32px 1fr auto; padding: 6px; margin: 0; }
+.immersive-game .lobby-panel .player-row small:last-child, .immersive-game .lobby-panel .roster-deeds { display: none; }
+.immersive-game .lobby-panel .silver-portrait { width: 30px; height: 30px; }
+.immersive-game .lobby-panel .primary-button { background: #d73549; color: white; min-height: 46px; margin-top: 10px; }
+.live-seats { position: absolute; z-index: 10; right: max(18px, env(safe-area-inset-right)); top: max(136px, calc(env(safe-area-inset-top) + 122px)); display: grid; gap: 8px; width: 154px; }
+.live-seats > button { display: flex; align-items: center; gap: 9px; min-height: 58px; padding: 7px; background: #fffaf0e6; color: #36533d; border: 1px solid #ffffffa8; border-left: 4px solid var(--player-color); border-radius: 12px; box-shadow: 0 4px 10px #334c3633; text-align: left; }
+.live-seats > .seat-active { background: #fffef6; box-shadow: 0 0 0 2px var(--player-color), 0 4px 14px #334c364d; }
+.live-seats .silver-portrait { width: 37px; height: 37px; flex-shrink: 0; }
+.live-seats > button > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.live-seats b { display: block; max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.live-seats strong { color: #284f35; font-size: 16px; line-height: 1; }
+.live-seats small { font-size: 8px; color: #a44334; }
+.seat-out { opacity: .55; }
+.immersive-game .landing-ribbon { position: absolute; z-index: 10; left: max(20px, env(safe-area-inset-left)); right: auto; top: auto; bottom: max(20px, env(safe-area-inset-bottom)); width: min(290px, calc(100% - 40px)); min-height: 0; padding: 12px; border: 1px solid #ffffffa3; border-radius: 13px; background: #fffaf0e6; box-shadow: 0 4px 14px #30483433; }
+.immersive-game .landing-ribbon b { font-size: 15px; }
+.immersive-game .landing-ribbon small, .immersive-game .landing-ribbon span { font-size: 10px; }
+.immersive-game .landing-ribbon button { font-size: 10px; min-height: 38px; }
+.immersive-game .unity-camera-tools, .immersive-game .scene-tools { position: absolute; z-index: 10; inset: auto auto 130px max(20px, env(safe-area-inset-left)); display: flex; flex-direction: column; gap: 6px; padding: 0; background: transparent; }
+.immersive-game .unity-camera-tools button, .immersive-game .scene-tools button { display: flex; align-items: center; justify-content: center; min-width: 42px; width: 42px; min-height: 42px; padding: 0; background: #fffaf0eb; border: 1px solid #ffffffb0; border-radius: 11px; box-shadow: 0 3px 10px #2e4b342e; color: #3e5e3b; font-size: 23px; font-weight: 700; }
+.touch-guide { position: absolute; z-index: 8; bottom: 150px; left: 50%; transform: translateX(-50%); margin: 0; padding: 6px 12px; border-radius: 20px; background: #2947339e; color: #f3f6df; font-size: 10px; white-space: nowrap; pointer-events: none; }
+.touch-copy { display: none; }
+.immersive-game .global-error, .fullscreen-notice, .immersive-game .asset-notice { position: absolute; z-index: 28; left: 50%; top: 140px; transform: translateX(-50%); width: min(470px, calc(100% - 32px)); margin: 0; padding: 12px 17px; border-radius: 11px; color: #4d4b2b; background: #fff3ca; box-shadow: 0 6px 24px #3f4e3a40; font-size: 13px; text-align: center; }
+.immersive-game .asset-notice { top: 184px; }
+.hud-drawer-backdrop { position: absolute; z-index: 32; inset: 0; display: flex; justify-content: flex-end; padding: max(16px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)); background: #253f3b55; backdrop-filter: blur(4px); }
+.hud-drawer { width: min(410px, 100%); max-height: 100%; padding: 20px; overflow: auto; border: 1px solid #fffef0; border-radius: 20px; background: #fffaf0; color: #36543c; box-shadow: 0 15px 55px #183b3966; }
+.hud-drawer > header, .tool-sheet > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 15px; }
+.hud-drawer h2 { font: 900 24px "Trebuchet MS", sans-serif; margin: 0; }
+.hud-drawer .player-row { grid-template-columns: 40px minmax(0, 1fr) auto; min-height: 82px; border-color: #d6dec4; color: #3e573e; }
+.hud-drawer .player-row b, .hud-drawer .player-row strong { color: #3a593c; }
+.hud-drawer .player-row > strong { grid-column: auto; font-size: 18px; margin: 0; }
+.hud-drawer .player-row small { color: #718365; }
+.hud-drawer .roster-deeds ul { color: #6c7857; line-height: 1.7; font-size: 12px; padding-left: 14px; }
+.hud-drawer .event-log { max-height: none; padding: 0; background: transparent; border: 0; box-shadow: none; }
+.hud-drawer .event-log > .eyebrow { display: none; }
+.hud-drawer .event-log li { color: #59734c; font-size: 13px; padding-block: 10px; border-color: #d8dfc8; }
+.tool-sheet { position: absolute; z-index: 22; bottom: calc(100% + 12px); left: 0; right: 0; max-height: min(60dvh, 520px); padding: 18px; overflow: auto; border: 1px solid #f9ffed; border-radius: 17px; background: #fffaf0; box-shadow: 0 12px 40px #243b3966; color: #395537; }
+.tool-sheet > header b { color: #35533a; font: 800 19px "Trebuchet MS", sans-serif; }
+.tool-sheet .deed-row b, .tool-sheet .field-label, .tool-sheet .property-checks { color: #455d3b; }
+.tool-sheet .text-input { color: #35533a; background: #f1f0e1; border-color: #b8c5a6; min-height: 44px; }
+.tool-sheet .property-tools, .tool-sheet .trade-composer { margin: 0; }
+.tool-sheet button { min-height: 42px; }
+.tool-sheet .deed-actions button { color: #3b5d3d; background: #e7edda; border-color: #b8c5a6; }
+.immersive-game .motion-event { position: absolute; inset: 145px 210px 170px 75px; z-index: 20; }
+.immersive-game .event-backdrop { position: absolute; z-index: 35; }
+.immersive-game .motion-winner { inset: 0; }
+.immersive-game .table-caption, .immersive-game .my-piece-strip { display: none; }
+@media (pointer: coarse) { .touch-copy { display: inline; } .mouse-copy { display: none; } }
+@media (max-width: 1150px) {
+  .immersive-game .landing-ribbon { bottom: 152px; width: 260px; }
+  .immersive-game .unity-camera-tools, .immersive-game .scene-tools { bottom: 244px; }
+}
+@media (max-width: 700px) {
+  .immersive-game .game-header { inset: max(9px, env(safe-area-inset-top)) max(9px, env(safe-area-inset-right)) auto max(9px, env(safe-area-inset-left)); gap: 6px; min-height: 40px; height: 40px; }
+  .immersive-game .game-header .wordmark { min-height: 40px; padding: 8px; font-size: 13px; border-radius: 10px; }
+  .immersive-game .room-ticket { min-height: 40px; gap: 5px; padding: 5px 7px; border-radius: 10px; }
+  .immersive-game .room-ticket strong { font-size: 15px; }
+  .immersive-game .room-ticket span, .immersive-game .connection-pill { display: none; }
+  .immersive-game .room-ticket button { font-size: 0; min-width: 26px; padding: 4px; min-height: 28px; }
+  .immersive-game .room-ticket button::after { content: '↗'; font-size: 17px; }
+  .hud-navigation { gap: 5px; }
+  .hud-navigation button { min-width: 38px; min-height: 40px; border-radius: 10px; padding: 5px; font-size: 21px; }
+  .hud-navigation span { display: none; }
+  .immersive-game .play-turn-banner { top: max(60px, calc(env(safe-area-inset-top) + 51px)); left: 10px; width: calc(100% - 150px); padding: 7px 9px; min-height: 44px; }
+  .immersive-game .play-turn-banner b { font-size: 12px; }
+  .immersive-game .play-turn-banner div > span { font-size: 9px; }
+  .immersive-game .play-turn-banner > strong { display: none; }
+  .immersive-game .table-toolbar { top: max(60px, calc(env(safe-area-inset-top) + 51px)); right: 10px; gap: 5px; min-height: 42px; }
+  .immersive-game .table-toolbar button { min-width: 38px; min-height: 42px; padding: 5px; }
+  .immersive-game .table-toolbar button span { display: none; }
+  .immersive-game .table-preferences { top: 112px; right: 10px; width: min(380px, calc(100% - 20px)); max-height: calc(100dvh - 140px); }
+  .live-seats { top: max(116px, calc(env(safe-area-inset-top) + 107px)); left: 10px; right: 10px; width: auto; display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 5px; scrollbar-width: none; }
+  .live-seats > button { flex: 0 0 auto; gap: 5px; min-height: 45px; min-width: 94px; padding: 4px 6px 4px 4px; border-left-width: 3px; border-radius: 9px; }
+  .live-seats .silver-portrait { width: 28px; height: 28px; }
+  .live-seats b { max-width: 68px; font-size: 8px; }
+  .live-seats strong { font-size: 13px; }
+  .immersive-game .side-rail { width: calc(100% - 20px); bottom: max(12px, env(safe-area-inset-bottom)); }
+  .immersive-game .side-rail > .controls-panel { grid-template-columns: 100px 1fr; gap: 8px; padding: 11px; border-radius: 14px; }
+  .immersive-game .controls-panel .hand-heading { display: flex; margin: 0; }
+  .immersive-game .hand-heading b { font-size: 11px; }
+  .immersive-game .hand-heading span { font-size: 10px; }
+  .immersive-game .controls-panel .utility-actions { gap: 5px; }
+  .immersive-game .controls-panel .utility-actions button { min-height: 48px; padding: 6px; font-size: 10px; }
+  .immersive-game .roll-button span { font-size: 18px; }
+  .immersive-game .landing-ribbon { left: 10px; bottom: 139px; padding: 8px 10px; width: min(270px, calc(100% - 75px)); background: #fffaf0e6; }
+  .immersive-game .landing-ribbon small { display: none; }
+  .immersive-game .landing-ribbon span { font-size: 9px; }
+  .immersive-game .landing-ribbon b { font-size: 13px; }
+  .immersive-game .landing-ribbon button { display: none; }
+  .immersive-game .unity-camera-tools, .immersive-game .scene-tools { bottom: 140px; left: auto; right: 10px; gap: 5px; }
+  .immersive-game .unity-camera-tools button, .immersive-game .scene-tools button { min-width: 39px; width: 39px; min-height: 39px; font-size: 22px; }
+  .touch-guide { bottom: 119px; max-width: calc(100% - 20px); font-size: 8px; padding: 4px 8px; }
+  .immersive-game .side-rail > .lobby-panel { width: min(340px, 100%); max-height: 38dvh; padding: 13px; }
+  .immersive-game .lobby-panel .player-row { min-height: 40px; font-size: 11px; }
+  .immersive-game .lobby-panel .eyebrow { font-size: 9px; }
+  .immersive-game .lobby-panel h2 { font-size: 18px; margin-block: 4px; }
+  .immersive-game .lobby-panel .player-row small { display: none; }
+  .immersive-game .motion-event { inset: 185px 12px 205px; }
+  .immersive-game .motion-banner strong { font-size: 15px; }
+  .immersive-game .global-error, .fullscreen-notice { top: 169px; font-size: 11px; }
+  .immersive-game .board-wrap { width: calc(100% - 20px); }
+  .tool-sheet { max-height: 56dvh; padding: 14px; }
+}
+@media (orientation: landscape) and (max-height: 600px) {
+  .immersive-game .game-header { inset: 8px 10px auto; height: 38px; min-height: 38px; }
+  .immersive-game .game-header .wordmark { display: block; font-size: 13px; min-height: 38px; padding: 8px 10px; }
+  .immersive-game .game-header .connection-pill { display: none; }
+  .immersive-game .play-turn-banner { display: flex; top: 57px; left: 10px; width: 230px; min-height: 42px; }
+  .immersive-game .play-turn-banner b { font-size: 12px; }
+  .immersive-game .play-turn-banner div > span { font-size: 9px; }
+  .immersive-game .play-turn-banner > strong { display: none; }
+  .immersive-game .table-toolbar { top: 57px; right: 10px; }
+  .immersive-game .table-toolbar button { min-height: 38px; min-width: 38px; padding: 6px; }
+  .immersive-game .table-toolbar button span { display: none; }
+  .live-seats { top: 106px; right: 10px; left: auto; width: 125px; display: grid; gap: 4px; max-height: calc(100dvh - 120px); overflow: auto; }
+  .live-seats > button { min-height: 36px; padding: 4px; }
+  .live-seats .silver-portrait { width: 26px; height: 26px; }
+  .live-seats b { font-size: 8px; }
+  .live-seats strong { font-size: 12px; }
+  .immersive-game .side-rail { width: min(475px, calc(100% - 320px)); left: 50%; bottom: 11px; }
+  .immersive-game .side-rail > .controls-panel { grid-template-columns: 90px 1fr; gap: 6px; padding: 8px 10px; border-radius: 12px; }
+  .immersive-game .controls-panel .hand-heading { display: flex; }
+  .immersive-game .controls-panel .roll-button, .immersive-game .controls-panel .utility-actions button { min-height: 40px; padding: 6px; font-size: 10px; }
+  .immersive-game .controls-panel .roll-button span { font-size: 17px; }
+  .immersive-game .hand-heading b { font-size: 10px; }
+  .immersive-game .hand-heading span { font-size: 9px; }
+  .immersive-game .landing-ribbon { left: 10px; bottom: 11px; width: 145px; padding: 8px; }
+  .immersive-game .landing-ribbon b { font-size: 11px; }
+  .immersive-game .landing-ribbon small, .immersive-game .landing-ribbon button { display: none; }
+  .immersive-game .landing-ribbon span { font-size: 8px; }
+  .immersive-game .unity-camera-tools, .immersive-game .scene-tools { left: 10px; right: auto; bottom: 87px; flex-direction: row; }
+  .immersive-game .unity-camera-tools button, .immersive-game .scene-tools button { width: 35px; min-width: 35px; min-height: 35px; font-size: 20px; }
+  .touch-guide { bottom: 102px; font-size: 8px; }
+  .immersive-game .side-rail > .lobby-panel { max-height: 66dvh; padding: 12px; }
+  .immersive-game .table-preferences { top: 102px; right: 10px; max-height: calc(100dvh - 115px); }
+  .immersive-game .motion-event { inset: 115px 145px 115px 170px; width: auto; }
+  .immersive-game .global-error, .fullscreen-notice { top: 105px; }
+  .hud-drawer-backdrop { padding: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .immersive-game *, .immersive-game *::before, .immersive-game *::after { scroll-behavior: auto; } }

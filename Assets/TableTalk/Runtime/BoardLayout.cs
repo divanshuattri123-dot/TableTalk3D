@@ -29,7 +29,7 @@ namespace TableTalk
     [System.Serializable] public class TileSnapshot
     {
         public int id, price, houses;
-        public string name, kind, color, ownerId;
+        public string name, boardLabel, region, detail, kind, color, ownerId;
         public bool mortgaged;
     }
     [System.Serializable] public class PlayerSnapshot
@@ -40,7 +40,7 @@ namespace TableTalk
     }
     [System.Serializable] public class BoardSnapshot
     {
-        public string roomCode, phase, activePlayerId;
+        public string roomCode, phase, activePlayerId, currencySymbol;
         public int boardSize = 40, eventId;
         public TileSnapshot[] tiles;
         public PlayerSnapshot[] players;

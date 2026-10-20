@@ -30,6 +30,8 @@ namespace TableTalk
         readonly System.Collections.Generic.List<GameObject> streamedModels = new System.Collections.Generic.List<GameObject>();
         Vector2 lastDrag;
         float pinchDistance;
+        bool angledView;
+        [Serializable] public class VisualSettings { public string quality, theme, camera; public bool mobile, reducedMotion; }
         public string CompletedFrameId { get; private set; }
         public bool WebMotionPlaying => webMotion != null;
 #if UNITY_WEBGL && !UNITY_EDITOR
@@ -52,6 +54,25 @@ namespace TableTalk
             WebGLInput.captureAllKeyboardInput = false;
 #endif
             EmitWeb("ready", "1");
+        }
+
+        [Preserve] public void SetVisualSettings(string json)
+        {
+            var settings = JsonUtility.FromJson<VisualSettings>(json);
+            if (settings == null) return;
+            bool low = settings.quality == "low" || settings.quality == "auto" && settings.mobile;
+            bool night = settings.theme == "night";
+            angledView = settings.camera == "perspective";
+            QualitySettings.shadowDistance = low ? 18 : 38;
+            QualitySettings.shadowResolution = low ? ShadowResolution.Low : ShadowResolution.Medium;
+            if (RenderSettings.sun != null)
+            {
+                RenderSettings.sun.intensity = night ? .8f : 2.1f;
+                RenderSettings.sun.color = ColorOf(night ? "#a9c6ec" : "#fff7df");
+            }
+            RenderSettings.ambientSkyColor = ColorOf(night ? "#718bb4" : "#c7dcf6");
+            RenderSettings.ambientEquatorColor = ColorOf(night ? "#506d78" : "#a5bdba");
+            if (shown != null) WholeBoard();
         }
 
         [Preserve] public void ResetSnapshot(string json)
@@ -220,7 +241,11 @@ namespace TableTalk
 
         [Preserve] public void ZoomIn() { cameraZoom = Mathf.Clamp(cameraZoom * 1.3f, 1, 3.5f); CameraTo(CameraTarget(), false); }
         [Preserve] public void ZoomOut() { cameraZoom = Mathf.Clamp(cameraZoom / 1.3f, 1, 3.5f); CameraTo(cameraZoom == 1 ? Vector3.zero : CameraTarget(), false); }
-        Vector3 CameraTarget() => Physics.Raycast(boardCamera.ViewportPointToRay(new Vector3(.5f, .5f)), out var hit) ? hit.point : Vector3.zero;
+        Vector3 CameraTarget()
+        {
+            var ray = boardCamera.ViewportPointToRay(new Vector3(.5f, .5f));
+            return new Plane(Vector3.up, Vector3.zero).Raycast(ray, out var distance) ? ray.GetPoint(distance) : Vector3.zero;
+        }
 
         [Serializable] public class StreamedModel { public string id; public float[] positions, normals; public int[] indices; }
         [Preserve] public void RegisterModel(string json)
@@ -265,8 +290,10 @@ namespace TableTalk
             if (pointer.press.isPressed && dragging)
             {
                 if (cameraMove != null) { StopCoroutine(cameraMove); cameraMove = null; }
-                Vector2 delta = point - lastDrag;
-                boardCamera.transform.position -= new Vector3(delta.x, 0, delta.y) * (BoardLayout.Span(shown.boardSize) / Mathf.Max(Screen.height, 1)) / cameraZoom;
+                var plane = new Plane(Vector3.up, Vector3.zero);
+                var previousRay = boardCamera.ScreenPointToRay(lastDrag); var currentRay = boardCamera.ScreenPointToRay(point);
+                if (plane.Raycast(previousRay, out var previousDistance) && plane.Raycast(currentRay, out var currentDistance))
+                    boardCamera.transform.position += previousRay.GetPoint(previousDistance) - currentRay.GetPoint(currentDistance);
             }
             lastDrag = point;
         }

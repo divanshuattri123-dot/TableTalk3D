@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { getBoard, getTile, isPurchasableTile, isStreetTile } from "../engine/board";
 import type { GameAction, GameState } from "../engine/types";
@@ -8,14 +8,16 @@ import type { GameAsset } from "../assets";
 import type { AssetUse } from "./AssetStudio";
 import { GROUP_COLORS } from "./palette";
 import { useGameAudio } from "./useGameAudio";
+import type { PresentationFrame } from "../presentation/plan";
 
 const ThreeBoard = lazy(() => import("./ThreeBoard"));
+const UnityBoard = lazy(() => import("./UnityBoard"));
 const AssetStudio = lazy(() => import("./AssetStudio"));
 const money = formatRupees;
 
-export default function BoardStage({ game, shown, onPlayable, localId, sendAction, render2D }: {
+export default function BoardStage({ game, shown, target, frame, onComplete, onReady, onPlayable, localId, sendAction, render2D }: {
   game: GameState; localId: string; sendAction: (action: GameAction) => void;
-  shown: GameState;
+  shown: GameState; target: GameState; frame?: PresentationFrame; onComplete: (id: string) => void; onReady: (ready: boolean) => void;
   onPlayable: (ready: boolean) => void;
   render2D: (onSelect: (position: number) => void) => ReactNode;
 }) {
@@ -31,9 +33,10 @@ export default function BoardStage({ game, shown, onPlayable, localId, sendActio
   const locationOwner = game.players.find((player) => player.id === game.properties[location.position]?.ownerId);
   const instruction = game.phase === "lobby" ? "Invite your friends, then start" : game.phase === "awaitingRoll" ? "Roll the dice" : game.phase === "awaitingBuy" ? "Buy this property or auction it" : game.phase === "awaitingAuction" ? "Open auction · bid or pass" : game.phase === "awaitingTradeResponse" ? "A trade is waiting for an answer" : game.phase === "awaitingMove" ? "Dice rolling…" : game.phase === "gameOver" ? "Game complete" : "Manage your deeds, then end your turn";
   useGameAudio(game, settings);
-  useEffect(() => { onPlayable(true); }, [onPlayable]);
+  const unityReady = useCallback((ready: boolean) => { onReady(ready); onPlayable(ready); }, [onReady, onPlayable]);
+  useEffect(() => { const unity = settings.view === "3d" && settings.renderer === "unity"; if (!unity) onReady(false); onPlayable(!unity); }, [settings.view, settings.renderer, onReady, onPlayable]);
   useEffect(() => {
-    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { setTile(undefined); setHelp(false); } };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { setTile(undefined); setHelp(false); setPreferences(false); setStudio(undefined); } };
     window.addEventListener("keydown", escape);
     return () => window.removeEventListener("keydown", escape);
   }, []);
@@ -47,27 +50,28 @@ export default function BoardStage({ game, shown, onPlayable, localId, sendActio
   };
   return <section className="board-stage" aria-label="Interactive table">
     <div className="play-turn-banner" style={{ "--turn-color": current?.color ?? "#77c5a1" } as CSSProperties}><span className="play-turn-dot" /><div><b>{current ? `${current.name}${current.id === localId ? " (you)" : ""}’s turn` : `Room ${game.roomCode}`}</b><span>{instruction}</span></div><strong>{game.boardSize}<small>SPACES</small></strong></div>
-    <div className="table-toolbar">
-      <div className="view-switch" aria-label="Board view"><button type="button" aria-pressed={settings.view === "3d"} onClick={() => update({ view: "3d" })}>3D table</button><button type="button" aria-pressed={settings.view === "2d"} onClick={() => update({ view: "2d" })}>2D</button></div>
-      <button type="button" className="collection-button" onClick={() => setStudio("token")}>◇ Collection</button>
-      <button type="button" aria-expanded={preferences} onClick={() => setPreferences((open) => !open)}>Settings</button>
+    <div className="table-toolbar" aria-label="Table tools">
+      <button type="button" className="collection-button" onClick={() => setStudio("token")} aria-label="Open token collection">◇ <span>Pieces</span></button>
+      <button type="button" aria-expanded={preferences} onClick={() => setPreferences((open) => !open)} aria-label="Game settings">⚙ <span>Settings</span></button>
       <button type="button" className="help-button" onClick={() => setHelp(true)} aria-label="How to play">?</button>
     </div>
     {preferences && <div className="table-preferences">
-      <div className="renderer-note"><b>India 3D board</b><span>Indian place names and ₹ deed labels are shown on the game map.</span></div>
+      <div className="preferences-title"><b>Your table</b><button type="button" autoFocus onClick={() => setPreferences(false)} aria-label="Close settings">×</button></div>
+      <label>Board view<select value={settings.view} onChange={(event) => update({ view: event.target.value as "3d" | "2d" })}><option value="3d">3D city</option><option value="2d">2D board</option></select></label>
+      <label>Scenery<select value={settings.renderer} onChange={(event) => update({ renderer: event.target.value as "unity" | "collection" })}><option value="unity">Cinematic city & park</option><option value="collection">Custom collection scenery</option></select></label>
       <label>Graphics<select value={settings.quality} onChange={(event) => update({ quality: event.target.value as typeof settings.quality })}><option value="auto">Automatic</option><option value="low">Battery saver</option><option value="high">High detail</option></select></label>
       <label>Lighting<select value={settings.theme} onChange={(event) => update({ theme: event.target.value as typeof settings.theme })}><option value="day">Daylight</option><option value="night">After dark</option></select></label>
-      <label>Camera<select value={settings.camera} onChange={(event) => update({ camera: event.target.value as typeof settings.camera })}><option value="top">Play camera · readable</option><option value="perspective">3D angle · orbit</option></select></label>
+      <label>Camera<select value={settings.camera} onChange={(event) => update({ camera: event.target.value as typeof settings.camera })}><option value="top">Play camera · readable</option><option value="perspective">Cinematic angle</option></select></label>
       <label className="check-setting"><input type="checkbox" checked={settings.sound} onChange={(event) => update({ sound: event.target.checked })} />Game sounds</label>
       <label>Volume<input type="range" min="0" max="1" step="0.05" value={settings.volume} onChange={(event) => update({ volume: Number(event.target.value) })} /></label>
       <button type="button" onClick={() => setStudio("music")}>Choose music</button>
       {settings.musicId && <button type="button" onClick={() => update({ musicId: undefined })}>Stop music</button>}
-      <button type="button" onClick={() => { update({ cityId: undefined, tableArtId: undefined }); }}>Reset scenery</button>
+      <button type="button" onClick={() => { update({ cityId: undefined, tableArtId: undefined, renderer: "unity", camera: "top" }); }}>Restore city scenery</button>
       <p>View, scenery and audio are personal. Your token and dice are shared with the whole room.</p>
     </div>}
     {error && <p className="asset-notice">{error} <button type="button" onClick={reload}>Retry collection</button></p>}
     {settings.view === "3d" ? <Suspense fallback={<div className="scene-loading"><span className="pulse-token" /><b>Building your 3D table…</b><small>The rules and room are ready.</small></div>}>
-      <ThreeBoard game={shown} settings={settings} onSelect={setTile} onFallback={() => update({ view: "2d" })} onCamera={() => update({ camera: settings.camera === "top" ? "perspective" : "top" })} />
+      {settings.renderer === "unity" ? <UnityBoard game={shown} target={target} settings={settings} frame={frame} onSelect={setTile} onComplete={onComplete} onReady={unityReady} onFallback={() => update({ view: "2d" })} /> : <ThreeBoard game={shown} settings={settings} onSelect={setTile} onFallback={() => update({ view: "2d" })} onCamera={() => update({ camera: settings.camera === "top" ? "perspective" : "top" })} />}
     </Suspense> : render2D(setTile)}
     <div className="landing-ribbon"><div><small>{game.phase === "lobby" ? "Tap any space to inspect it" : `${current?.name ?? "Player"} is at`}</small><b>{location.name}</b><span>{location.region && `${location.region} · `}{isPurchasableTile(location) ? `${money(location.price)} · ${locationOwner ? `Owned by ${locationOwner.name}` : "Unowned deed"}` : location.kind === "tax" ? `Pay ${money(location.amount)}` : location.kind === "go" ? "Collect ₹200 when passing GO" : instruction}</span></div><button type="button" onClick={() => setTile(location.position)}>Full details ↗</button></div>
     <div className="table-caption"><label className="tile-jump"><span className="sr-only">Inspect any board tile</span><select aria-label="Inspect any board tile" value="" onChange={(event) => { if (event.target.value) setTile(Number(event.target.value)); }}><option value="">Explore every property ↗</option>{getBoard(game.boardSize).map((entry) => <option value={entry.position} key={entry.position}>{entry.position + 1}. {entry.name}{entry.region ? ` — ${entry.region}` : ""}</option>)}</select></label></div>

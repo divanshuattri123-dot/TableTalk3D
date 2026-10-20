@@ -25,6 +25,7 @@ namespace TableTalk
         readonly Dictionary<string, Transform> pieces = new Dictionary<string, Transform>();
         readonly Dictionary<string, string> pieceModels = new Dictionary<string, string>();
         readonly Dictionary<int, Transform> tiles = new Dictionary<int, Transform>();
+        readonly Dictionary<int, TextMeshPro> tileLabels = new Dictionary<int, TextMeshPro>();
         readonly Queue<BoardSnapshot> pending = new Queue<BoardSnapshot>();
         readonly List<Material> ownedMaterials = new List<Material>();
         readonly Dictionary<string, Material> materialCache = new Dictionary<string, Material>();
@@ -86,7 +87,7 @@ namespace TableTalk
             if (tokenRoot != null) Destroy(tokenRoot.gameObject);
             if (propertyRoot != null) Destroy(propertyRoot.gameObject);
             foreach (var material in ownedMaterials) Destroy(material);
-            ownedMaterials.Clear(); materialCache.Clear(); pieces.Clear(); pieceModels.Clear(); tiles.Clear();
+            ownedMaterials.Clear(); materialCache.Clear(); pieces.Clear(); pieceModels.Clear(); tiles.Clear(); tileLabels.Clear();
             boardRoot = new GameObject("Readable board").transform;
             tokenRoot = new GameObject("Player tokens").transform;
             propertyRoot = new GameObject("Ownership and buildings").transform;
@@ -113,18 +114,34 @@ namespace TableTalk
                 label.transform.position = new Vector3(point.x, .164f, point.z) - inward * (tile.kind == "property" ? .13f : 0);
                 label.transform.rotation = Quaternion.Euler(90, 0, 0);
                 var text = label.GetComponent<TextMeshPro>();
-                text.text = tile.name.Replace(" Avenue", "").Replace(" Place", "").Replace("Railroad", "Rail").Replace("Company", "Co.") + (tile.price > 0 ? "\n$" + tile.price : "");
-                text.color = ColorOf("#0e2019"); text.fontSize = 2.7f; text.fontStyle = FontStyles.Bold;
-                text.enableAutoSizing = true; text.fontSizeMin = 2; text.fontSizeMax = 2.7f;
+                tileLabels[tile.id] = text;
+                text.color = ColorOf("#17392e"); text.fontSize = 2.55f; text.fontStyle = FontStyles.Bold;
+                text.enableAutoSizing = true; text.fontSizeMin = 1.55f; text.fontSizeMax = 2.55f;
                 text.alignment = TextAlignmentOptions.Center; text.textWrappingMode = TextWrappingModes.Normal;
                 text.rectTransform.sizeDelta = tile.kind != "property" ? new Vector2(dimensions.x - .16f, dimensions.z - .16f)
                     : quarter % 2 == 0 ? new Vector2(dimensions.x - .12f, dimensions.z - .4f) : new Vector2(dimensions.x - .4f, dimensions.z - .12f);
             }
             if (city != null) city.localScale = Vector3.one * (state.boardSize / 4f - 1.45f);
+            BuildLandscape(state.boardSize);
+            SyncLabels(state);
+        }
+
+        void SyncLabels(BoardSnapshot state)
+        {
+            foreach (var tile in state.tiles)
+            {
+                if (!tileLabels.TryGetValue(tile.id, out var label)) continue;
+                string title = string.IsNullOrEmpty(tile.boardLabel) ? tile.name : tile.boardLabel;
+                string symbol = string.IsNullOrEmpty(state.currencySymbol) ? "Rs " : state.currencySymbol;
+                if (symbol == "₹" && !label.font.HasCharacter('₹')) symbol = "Rs ";
+                string region = string.IsNullOrEmpty(tile.region) ? "" : "\n<size=60%><color=#567360>" + tile.region.Split('·')[0].Trim() + "</color></size>";
+                label.text = title + region + (tile.price > 0 ? "\n<b>" + symbol + tile.price + "</b>" : "");
+            }
         }
 
         void SyncInstant(BoardSnapshot state)
         {
+            SyncLabels(state);
             foreach (var player in state.players)
             {
                 if (!pieces.TryGetValue(player.id, out var piece))
@@ -134,7 +151,7 @@ namespace TableTalk
                     plinth.transform.SetParent(piece, false); plinth.transform.localPosition = new Vector3(0, -.045f, 0);
                     plinth.transform.localScale = new Vector3(.6f, .035f, .6f);
                     plinth.GetComponent<Renderer>().sharedMaterial = Material(ColorOf(player.color), .15f, .45f);
-                    Destroy(plinth.GetComponent<Collider>()); pieces[player.id] = piece;
+                    Destroy(plinth.GetComponent<CapsuleCollider>()); pieces[player.id] = piece;
                 }
                 UpdateTokenModel(piece, player);
                 piece.gameObject.SetActive(!player.bankrupt);
@@ -250,8 +267,8 @@ namespace TableTalk
         }
         IEnumerator EaseCamera(Vector3 target, bool tilted)
         {
-            float distance = BoardLayout.Span(shown?.boardSize ?? 40) * 1.8f / cameraZoom * Mathf.Max(1, 1 / boardCamera.aspect);
-            Vector3 destination = target + new Vector3(0, distance, -distance * (tilted ? .7f : .24f));
+            float distance = BoardLayout.Span(shown?.boardSize ?? 40) * 2.05f / cameraZoom * Mathf.Max(1, 1 / boardCamera.aspect);
+            Vector3 destination = target + new Vector3(0, distance, -distance * (tilted || angledView ? .7f : .24f));
             Quaternion rotation = Quaternion.LookRotation(target - destination);
             var origin = boardCamera.transform.position; var facing = boardCamera.transform.rotation;
             for (float t = 0; t < 1; t += Time.unscaledDeltaTime / .7f)
@@ -282,7 +299,7 @@ namespace TableTalk
                     var tile = shown.tiles.FirstOrDefault(t => t.id == selected.position);
                     if (tile != null && statusText != null)
                     {
-                        statusText.text = tile.name + (tile.price > 0 ? " · $" + tile.price : "");
+                        statusText.text = tile.name + (tile.price > 0 ? " · Rs " + tile.price : "");
                         cameraZoom = 2.15f; CameraTo(BoardLayout.Point(tile.id, shown.boardSize), false);
                     }
                 }
@@ -315,6 +332,7 @@ namespace TableTalk
         static Color ColorOf(string hex) => ColorUtility.TryParseHtmlString(hex, out var color) ? color : Color.white;
         void OnDestroy()
         {
+            DisposeLandscape();
             foreach (var material in ownedMaterials) if (material != null) Destroy(material);
             foreach (var model in streamedModels) if (model != null) Destroy(model);
             foreach (var mesh in streamedMeshes) if (mesh != null) Destroy(mesh);

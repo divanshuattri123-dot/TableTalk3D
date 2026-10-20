@@ -13,6 +13,12 @@ large game assets; GitHub Pages hosts the static website only.
 - Main target: **WebGL**, tuned from a mobile quality profile
 - Entry scene: `Assets/TableTalk/Scenes/TableTalk.unity`
 
+The game opens as an immersive table: the city fills the window, with floating
+turn actions, player balances, camera tools and menus. Create/Join requests native
+full screen where supported; the in-game full-screen button can toggle it later.
+Phone players can drag to pan, pinch to zoom and tap a property for its deed.
+Players, trades, auctions, building tools and the event log stay inside the game.
+
 ## Open the project
 
 Open this folder in Unity Hub, load `Assets/TableTalk/Scenes/TableTalk.unity`, and
@@ -39,12 +45,16 @@ phone-browser performance still require end-to-end checks on the target devices.
 ## Included assets and project features
 
 - Five assembled city meshes with their palette and UVs: 82,180 triangles.
+- A surrounding park with layered leafy canopies, branching trunks, lawns,
+  promenades and a perimeter road. Trees share combined meshes and materials.
 - Thirteen supplied model files, including tokens, Paris dice, houses, a hotel and
   jail bars.
 - Near-overhead perspective camera, easing, close-up inspection, and touch/pointer
   navigation.
 - URP lighting, tone mapping, bloom and responsive screen-space UI.
 - JSON snapshot DTOs in `Assets/TableTalk/Runtime/BoardLayout.cs`.
+- Indian landmark labels and prices are read from each snapshot by Unity itself.
+  The Unity font falls back to `Rs` when the rupee glyph is unavailable.
 - Editor-side layout, rendered-map and motion checks in `AgentScripts/`.
 
 ## Build and verify
@@ -71,7 +81,14 @@ through `run_script`:
   advancing frames, completion and jail cage.
 - `WebIntegration.Prepare` and `WebIntegration.VerifyMotion` — WebGL bridge setup
   and Unity-side event/movement checks.
+- `WebGraphicsResources.Prepare` — retain alpha-cutout foliage variants and use
+  the WebGL 2-compatible post-process resource set before rebuilding the player.
+- `TouchVerification.Run` — feed real Input System touch events through the
+  camera's pinch and one-finger pan loop while frames advance.
 
 Keep `Assets/` and its `.meta` files together when changing the project. Unity
 generates `Library/`, `Temp/`, `Logs/`, `Data/`, build output, and `UserSettings/`;
 these directories are ignored because they are local or platform-specific output.
+
+After changing the browser board data, run `node scripts/export-unity-preview.mjs`
+from `Browser/` to refresh the Unity studio snapshots for every board size.

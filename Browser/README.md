@@ -40,6 +40,12 @@ pipeline remains in the original development workspace; generated binaries and
 the extracted asset archive are intentionally not copied into this static-site
 folder.
 
+The cinematic Unity city is the default renderer. Saved preferences from the
+older collection-only release migrate back to it. The table fills the viewport;
+Create/Join requests native full screen when available, with a toggle inside the
+game. The HUD, property tools, player list and event log overlay the table.
+Phones use drag, pinch and tap camera controls; 2D remains available in Settings.
+
 ## Engine
 
 `src/engine/reducer.ts` is the deterministic shared game reducer.

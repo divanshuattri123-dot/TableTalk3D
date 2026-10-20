@@ -31,6 +31,7 @@ import { useAssets, useViewSettings } from "./assets";
 import type { GameAsset } from "./assets";
 import type { AssetUse } from "./view/AssetStudio";
 import BoardStage from "./view/BoardStage";
+import { enterGameFullscreen, exitGameFullscreen, fullscreenActive } from "./view/fullscreen";
 const AssetStudio = lazy(() => import("./view/AssetStudio"));
 const ModelPreview = lazy(() => import("./view/ModelPreview"));
 
@@ -231,6 +232,7 @@ function App() {
   const begin = (roomCode: string) => {
     const normalized = roomCode.trim().toUpperCase();
     if (!name.trim() || !/^[A-Z]{4}$/.test(normalized)) return;
+    void enterGameFullscreen();
     const nextSession: Session = {
       roomCode: normalized,
       player: { id: savedSession(normalized)?.player.id ?? randomId(), name: name.trim().slice(0, 24), color, tokenId: token?.id, diceId: die?.id }
@@ -328,9 +330,31 @@ function App() {
 function GameRoom({ session, onLeave }: { session: Session; onLeave: () => void }) {
   const { game, connection, error, sendAction } = useGameRoom(session);
   const [copied, setCopied] = useState(false);
+  const [unityReady, setUnityReady] = useState(false);
+  const [drawer, setDrawer] = useState<"players" | "log">();
+  const [fullscreen, setFullscreen] = useState(fullscreenActive);
+  const [screenNotice, setScreenNotice] = useState("");
   const [sceneUsable, setSceneUsable] = useState(false);
-  const motion = usePresentation(game, false);
+  const motion = usePresentation(game, unityReady);
   const sentMove = useRef("");
+
+  useEffect(() => {
+    document.body.classList.add("in-game");
+    const sync = () => setFullscreen(fullscreenActive());
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setDrawer(undefined); };
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
+    window.addEventListener("keydown", escape);
+    return () => { document.body.classList.remove("in-game"); document.removeEventListener("fullscreenchange", sync); document.removeEventListener("webkitfullscreenchange", sync); window.removeEventListener("keydown", escape); };
+  }, []);
+
+  const toggleFullscreen = async () => {
+    if (fullscreenActive()) { await exitGameFullscreen(); return; }
+    if (!await enterGameFullscreen()) {
+      setScreenNotice("Full screen is unavailable here. The game will keep filling this window.");
+      window.setTimeout(() => setScreenNotice(""), 4500);
+    }
+  };
 
   const me = game?.players.find((player) => player.id === session.player.id);
   const moveKey = game?.phase === "awaitingMove" && game.pendingRoll && me && game.pendingRoll.playerId === me.id
@@ -374,7 +398,7 @@ function GameRoom({ session, onLeave }: { session: Session; onLeave: () => void 
   const shareText = copied ? "Link copied" : "Copy room link";
 
   return (
-    <main className="game-page" data-phase={game.phase}>
+    <main className="game-page immersive-game" data-phase={game.phase}>
       <header className="game-header">
         <button className="wordmark" type="button" onClick={onLeave} aria-label="Leave this table">
           TABLE <i>TALK</i>
@@ -384,20 +408,25 @@ function GameRoom({ session, onLeave }: { session: Session; onLeave: () => void 
           <button type="button" onClick={copyRoomLink}>{shareText}</button>
         </div>
         <div className={`connection-pill ${connection}`}><span />{connection}</div>
+        <nav className="hud-navigation" aria-label="Game menu">
+          <button type="button" onClick={() => setDrawer("players")} aria-label="Players and deeds" aria-haspopup="dialog">♙ <span>Players</span></button>
+          <button type="button" onClick={() => setDrawer("log")} aria-label="Event log" aria-haspopup="dialog">≡ <span>Log</span></button>
+          <button type="button" onClick={toggleFullscreen} aria-label={fullscreen ? "Exit full screen" : "Enter full screen"} title={fullscreen ? "Exit full screen" : "Enter full screen"}>⛶</button>
+        </nav>
       </header>
 
       {error && <p className="global-error">{error}</p>}
       {game.notice && <p className="global-error" role="status">{game.notice}</p>}
+      {screenNotice && <p className="fullscreen-notice" role="status">{screenNotice}</p>}
 
       <section className="game-layout">
-        <BoardStage game={game} shown={motion.shown ?? game} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />
+        <BoardStage game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />
+        {game.phase !== "lobby" && <div className="live-seats" aria-label="Live player balances">{game.players.map(player => <button type="button" key={player.id} className={`${player.id === game.activePlayerId ? "seat-active" : ""} ${player.bankrupt ? "seat-out" : ""}`} style={{ "--player-color": player.color } as CSSProperties} onClick={() => setDrawer("players")}><PlayerPortrait player={player} /><span><b>{player.name}{player.id === session.player.id ? " · you" : ""}</b><strong>{player.bankrupt ? "Out" : formatMoney(player.cash)}</strong>{player.inJail && <small>In jail</small>}</span></button>)}</div>}
         <aside className="side-rail" aria-label="Game controls and status">
           {game.phase === "lobby" ? (
             <Lobby game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} />
           ) : (
             <>
-              <TurnStatus game={game} current={current} />
-              <PlayerRoster game={game} localId={session.player.id} />
               {me ? (
                 <Controls game={game} local={me} isCurrent={isCurrent} presenting={motion.busy} sendAction={sendAction} />
               ) : (
@@ -405,9 +434,10 @@ function GameRoom({ session, onLeave }: { session: Session; onLeave: () => void 
               )}
             </>
           )}
-          <EventLog game={game} />
         </aside>
       </section>
+
+      {drawer && <div className="hud-drawer-backdrop" onClick={() => setDrawer(undefined)}><section className="hud-drawer" role="dialog" aria-modal="true" aria-labelledby="hud-drawer-title" onClick={event => event.stopPropagation()}><header><h2 id="hud-drawer-title">{drawer === "players" ? "At the table" : "Table chatter"}</h2><button type="button" autoFocus onClick={() => setDrawer(undefined)} aria-label="Close panel">×</button></header>{drawer === "players" ? <PlayerRoster game={game} localId={session.player.id} /> : <EventLog game={game} />}</section></div>}
 
       <EventStage game={game} frame={motion.frame} busy={motion.busy || !sceneUsable} localId={session.player.id} sendAction={sendAction} />
     </main>
@@ -612,8 +642,7 @@ function Controls({
         </div>
       )}
 
-      {showBuild && normalTurn && isCurrent && <PropertyTools game={game} player={local} properties={ownProperties} sendAction={sendAction} />}
-      {showTrade && normalTurn && isCurrent && <TradeComposer game={game} local={local} sendAction={sendAction} />}
+      {(showBuild || showTrade) && normalTurn && isCurrent && <div className="tool-sheet"><header><b>{showBuild ? "Manage your property" : "Make a trade"}</b><button type="button" onClick={() => { setShowBuild(false); setShowTrade(false); }} aria-label="Close property tools">×</button></header>{showBuild ? <PropertyTools game={game} player={local} properties={ownProperties} sendAction={sendAction} /> : <TradeComposer game={game} local={local} sendAction={sendAction} />}</div>}
     </section>
   );
 }
