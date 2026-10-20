@@ -1,10 +1,11 @@
 import { getBoard, isPurchasableTile } from "../engine/board";
 import type { GameState } from "../engine/types";
 import { GROUP_COLORS } from "../view/palette";
+import { decisionPlayerId } from "../engine/reducer";
 
 export const unitySnapshot = (game: GameState) => ({
   roomCode: game.roomCode, boardSize: game.boardSize, eventId: game.nextEventId,
-  phase: game.phase, activePlayerId: game.activePlayerId ?? "", players: game.players, currencySymbol: "₹",
+  phase: game.phase, activePlayerId: decisionPlayerId(game) ?? "", players: game.players, currencySymbol: "₹",
   dice: game.lastRoll?.dice ?? [],
   tiles: getBoard(game.boardSize).map(tile => ({
     id: tile.position, name: tile.name, boardLabel: tile.boardLabel ?? tile.name,

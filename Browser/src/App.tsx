@@ -21,7 +21,7 @@ import type {
   PropertyState
 } from "./engine/types";
 import type { CSSProperties } from "react";
-import { canTradeProperty, netWorth } from "./engine/reducer";
+import { canTradeProperty, decisionPlayerId, netWorth } from "./engine/reducer";
 import { formatRupees } from "./engine/currency";
 import { usePresentation } from "./presentation/usePresentation";
 import { shouldSendMove } from "./presentation/plan";
@@ -31,7 +31,8 @@ import { useAssets, useViewSettings } from "./assets";
 import type { GameAsset } from "./assets";
 import type { AssetUse } from "./view/AssetStudio";
 import BoardStage from "./view/BoardStage";
-import { enterGameFullscreen, exitGameFullscreen, fullscreenActive } from "./view/fullscreen";
+import { enterGameFullscreen, exitGameFullscreen, fullscreenActive, releaseGameOrientation } from "./view/fullscreen";
+import LandscapeGate from "./view/LandscapeGate";
 const AssetStudio = lazy(() => import("./view/AssetStudio"));
 const ModelPreview = lazy(() => import("./view/ModelPreview"));
 
@@ -79,6 +80,7 @@ const phaseLabel = (phase: GameState["phase"]): string =>
     awaitingMove: "Dice are moving",
     awaitingBuy: "Property decision",
     awaitingJailPayment: "Jail decision",
+    awaitingDebt: "Debt settlement required",
     awaitingAuction: "Open auction",
     awaitingTradeResponse: "Trade pending",
     awaitingEndTurn: "Turn complete",
@@ -345,7 +347,7 @@ function GameRoom({ session, onLeave }: { session: Session; onLeave: () => void 
     document.addEventListener("fullscreenchange", sync);
     document.addEventListener("webkitfullscreenchange", sync);
     window.addEventListener("keydown", escape);
-    return () => { document.body.classList.remove("in-game"); document.removeEventListener("fullscreenchange", sync); document.removeEventListener("webkitfullscreenchange", sync); window.removeEventListener("keydown", escape); };
+    return () => { releaseGameOrientation(); document.body.classList.remove("in-game"); document.removeEventListener("fullscreenchange", sync); document.removeEventListener("webkitfullscreenchange", sync); window.removeEventListener("keydown", escape); };
   }, []);
 
   const toggleFullscreen = async () => {
@@ -392,8 +394,8 @@ function GameRoom({ session, onLeave }: { session: Session; onLeave: () => void 
     );
   }
 
-  const current = game.players.find((player) => player.id === game.activePlayerId);
-  const isCurrent = me?.id === game.activePlayerId && !me?.bankrupt && !motion.busy && sceneUsable;
+  const current = game.players.find((player) => player.id === decisionPlayerId(game));
+  const isCurrent = me?.id === decisionPlayerId(game) && !me?.bankrupt && !motion.busy && sceneUsable;
   const isHost = game.players[0]?.id === me?.id;
   const shareText = copied ? "Link copied" : "Copy room link";
 
@@ -439,7 +441,8 @@ function GameRoom({ session, onLeave }: { session: Session; onLeave: () => void 
 
       {drawer && <div className="hud-drawer-backdrop" onClick={() => setDrawer(undefined)}><section className="hud-drawer" role="dialog" aria-modal="true" aria-labelledby="hud-drawer-title" onClick={event => event.stopPropagation()}><header><h2 id="hud-drawer-title">{drawer === "players" ? "At the table" : "Table chatter"}</h2><button type="button" autoFocus onClick={() => setDrawer(undefined)} aria-label="Close panel">×</button></header>{drawer === "players" ? <PlayerRoster game={game} localId={session.player.id} /> : <EventLog game={game} />}</section></div>}
 
-      <EventStage game={game} frame={motion.frame} busy={motion.busy || !sceneUsable} localId={session.player.id} sendAction={sendAction} />
+      <EventStage game={game} frame={motion.frame} busy={motion.busy || !sceneUsable} localId={session.player.id} sendAction={sendAction} onCardRead={motion.acknowledgeCard} />
+      <LandscapeGate onLeave={onLeave} />
     </main>
   );
 }
@@ -570,7 +573,7 @@ function PlayerRoster({ game, localId }: { game: GameState; localId: string }) {
           (tile) => isPurchasableTile(tile) && game.properties[tile.position]?.ownerId === player.id
         );
         return (
-          <div className={`player-row ${player.id === game.activePlayerId ? "active" : ""} ${player.bankrupt ? "bankrupt" : ""}`} key={player.id}>
+          <div className={`player-row ${player.id === decisionPlayerId(game) ? "active" : ""} ${player.bankrupt ? "bankrupt" : ""}`} key={player.id}>
             <PlayerPortrait player={player} />
             <div><b>{player.name}{player.id === localId ? " (you)" : ""}</b><small>{properties.length} deed{properties.length === 1 ? "" : "s"}{player.inJail ? " · in Jail" : ""}</small><small>{byId.get(player.tokenId ?? catalog?.featured.tokens[game.players.indexOf(player) % (catalog?.featured.tokens.length || 1)] ?? "")?.label ?? "Token"} · {getTile(player.position, game.boardSize).name}</small>
               {properties.length > 0 && <details className="roster-deeds"><summary>View deeds</summary><ul>{properties.map((tile) => <li key={tile.position}>{tile.name}{propertyLabel(game.properties[tile.position]!) ? ` · ${propertyLabel(game.properties[tile.position]!)}` : ""}</li>)}</ul></details>}
@@ -598,7 +601,13 @@ function Controls({
 }) {
   const [showBuild, setShowBuild] = useState(false);
   const [showTrade, setShowTrade] = useState(false);
-  const normalTurn = game.phase === "awaitingRoll" || game.phase === "awaitingEndTurn";
+  const [confirmBankruptcy, setConfirmBankruptcy] = useState(false);
+  const debt = game.debts?.[0], settling = debt?.playerId === local.id;
+  const normalTurn = game.phase === "awaitingRoll" || game.phase === "awaitingEndTurn" || game.phase === "awaitingDebt" || game.phase === "awaitingJailPayment";
+  useEffect(() => {
+    if (settling && game.phase === "awaitingDebt") { setShowBuild(true); setShowTrade(false); }
+    if (!debt) { setShowBuild(false); setShowTrade(false); setConfirmBankruptcy(false); }
+  }, [game.phase, debt?.playerId, local.id]);
   const ownProperties = useMemo(
     () => getBoard(game.boardSize).filter((tile) => isPurchasableTile(tile) && game.properties[tile.position]?.ownerId === local.id),
     [game.properties, game.boardSize, local.id]
@@ -607,11 +616,11 @@ function Controls({
   return (
     <section className="controls-panel" style={{ "--seat-color": local.color } as CSSProperties}>
       {presenting && <p className="animation-wait" role="status">Playing the table event…</p>}
-      <div className="hand-heading"><b>{isCurrent ? "Your turn" : game.phase === "awaitingAuction" ? "Auction open" : game.pendingTrade?.toPlayerId === local.id ? "Trade offer for you" : "Watching the table"}</b><span>{local.name} · {formatMoney(local.cash)}</span></div>
+      <div className="hand-heading"><b>{settling ? "Debt must be settled" : isCurrent ? "Your turn" : game.phase === "awaitingAuction" ? "Auction open" : game.pendingTrade?.toPlayerId === local.id ? "Trade offer for you" : "Watching the table"}</b><span>{local.name} · {formatMoney(local.cash)}</span></div>
       <p className="eyebrow">Your hand</p>
       <div className="cash-line"><span>Cash</span><strong>{formatMoney(local.cash)}</strong></div>
       <p className="net-worth-line">Portfolio net worth <b>{formatMoney(netWorth(game, local.id))}</b> · Bank: {game.bankHouses} houses / {game.bankHotels} hotels</p>
-      {local.cash < 0 && !local.bankrupt && <p className="inline-error">Cash is negative. Sell buildings, mortgage or make a trade on your turn.</p>}
+      {settling && <p className="debt-warning" role="alert"><b>Raise {formatMoney(-local.cash)} to continue.</b> Owed to {debt.creditorId === "bank" ? "the bank" : game.players.find(player => player.id === debt.creditorId)?.name} {debt.reason}. Sell buildings, mortgage or trade. Normal play is paused.</p>}
       {local.getOutOfJailCards > 0 && <p className="jail-card">{local.getOutOfJailCards} jail-release card</p>}
 
       {game.phase === "awaitingRoll" && isCurrent && (
@@ -636,11 +645,14 @@ function Controls({
 
       {normalTurn && isCurrent && (
         <div className="utility-actions">
-          <button className="secondary-button" type="button" onClick={() => { setShowBuild((value) => !value); setShowTrade(false); }}>Build / mortgage</button>
+          <button className="secondary-button" type="button" onClick={() => { setShowBuild((value) => !value); setShowTrade(false); }}>{settling ? "Sell / mortgage" : "Build / mortgage"}</button>
           <button className="secondary-button" type="button" onClick={() => { setShowTrade((value) => !value); setShowBuild(false); }}>Trade</button>
           {game.phase === "awaitingEndTurn" && <button className="primary-button" type="button" onClick={() => sendAction({ type: "END_TURN", playerId: local.id })}>{game.lastRoll?.grantsExtraRoll ? "Roll again" : "End turn"}</button>}
+          {settling && game.phase === "awaitingDebt" && <button className="bankrupt-button" type="button" onClick={() => setConfirmBankruptcy(true)}>Declare bankruptcy</button>}
         </div>
       )}
+
+      {confirmBankruptcy && settling && isCurrent && <div className="bankruptcy-confirm" role="alertdialog" aria-label="Confirm bankruptcy"><p>Leave the match and give your assets to the creditor?</p><button type="button" onClick={() => sendAction({ type: "BANKRUPT", playerId: local.id })}>Yes, declare bankruptcy</button><button type="button" onClick={() => setConfirmBankruptcy(false)}>Keep raising money</button></div>}
 
       {(showBuild || showTrade) && normalTurn && isCurrent && <div className="tool-sheet"><header><b>{showBuild ? "Manage your property" : "Make a trade"}</b><button type="button" onClick={() => { setShowBuild(false); setShowTrade(false); }} aria-label="Close property tools">×</button></header>{showBuild ? <PropertyTools game={game} player={local} properties={ownProperties} sendAction={sendAction} /> : <TradeComposer game={game} local={local} sendAction={sendAction} />}</div>}
     </section>
@@ -661,7 +673,7 @@ function PropertyTools({
   return (
     <div className="property-tools">
       <p className="eyebrow">Your deeds</p>
-      {properties.length === 0 && <p className="waiting-note">Buy a property to manage it here.</p>}
+      {properties.length === 0 && <p className="waiting-note">{game.phase === "awaitingDebt" ? "No deeds to mortgage. Try a rescue trade or declare bankruptcy." : "Buy a property to manage it here."}</p>}
       {properties.map((tile) => {
         if (!isPurchasableTile(tile)) return null;
         const property = game.properties[tile.position] as PropertyState;
@@ -669,8 +681,8 @@ function PropertyTools({
           <div className="deed-row" key={tile.position}>
             <div><b>{tile.name}</b><small>{propertyLabel(property) || "Unimproved"}</small></div>
             <div className="deed-actions">
-              {tile.kind === "property" && <><button type="button" onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "build" })}>+</button><button type="button" onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "sell" })}>−</button></>}
-              <button type="button" onClick={() => sendAction({ type: "MORTGAGE", playerId: player.id, propertyId: tile.position, mortgage: !property.mortgaged })}>{property.mortgaged ? "Unmortgage" : "Mortgage"}</button>
+              {tile.kind === "property" && <><button type="button" disabled={game.phase === "awaitingDebt"} aria-label={`Build on ${tile.name}`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "build" })}>+</button><button type="button" disabled={property.houses === 0} aria-label={`Sell a building on ${tile.name}`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "sell" })}>Sell {formatMoney(Math.floor(tile.houseCost / 2))}</button></>}
+              <button type="button" disabled={property.mortgaged && game.phase === "awaitingDebt"} aria-label={`${property.mortgaged ? "Unmortgage" : "Mortgage"} ${tile.name}`} onClick={() => sendAction({ type: "MORTGAGE", playerId: player.id, propertyId: tile.position, mortgage: !property.mortgaged })}>{property.mortgaged ? "Unmortgage" : `Mortgage ${formatMoney(tile.mortgageValue)}`}</button>
             </div>
           </div>
         );

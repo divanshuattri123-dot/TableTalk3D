@@ -9,6 +9,9 @@ export interface PresentationFrame {
   diceId?: string;
 }
 
+export const canCompleteFrame = (frame: PresentationFrame | undefined, id: string, source: "animation" | "reader") =>
+  frame?.id === id && (frame.kind === "card" ? source === "reader" : source === "animation");
+
 export const routeBetween = (from: number, to: number, size: number, backwards = false): number[] => {
   const direction = backwards ? -1 : 1, count = backwards ? (from - to + size) % size : (to - from + size) % size;
   return Array.from({ length: count }, (_, i) => (from + direction * (i + 1) + size) % size);
@@ -29,7 +32,7 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
     destinations.set(roll.playerId, ((positions.get(roll.playerId) ?? 0) + roll.total) % next.boardSize);
   }
   let backwards = false;
-  if (previous.phase === "awaitingRoll" && next.phase !== "awaitingRoll" && next.lastRoll && !next.notice) {
+  if (previous.phase === "awaitingRoll" && next.phase !== "awaitingRoll" && next.phase !== "awaitingDebt" && next.lastRoll && !next.notice) {
     add("dice", `${active?.name ?? "Player"} rolled ${next.lastRoll.dice.join(" + ")}${next.lastRoll.doubles ? " · DOUBLES!" : ""}`, 1450,
       { playerId: next.lastRoll.playerId, dice: [...next.lastRoll.dice], diceId: active?.diceId });
   }
@@ -55,7 +58,7 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
         if (effect.kind === "moveRelative") destinations.set(playerId, (position + effect.spaces + next.boardSize) % next.boardSize);
         if (effect.kind === "nearestRailroad") destinations.set(playerId, railroadPositions(next.boardSize).find(p => p > position) ?? railroadPositions(next.boardSize)[0]!);
       }
-      add("card", text, 2900, { playerId, deck: entry?.deck }); continue;
+      add("card", entry?.card?.text ?? text, 2900, { playerId, deck: entry?.deck }); continue;
     }
     if (event.text.includes(" went to Jail (") && player) {
       add("jail", event.text, 1900, { playerId, tileId: next.boardSize / 4, route: [next.boardSize / 4] });

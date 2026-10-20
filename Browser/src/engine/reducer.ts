@@ -15,6 +15,7 @@ import { formatRupees } from "./currency";
 import type {
   AuctionState,
   BoardSize,
+  DebtResumePhase,
   CardDeck,
   CardDraw,
   GameAction,
@@ -110,6 +111,10 @@ const isActive = (state: GameState, playerId: string): boolean =>
 const isNormalTurnPhase = (state: GameState): boolean =>
   state.phase === "awaitingRoll" || state.phase === "awaitingEndTurn";
 
+export const decisionPlayerId = (state: GameState): string | undefined => state.debts?.[0]?.playerId ?? state.activePlayerId;
+const canManageFinances = (state: GameState, playerId: string): boolean =>
+  (isNormalTurnPhase(state) || state.phase === "awaitingDebt" || state.phase === "awaitingJailPayment") && decisionPlayerId(state) === playerId;
+
 export const netWorth = (state: GameState, playerId: string): number => {
   const player = playerById(state, playerId);
   if (!player) {
@@ -186,9 +191,9 @@ export const calculateRent = (
   return diceTotal * (ownedUtilities === 2 ? 10 : 4);
 };
 
-const bankruptPlayer = (state: GameState, playerId: string, creditor: PaymentTarget): GameState => {
+const bankruptPlayer = (state: GameState, playerId: string, creditor: PaymentTarget, surrender = false): GameState => {
   const player = playerById(state, playerId);
-  if (!player || player.bankrupt || netWorth(state, playerId) >= 0) {
+  if (!player || player.bankrupt || (!surrender && netWorth(state, playerId) >= 0)) {
     return state;
   }
 
@@ -266,10 +271,12 @@ const makePayment = (
   if (amount <= 0) {
     return state;
   }
+  const available = Math.max(0, playerById(state, fromPlayerId)?.cash ?? 0);
   let next = changeCash(state, fromPlayerId, -amount);
   if (target !== "bank") {
-    next = changeCash(next, target, amount);
+    next = changeCash(next, target, Math.min(available, amount));
   }
+  if ((playerById(next, fromPlayerId)?.cash ?? 0) < 0) next = { ...next, debts: [...(next.debts ?? []), { playerId: fromPlayerId, creditorId: target, reason }] };
   next = addEvent(
     next,
     `${playerName(next, fromPlayerId)} paid ${formatRupees(amount)} ${reason}.`,
@@ -766,7 +773,7 @@ const handleAuctionBid = (
 };
 
 const handleBuild = (state: GameState, action: Extract<GameAction, { type: "BUILD" }>): GameState => {
-  if (!isNormalTurnPhase(state) || !isActive(state, action.playerId)) {
+  if (!canManageFinances(state, action.playerId)) {
     return reject(state, "Buildings can only change during your turn.");
   }
   const player = playerById(state, action.playerId) as Player;
@@ -840,7 +847,7 @@ const handleMortgage = (
   state: GameState,
   action: Extract<GameAction, { type: "MORTGAGE" }>
 ): GameState => {
-  if (!isNormalTurnPhase(state) || !isActive(state, action.playerId)) {
+  if (!canManageFinances(state, action.playerId)) {
     return reject(state, "Mortgages can only change during your turn.");
   }
   const player = playerById(state, action.playerId) as Player;
@@ -987,8 +994,8 @@ const validTradeTerms = (state: GameState, offer: TradeOffer): string | undefine
     to.bankrupt ||
     !isWholeNonNegative(offer.offeredCash) ||
     !isWholeNonNegative(offer.requestedCash) ||
-    offer.offeredCash > from.cash ||
-    offer.requestedCash > to.cash ||
+    offer.offeredCash > Math.max(0, from.cash) ||
+    offer.requestedCash > Math.max(0, to.cash) ||
     !uniqueValues(offer.offeredPropertyIds) ||
     !uniqueValues(offer.requestedPropertyIds)
   ) {
@@ -1004,8 +1011,7 @@ const handleTradeOffer = (
   action: Extract<GameAction, { type: "TRADE_OFFER" }>
 ): GameState => {
   if (
-    (state.phase !== "awaitingRoll" && state.phase !== "awaitingEndTurn") ||
-    !isActive(state, action.playerId)
+    !canManageFinances(state, action.playerId)
   ) {
     return reject(state, "Trades can only be offered during your turn.");
   }
@@ -1020,7 +1026,7 @@ const handleTradeOffer = (
     offeredPropertyIds: [...action.offeredPropertyIds],
     requestedCash: action.requestedCash,
     requestedPropertyIds: [...action.requestedPropertyIds],
-    resumePhase: state.phase
+    resumePhase: state.phase as TradeOffer["resumePhase"]
   };
   if (
     offer.offeredCash === 0 &&
@@ -1101,7 +1107,7 @@ const handleTradeDecline = (
   );
 };
 
-export const reduceGame = (state: GameState, action: GameAction): GameState => {
+const applyAction = (state: GameState, action: GameAction): GameState => {
   switch (action.type) {
     case "JOIN":
       return handleJoin(state, action);
@@ -1128,6 +1134,12 @@ export const reduceGame = (state: GameState, action: GameAction): GameState => {
       return handlePay(state, action);
     case "END_TURN":
       return handleEndTurn(state, action);
+    case "BANKRUPT": {
+      const debt = state.debts?.[0], player = playerById(state, action.playerId);
+      return state.phase === "awaitingDebt" && debt?.playerId === action.playerId && player && player.cash < 0
+        ? bankruptPlayer(state, player.id, debt.creditorId, true)
+        : reject(state, "Only the player settling a negative balance can declare bankruptcy.");
+    }
     case "AUCTION_BID":
       return handleAuctionBid(state, action);
     case "TRADE_OFFER":
@@ -1137,4 +1149,47 @@ export const reduceGame = (state: GameState, action: GameAction): GameState => {
     case "TRADE_DECLINE":
       return handleTradeDecline(state, action);
   }
+};
+
+const synchronizeDebt = (state: GameState): GameState => {
+  if (state.phase === "lobby") return state;
+  if (state.phase === "gameOver") return state.debts || state.debtResumePhase ? { ...state, debts: undefined, debtResumePhase: undefined } : state;
+  let next = state;
+  const debts = [...(state.debts ?? [])];
+  for (const player of next.players) {
+    if (!player.bankrupt && player.cash < 0 && !debts.some(debt => debt.playerId === player.id)) debts.push({ playerId: player.id, creditorId: "bank", reason: "an unpaid balance" });
+  }
+  for (const debt of debts) next = bankruptPlayer(next, debt.playerId, debt.creditorId);
+  if (next.phase === "gameOver") return { ...next, debts: undefined, debtResumePhase: undefined };
+  if (playerById(next, next.activePlayerId ?? "")?.bankrupt) next = finishLanding({ ...next, debtResumePhase: undefined, pendingTrade: undefined, pendingRoll: undefined });
+  const outstanding = debts.filter(debt => { const player = playerById(next, debt.playerId); return player && !player.bankrupt && player.cash < 0; });
+  if (!outstanding.length) {
+    if (!next.debts && !next.debtResumePhase && next.phase !== "awaitingDebt") return next;
+    return { ...next, phase: next.phase === "awaitingDebt" ? next.debtResumePhase ?? "awaitingEndTurn" : next.phase, debts: undefined, debtResumePhase: undefined };
+  }
+  const tradeResume = next.pendingTrade?.resumePhase;
+  const resume = next.phase === "awaitingDebt" || next.phase === "awaitingTradeResponse"
+    ? next.debtResumePhase ?? (tradeResume && tradeResume !== "awaitingDebt" ? tradeResume : "awaitingEndTurn")
+    : next.phase as DebtResumePhase;
+  return { ...next, phase: next.pendingTrade ? "awaitingTradeResponse" : "awaitingDebt", debts: outstanding, debtResumePhase: resume };
+};
+
+export const reduceGame = (state: GameState, action: GameAction): GameState => {
+  const before = synchronizeDebt(state), debt = before.debts?.[0];
+  if (debt) {
+    const reply = before.phase === "awaitingTradeResponse" && before.pendingTrade?.toPlayerId === ("playerId" in action ? action.playerId : "") && (action.type === "TRADE_ACCEPT" || action.type === "TRADE_DECLINE");
+    const managing = before.phase === "awaitingDebt" && "playerId" in action && action.playerId === debt.playerId &&
+      (action.type === "BANKRUPT" || action.type === "TRADE_OFFER" || action.type === "BUILD" && action.operation === "sell" || action.type === "MORTGAGE" && action.mortgage);
+    if (!reply && !managing && action.type !== "JOIN" && action.type !== "SET_APPEARANCE") return reject(before, "Settle the outstanding debt before normal play can continue.");
+  }
+  let next = applyAction(before, action);
+  // Raised cash repays the creditor first. Unpaid rent must never become free money.
+  for (const pending of before.debts ?? []) {
+    const oldPlayer = playerById(before, pending.playerId), player = playerById(next, pending.playerId);
+    const creditor = playerById(next, pending.creditorId);
+    if (!oldPlayer || !player || player.bankrupt || !creditor || creditor.bankrupt) continue;
+    const paid = Math.min(-oldPlayer.cash, Math.max(0, player.cash - oldPlayer.cash));
+    if (paid > 0) next = changeCash(next, creditor.id, paid);
+  }
+  return synchronizeDebt(next);
 };

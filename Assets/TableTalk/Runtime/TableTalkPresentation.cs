@@ -114,6 +114,7 @@ namespace TableTalk
                 label.transform.position = new Vector3(point.x, .164f, point.z) - inward * (tile.kind == "property" ? .13f : 0);
                 label.transform.rotation = Quaternion.Euler(90, 0, 0);
                 var text = label.GetComponent<TextMeshPro>();
+                text.enabled = !screenLabels;
                 tileLabels[tile.id] = text;
                 text.color = ColorOf("#17392e"); text.fontSize = 2.55f; text.fontStyle = FontStyles.Bold;
                 text.enableAutoSizing = true; text.fontSizeMin = 1.55f; text.fontSizeMax = 2.55f;
@@ -123,6 +124,7 @@ namespace TableTalk
             }
             if (city != null) city.localScale = Vector3.one * (state.boardSize / 4f - 1.45f);
             BuildLandscape(state.boardSize);
+            labelPositionsDirty = true;
             SyncLabels(state);
         }
 

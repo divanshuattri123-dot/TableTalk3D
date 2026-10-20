@@ -110,6 +110,7 @@ no cards. Passing or landing on GO pays ₹200. Free Parking has no jackpot.
       | "awaitingMove"
       | "awaitingBuy"
       | "awaitingJailPayment"
+      | "awaitingDebt"
       | "awaitingAuction"
       | "awaitingTradeResponse"
       | "awaitingEndTurn"
@@ -140,6 +141,8 @@ no cards. Passing or landing on GO pays ₹200. Free Parking has no jackpot.
       pendingPurchase?: PendingPurchase;
       auction?: AuctionState;
       pendingTrade?: TradeOffer;
+      debts?: { playerId: string; creditorId: string | "bank"; reason: string }[];
+      debtResumePhase?: DebtResumePhase;
       card?: CardReveal;
       lastRoll?: LastRoll;
       eventLog: GameEvent[];  // newest first, bounded to 60
@@ -148,7 +151,7 @@ no cards. Passing or landing on GO pays ₹200. Free Parking has no jackpot.
       winnerId?: string;
     }
 
-Money is integer dollars. netWorth(player) is cash plus listed property and
+Money is integer rupees. netWorth(player) is cash plus listed property and
 improvement value less mortgage principal. It implements the explicitly
 requested negative-net-worth bankruptcy condition.
 
@@ -168,6 +171,7 @@ action types:
 | BUILD | playerId, propertyId, operation | Builds or sells one improvement. |
 | MORTGAGE | playerId, propertyId, mortgage | Mortgages or unmortgages an eligible property. |
 | PAY | playerId, kind | Pays the jail fine or uses a jail-release card. |
+| BANKRUPT | playerId | The current negative-cash debtor surrenders to the recorded creditor. |
 | END_TURN | playerId | Advances, or lets the same player roll after doubles. |
 | AUCTION_BID | playerId, amount or pass | Places an ascending bid or permanently passes. |
 | TRADE_OFFER | playerId, offerId, recipient, cash/property terms | Creates one bilateral offer. |
@@ -189,6 +193,9 @@ remains deterministic without concealed state.
     awaitingEndTurn --END_TURN--> awaitingRoll for same player after doubles,
                                   otherwise awaitingRoll for next solvent player
 
+    any payment --cash below zero--> awaitingDebt --settle--> interrupted phase
+    awaitingDebt --BANKRUPT--> next player or gameOver
+
 ROLL never advances a token. Separating it from MOVE_RESULT permits dice
 animation before movement and card display afterward. A MOVE_RESULT can
 consume several supplied CardDraw items because a card-directed move may land
@@ -207,6 +214,31 @@ Jail and doubles details:
 
 ## Landing, cards, and payments
 
+### Debt settlement correction
+
+A negative cash balance suspends normal play in `awaitingDebt`. `debts` is an
+ordered queue of debtor/creditor/reason records; the outstanding amount is the
+debtor's negative cash. `debtResumePhase` preserves the interrupted phase,
+including an already-rolled move after the third jail attempt. The original
+active player does not change for off-turn Community Chest payments.
+
+Only the first debtor can sell improvements, mortgage deeds, or offer a rescue
+trade. The recipient can accept/decline that trade. Rolling, buying, building,
+unmortgaging, bidding, and ending a turn remain blocked until every debt is paid.
+Zero-cash trade offers remain legal when the offerer's balance is negative.
+
+Creditors receive only cash actually available, then receive liquidation/trade
+proceeds up to the unpaid balance. Bankruptcy does not invent the missing cash.
+Negative net worth still eliminates a player automatically. A debtor can also
+send `BANKRUPT` to surrender when a rescue is impossible or declined; solvent
+players cannot use it. Assets pass to the recorded creditor or bank. Elimination
+advances an active bankrupt player's turn and declares the final survivor winner.
+Multiple off-turn debtors settle in queue order before the interrupted turn resumes.
+
+Card presentation is not an engine action: card effects apply exactly once in
+the reducer. Every viewer can read the full card until pressing Continue; Unity
+animation completion and presentation timeouts cannot dismiss a card for them.
+
 - An unowned property records a pending purchase for BUY or DECLINE_BUY.
 - An owned unmortgaged property charges rent, except to its own owner.
 - Tax tiles pay the bank: income tax ₹200 and GST / trade duty ₹100.
@@ -214,8 +246,8 @@ Jail and doubles details:
   Go To Jail, and Get Out of Jail Free effects.
 - Card text/effect is stored in state.card; dismissing the modal is client UI
   state and never mutates game state.
-- Forced payments can temporarily make cash negative. Afterwards, a player
-  with negative net worth is bankrupt.
+- Forced payments can make cash negative, which immediately pauses normal play
+  for mandatory debt settlement. Negative net worth eliminates the player.
 
 If a bankrupt player's creditor is another player, all their properties
 transfer to that creditor with mortgage state intact. If their creditor is the
@@ -228,7 +260,8 @@ because its four houses were already returned when it was built.
 
 ## Buildings and mortgages
 
-BUILD applies only to the active owner during a normal turn phase. Color
+BUILD applies to the active owner during a normal turn phase or jail payment;
+the current debtor may only sell improvements during debt settlement. Color
 properties require a complete unmortgaged set. Improvement levels must remain
 even across that set. Building 1–4 consumes a bank house; level 5 converts
 four houses into a hotel, returning those houses to the bank and consuming a

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GameState } from "../engine/types";
-import { planPresentation } from "./plan";
+import { canCompleteFrame, planPresentation } from "./plan";
 import type { PresentationFrame } from "./plan";
 
 interface Batch { target: GameState; frames: PresentationFrame[] }
@@ -20,7 +20,8 @@ export function usePresentation(game: GameState | undefined, externalMotion: boo
       setShown(batch.target); playing.current = undefined;
     }
   }, []);
-  const complete = useCallback((id: string) => { if (active.current?.id === id) advance(); }, [advance]);
+  const complete = useCallback((id: string) => { if (canCompleteFrame(active.current, id, "animation")) advance(); }, [advance]);
+  const acknowledgeCard = useCallback((id: string) => { if (canCompleteFrame(active.current, id, "reader")) advance(); }, [advance]);
   useEffect(() => {
     if (!game) return;
     const previous = planned.current;
@@ -35,10 +36,10 @@ export function usePresentation(game: GameState | undefined, externalMotion: boo
     if (!active.current) advance();
   }, [game, advance]);
   useEffect(() => {
-    if (!frame) return;
+    if (!frame || frame.kind === "card") return;
     // A lost WebGL callback must not strand a room. Normal progression uses Unity's actual completion.
     const timer = window.setTimeout(() => complete(frame.id), frame.duration + (externalMotion ? 8000 : 50));
     return () => window.clearTimeout(timer);
   }, [frame, externalMotion, complete]);
-  return { shown: shown ?? game, target: target ?? game, frame, busy: Boolean(frame) || Boolean(game && shown && game.nextEventId !== shown.nextEventId), complete };
+  return { shown: shown ?? game, target: target ?? game, frame, busy: Boolean(frame) || Boolean(game && shown && game.nextEventId !== shown.nextEventId), complete, acknowledgeCard };
 }

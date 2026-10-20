@@ -337,7 +337,7 @@ describe("shared pure Monopoly-style reducer", () => {
     state = setProperty(state, 1, { ownerId: "p1", houses: 5 });
     state = { ...state, bankHouses: 32, bankHotels: 11 };
     state = setPlayer(state, "p1", { cash: -200, position: 2 });
-    state = rollAndMove(state, "p1", [1, 1]);
+    state = reduceGame(state, { type: "BANKRUPT", playerId: "p1" });
     expect(state.players[0]?.bankrupt).toBe(true);
     expect(state.bankHouses).toBe(32);
     expect(state.bankHotels).toBe(12);

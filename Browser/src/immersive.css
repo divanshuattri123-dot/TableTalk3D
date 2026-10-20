@@ -1,4 +1,59 @@
 body.in-game { overflow: hidden; overscroll-behavior: none; }
+.landscape-gate { position: absolute; z-index: 100; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: max(28px, env(safe-area-inset-top)) 25px max(28px, env(safe-area-inset-bottom)); overflow: auto; color: #254536; background: radial-gradient(ellipse at top, #ecf1ce, #fffaf0 65%); text-align: center; }
+.landscape-gate h1 { margin: 0; max-width: 330px; color: #254536; font: 900 32px/1.1 "Trebuchet MS", sans-serif; }
+.landscape-gate > p { margin: 0; max-width: 340px; font-size: 15px; line-height: 1.5; }
+.landscape-gate .eyebrow { color: #a42e42; font-size: 10px; }
+.landscape-gate .rotation-note { color: #596a4c; font-size: 12px; }
+.landscape-gate .event-primary { width: min(330px, 100%); }
+.rotation-back { min-height: 44px; padding: 8px 16px; border: 0; color: #3a5943; background: transparent; text-decoration: underline; }
+.rotate-phone { display: grid; place-items: center; position: relative; width: 130px; height: 110px; }
+.rotate-phone i { width: 90px; height: 52px; border: 5px solid #406b50; border-radius: 10px; background: #bdd18e; box-shadow: inset 6px 0 #406b50; animation: phone-turn 1.4s ease-in-out both; }
+.rotate-phone span { position: absolute; top: -25px; right: 5px; color: #b52f44; font-size: 50px; }
+@keyframes phone-turn { from { transform: rotate(-90deg); } to { transform: none; } }
+.readable-card { --card-accent: #b42f42; display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(430px, 100%); max-height: calc(100dvh - 36px); overflow: auto; overscroll-behavior: contain; padding: clamp(20px, 4vw, 32px); color: #233d40; background: #fffbed; border: 3px solid var(--card-accent); border-radius: 20px; box-shadow: 0 18px 70px #061d3899; text-align: center; animation: readable-card-open .65s cubic-bezier(.2,.8,.2,1) both; }
+.readable-card.community { --card-accent: #266b91; }
+.readable-card .card-drawer { margin: 0; color: #57694e; font-size: 13px; }
+.readable-card h2 { margin: 0; color: var(--card-accent); font: 900 clamp(26px, 5vw, 34px)/1.1 "Trebuchet MS", sans-serif; }
+.readable-card .event-character { flex-shrink: 0; width: 160px; height: clamp(100px, 19dvh, 170px); }
+.readable-card .card-effect { width: 100%; margin: 0; padding-block: 16px; border-block: 1px solid #b6c7ac; color: #233d40; font: 800 clamp(20px, 4vw, 25px)/1.4 "Trebuchet MS", sans-serif; overflow-wrap: break-word; }
+.readable-card > small { color: #52634d; font-size: 12px; line-height: 1.5; }
+.readable-card .event-primary { width: 100%; min-height: 50px; flex-shrink: 0; margin-bottom: 5px; }
+@keyframes readable-card-open { from { opacity: 0; transform: perspective(900px) translateY(55px) rotateY(-60deg) scale(.85); } to { opacity: 1; transform: none; } }
+.immersive-game .controls-panel .debt-warning { grid-column: 1 / -1; margin: 0; padding: 10px 12px; color: #6c2430; background: #fff0d9; border: 1px solid #c86b5e; border-left: 4px solid #b52f44; border-radius: 9px; font-size: 12px; line-height: 1.5; }
+.debt-warning b { display: block; font-size: 15px; }
+.immersive-game .controls-panel .utility-actions .bankrupt-button { color: #8e2638; border-color: #b9505d; background: #ffe9e1; }
+.bankruptcy-confirm { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border: 2px solid #b52f44; border-radius: 10px; background: #fff8eb; }
+.bankruptcy-confirm p { flex-basis: 100%; margin: 0; font-size: 14px; color: #6c2430; }
+.bankruptcy-confirm button { flex: 1; min-height: 46px; padding: 8px 10px; border: 1px solid #b8c5a6; border-radius: 8px; color: #35533a; background: #e8edda; font-weight: 800; }
+.bankruptcy-confirm button:first-of-type { color: #fff; border-color: #972035; background: #b52f44; }
+.tool-sheet .deed-row { flex-wrap: wrap; align-items: center; }
+.tool-sheet .deed-actions { flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+.immersive-game .tool-sheet .property-tools, .immersive-game .tool-sheet .trade-composer { padding: 12px; border-left: 3px solid #769a68; border-radius: 8px; background: #f0f2e4; }
+.immersive-game .tool-sheet .eyebrow { color: #9e2b3c; }
+.immersive-game .tool-sheet .deed-row b { color: #254536; }
+.immersive-game .tool-sheet .deed-row small { color: #536b49; }
+.immersive-game[data-phase="awaitingDebt"] .tool-sheet { max-height: min(42dvh, 400px); }
+@media (max-height: 550px) { .readable-card { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 8px 16px; padding: 15px 20px; } .readable-card > * { grid-column: 2; } .readable-card .event-character { grid-column: 1; grid-row: 1 / 5; width: 80px; height: 100px; } .readable-card .card-effect { padding-block: 8px; font-size: 20px; } .readable-card .event-primary { min-height: 46px; } }
+.screen-board-labels { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+.screen-tile-label { position: absolute; top: 0; left: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; overflow: hidden; color: #122e21; text-shadow: 0 1px #f5fbe4a8; text-align: center; font-family: Arial, sans-serif; line-height: 1.04; contain: layout style; }
+.screen-tile-label[hidden] { display: none; }
+.screen-tile-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; font-size: var(--name-size); font-weight: 700; }
+.screen-tile-label.has-price .screen-tile-name { -webkit-line-clamp: 2; }
+.screen-tile-label.has-price[data-names="false"] .screen-tile-name, .screen-tile-label[data-currency="false"] .screen-tile-price i { display: none; }
+.screen-tile-price { flex-shrink: 0; font-size: var(--price-size); font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -.2px; }
+.screen-tile-price i { font-style: normal; }
+.price-reader { display: flex; flex-direction: column; width: min(460px, 100%); max-height: min(82dvh, 760px); padding: 20px; border: 1px solid #c3cfae; border-radius: 18px; background: #fffaf0; color: #254536; box-shadow: 0 18px 60px #1b392a66; }
+.price-reader > header { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+.price-reader h2 { margin: 4px 0; font: 900 25px "Trebuchet MS", sans-serif; }
+.price-reader .eyebrow { margin: 0; color: #a72d3e; font-size: 10px; }
+.price-reader > header button { min-width: 42px; min-height: 42px; border: 1px solid #b5c7a5; border-radius: 10px; color: #254536; background: #e8edda; font-size: 26px; }
+.price-reader > p { margin: 10px 0 16px; font-size: 13px; line-height: 1.5; color: #516648; }
+.price-reader-list { display: grid; gap: 7px; overflow: auto; min-height: 0; overscroll-behavior: contain; }
+.price-reader-list > button { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 60px; padding: 10px 12px; border: 1px solid #c9d2b6; border-left: 6px solid var(--deed-color); border-radius: 9px; background: #f3f5e9; color: #254536; text-align: left; }
+.price-reader-list span { display: grid; gap: 4px; }
+.price-reader-list b { font-size: 15px; }
+.price-reader-list small { font-size: 11px; color: #586b4c; }
+.price-reader-list strong { font-size: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .game-page.immersive-game { --hud-paper: #fffaf0ed; --hud-ink: #254536; --hud-edge: #b5c7a5; position: fixed; inset: 0; width: 100%; height: 100dvh; min-height: 0; padding: 0; overflow: hidden; background: #7d9c62; color: var(--hud-ink); font-family: "Segoe UI", sans-serif; }
 .immersive-game button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 .immersive-game button:focus-visible { outline: 3px solid #f4c955; outline-offset: 3px; }
@@ -199,3 +254,18 @@ body.in-game { overflow: hidden; overscroll-behavior: none; }
   .hud-drawer-backdrop { padding: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { .immersive-game *, .immersive-game *::before, .immersive-game *::after { scroll-behavior: auto; } }
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 600px) {
+  .immersive-game .side-rail { width: 190px; left: auto; right: max(10px, env(safe-area-inset-right)); transform: none; }
+  .immersive-game .side-rail > .controls-panel { display: flex; flex-direction: column; }
+  .immersive-game .controls-panel .action-cluster { width: 100%; }
+  .immersive-game .controls-panel .utility-actions { display: flex; flex-wrap: wrap; width: 100%; }
+  .immersive-game .controls-panel .utility-actions button { flex: 1 1 40%; }
+  .immersive-game .live-seats { width: 190px; max-height: calc(100dvh - 275px); }
+  .immersive-game[data-phase="awaitingDebt"] .live-seats { display: none; }
+  .immersive-game .side-rail .tool-sheet { position: fixed; inset: 10px 210px 10px max(10px, env(safe-area-inset-left)); max-height: none; width: auto; }
+  .immersive-game .side-rail > .lobby-panel { max-height: calc(100dvh - 120px); width: 100%; }
+  .immersive-game .controls-panel .debt-warning { font-size: 11px; padding: 8px; }
+  .immersive-game .bankruptcy-confirm { padding: 8px; }
+  .immersive-game .bankruptcy-confirm p { font-size: 12px; }
+  .immersive-game .bankruptcy-confirm button { font-size: 11px; }
+}

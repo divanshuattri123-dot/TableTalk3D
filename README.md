@@ -19,6 +19,12 @@ full screen where supported; the in-game full-screen button can toggle it later.
 Phone players can drag to pan, pinch to zoom and tap a property for its deed.
 Players, trades, auctions, building tools and the event log stay inside the game.
 
+On phones and narrow windows, native-resolution browser labels are projected onto
+the 3D tiles. Prices stay at a readable minimum size; full names appear when there
+is enough room after zooming. The camera's ₹ button opens a large-text price guide.
+The canvas defaults to up to 2× display resolution, with a bounded render-target
+budget; High detail allows 2.5×, and Battery saver retains the lower-cost option.
+
 ## Open the project
 
 Open this folder in Unity Hub, load `Assets/TableTalk/Scenes/TableTalk.unity`, and
@@ -85,6 +91,8 @@ through `run_script`:
   the WebGL 2-compatible post-process resource set before rebuilding the player.
 - `TouchVerification.Run` — feed real Input System touch events through the
   camera's pinch and one-finger pan loop while frames advance.
+- `ScreenLabelVerification.Run` — check projected labels across all four map
+  sizes, camera zoom, and restoring desktop world-space labels.
 
 Keep `Assets/` and its `.meta` files together when changing the project. Unity
 generates `Library/`, `Temp/`, `Logs/`, `Data/`, build output, and `UserSettings/`;

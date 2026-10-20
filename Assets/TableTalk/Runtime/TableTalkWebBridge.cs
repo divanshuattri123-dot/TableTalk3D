@@ -31,7 +31,7 @@ namespace TableTalk
         Vector2 lastDrag;
         float pinchDistance;
         bool angledView;
-        [Serializable] public class VisualSettings { public string quality, theme, camera; public bool mobile, reducedMotion; }
+        [Serializable] public class VisualSettings { public string quality, theme, camera; public bool mobile, reducedMotion, screenLabels; }
         public string CompletedFrameId { get; private set; }
         public bool WebMotionPlaying => webMotion != null;
 #if UNITY_WEBGL && !UNITY_EDITOR
@@ -63,6 +63,7 @@ namespace TableTalk
             bool low = settings.quality == "low" || settings.quality == "auto" && settings.mobile;
             bool night = settings.theme == "night";
             angledView = settings.camera == "perspective";
+            ConfigureScreenLabels(settings.screenLabels);
             QualitySettings.shadowDistance = low ? 18 : 38;
             QualitySettings.shadowResolution = low ? ShadowResolution.Low : ShadowResolution.Medium;
             if (RenderSettings.sun != null)
@@ -270,6 +271,7 @@ namespace TableTalk
         }
         void LateUpdate()
         {
+            PublishScreenLabels();
             if (!webMode || shown == null || webMotion != null) return;
             var mouse = Mouse.current;
             if (mouse != null && Mathf.Abs(mouse.scroll.ReadValue().y) > .1f)

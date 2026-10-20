@@ -23,6 +23,7 @@ export type Phase =
   | "awaitingMove"
   | "awaitingBuy"
   | "awaitingJailPayment"
+  | "awaitingDebt"
   | "awaitingAuction"
   | "awaitingTradeResponse"
   | "awaitingEndTurn"
@@ -126,8 +127,11 @@ export interface TradeOffer {
   offeredPropertyIds: number[];
   requestedCash: number;
   requestedPropertyIds: number[];
-  resumePhase: "awaitingRoll" | "awaitingEndTurn";
+  resumePhase: "awaitingRoll" | "awaitingEndTurn" | "awaitingDebt" | "awaitingJailPayment";
 }
+
+export interface Debt { playerId: string; creditorId: string | "bank"; reason: string }
+export type DebtResumePhase = Exclude<Phase, "lobby" | "gameOver" | "awaitingDebt" | "awaitingTradeResponse">;
 
 export interface CardDraw {
   deck: CardDeck;
@@ -167,6 +171,8 @@ export interface GameState {
   pendingPurchase?: PendingPurchase;
   auction?: AuctionState;
   pendingTrade?: TradeOffer;
+  debts?: Debt[];
+  debtResumePhase?: DebtResumePhase;
   card?: CardReveal;
   lastRoll?: PendingRoll;
   eventLog: GameEvent[];
@@ -194,6 +200,7 @@ export type GameAction =
   | { type: "MORTGAGE"; playerId: string; propertyId: number; mortgage: boolean }
   | { type: "PAY"; playerId: string; kind: PayKind }
   | { type: "END_TURN"; playerId: string }
+  | { type: "BANKRUPT"; playerId: string }
   | { type: "AUCTION_BID"; playerId: string; amount?: number; pass?: boolean }
   | {
       type: "TRADE_OFFER";

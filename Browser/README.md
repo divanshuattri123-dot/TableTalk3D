@@ -44,7 +44,18 @@ The cinematic Unity city is the default renderer. Saved preferences from the
 older collection-only release migrate back to it. The table fills the viewport;
 Create/Join requests native full screen when available, with a toggle inside the
 game. The HUD, property tools, player list and event log overlay the table.
-Phones use drag, pinch and tap camera controls; 2D remains available in Settings.
+Phones use landscape-first play with drag, pinch and tap camera controls; 2D
+remains available in Settings. Create/Join and the in-game fullscreen button
+request landscape orientation where the browser supports it. Portrait phones
+show a rotate-phone screen; browsers that refuse orientation/fullscreen still
+work after physically rotating the phone. Leaving the table releases the lock.
+
+Mobile prices are a browser-text layer anchored to Unity's projected tile bounds,
+so reduced 3D quality does not blur them. At whole-map scale prices take priority;
+names expand as the player zooms. The in-game ₹ button opens all bank prices and
+links to the full deed inspector. Canvas resolution tracks resizing and quality
+changes without restarting the room or Unity player. See Unity's supported
+[manual canvas sizing](https://docs.unity3d.com/Manual/webgl-canvas-size.html).
 
 ## Engine
 
@@ -52,3 +63,19 @@ Phones use drag, pinch and tap camera controls; 2D remains available in Settings
 `party/server.ts` is its PartyServer room implementation. Vitest covers the
 game rules; `npm run test:rooms` can verify the live Worker when
 `ROOM_SERVER_URL=wss://table-talk-realtime.divanshuattri123.workers.dev` is set.
+
+Negative cash enters mandatory debt settlement. Only selling improvements,
+mortgaging, a rescue trade or bankruptcy is allowed until the shortfall is paid.
+Off-turn Community Chest debts pause the roller and are resolved in order.
+The creditor receives actual paid cash, not the unpaid balance. Card effects
+are applied by the reducer once; each viewer reads the card until Continue.
+
+`node scripts/prepare-debt-room.mjs prepare CODE ws://127.0.0.1:8790` prepares a
+local browser room for card/debt QA using normal actions. The room must contain
+only players named `QA ...`. Reload that browser, then run `draw` instead of
+`prepare`. Use the UI to mortgage or declare bankruptcy and run `assert-settled`
+or `assert-bankrupt` to verify the canonical server result. This never requires
+a debug state-injection endpoint.
+
+See [RULES_AUDIT.md](RULES_AUDIT.md) for the official-rule comparison, known gaps
+and the difference between a passing regression suite and full rule compliance.

@@ -43,8 +43,21 @@ export function TitleDeed({ game, position, rent }: { game: GameState; position:
   </article>;
 }
 
-export default function EventStage({ game, frame, busy, localId, sendAction }: {
+function ReadableCard({ frame, player, onContinue }: { frame: PresentationFrame; player?: Player; onContinue: (id: string) => void }) {
+  const [opened, setOpened] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  useEffect(() => { if (opened) return; const timer = window.setTimeout(() => setOpened(true), 650); return () => window.clearTimeout(timer); }, [opened]);
+  return <div className="event-backdrop card-event-backdrop"><section className={`readable-card ${frame.deck}`} role="dialog" aria-modal="true" aria-labelledby="card-heading" aria-describedby="card-effect">
+    <p className="card-drawer">{player?.name ?? "A player"} drew a card</p><h2 id="card-heading">{frame.deck === "community" ? "Community Chest" : "Chance"}</h2>
+    <Character pose={frame.deck === "community" ? "chest" : "presenting"} />
+    <p className="card-effect" id="card-effect">{frame.text}</p>
+    <small>Card effects apply automatically. Continue when you have read the card.</small>
+    <button className="event-primary" type="button" disabled={!opened} onClick={() => onContinue(frame.id)}>{opened ? "Continue" : "Opening card…"}</button>
+  </section></div>;
+}
+
+export default function EventStage({ game, frame, busy, localId, sendAction, onCardRead }: {
   game: GameState; frame?: PresentationFrame; busy: boolean; localId: string; sendAction: (action: GameAction) => void;
+  onCardRead: (id: string) => void;
 }) {
   const [bid, setBid] = useState("");
   const previousAuction = useRef(game.auction);
@@ -54,6 +67,7 @@ export default function EventStage({ game, frame, busy, localId, sendAction }: {
   const acting = current?.id === localId && !busy && !me?.bankrupt;
   const auction = game.auction ?? (frame?.kind === "sold" ? previousAuction.current : undefined);
   const eventColor = actor?.color ?? current?.color ?? "#e93244";
+  if (frame?.kind === "card") return <ReadableCard key={frame.id} frame={frame} player={actor} onContinue={onCardRead} />;
   if (auction && (game.auction || frame?.kind === "sold")) {
     const sold = frame?.kind === "sold", winner = game.players.find(p => p.id === (sold ? frame.playerId : auction.highestBidderId));
     const tile = getPurchasableTile(auction.propertyId, game.boardSize);
@@ -85,7 +99,6 @@ export default function EventStage({ game, frame, busy, localId, sendAction }: {
     return <div className="event-backdrop trade-backdrop"><section className="trade-stage" role="dialog" aria-modal="true" aria-label="Trade offer"><h1>Let’s make a deal.</h1><p>{from.name} made an offer to {to.name}.</p><div className="trade-comparison">{[{ player: from, cash: trade.offeredCash, deeds: trade.offeredPropertyIds }, { player: to, cash: trade.requestedCash, deeds: trade.requestedPropertyIds }].map(side => <article key={side.player.id} style={{ "--player-color": side.player.color } as CSSProperties}><PlayerPortrait player={side.player} /><h2>{side.player.name} gives</h2><strong>{money(side.cash)}</strong><ul>{side.deeds.length ? side.deeds.map(id => <li key={id}>{getTile(id, game.boardSize).name}</li>) : <li>No properties</li>}</ul></article>)}</div>{localId === to.id ? <div className="trade-decision"><button className="event-primary" type="button" onClick={() => sendAction({ type: "TRADE_ACCEPT", playerId: localId, offerId: trade.id })}>Accept deal</button><button className="event-secondary" type="button" onClick={() => sendAction({ type: "TRADE_DECLINE", playerId: localId, offerId: trade.id })}>Decline</button></div> : <p>Waiting for {to.name}’s decision.</p>}</section></div>;
   }
   if (!frame) return null;
-  if (frame.kind === "card") return <div className="event-backdrop card-event-backdrop"><section className={`card-reveal ${frame.deck}`} key={frame.id} aria-live="polite"><div className="card-flipper"><div className="card-back"><span>{frame.deck === "community" ? "✦" : "?"}</span></div><div className="card-front"><h2>{frame.deck === "community" ? "Community Chest" : "Chance"}</h2><Character pose={frame.deck === "community" ? "chest" : "presenting"} /><p>{frame.text}</p></div></div></section></div>;
   const cinematic = ["jail", "release", "bankrupt", "winner", "purchase", "sold", "mortgage", "build", "trade"].includes(frame.kind);
   const rent = frame.kind === "money" && frame.text.includes("rent for") && frame.tileId !== undefined;
   return <div className={`motion-event ${cinematic ? "cinematic-event" : ""} motion-${frame.kind}`} key={frame.id} style={{ "--event-color": eventColor } as CSSProperties} aria-live="polite">

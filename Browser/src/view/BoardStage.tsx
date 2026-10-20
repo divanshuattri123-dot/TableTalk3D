@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { getBoard, getTile, isPurchasableTile, isStreetTile } from "../engine/board";
 import type { GameAction, GameState } from "../engine/types";
 import { formatRupees } from "../engine/currency";
+import { decisionPlayerId } from "../engine/reducer";
 import { useAssets, useViewSettings } from "../assets";
 import type { GameAsset } from "../assets";
 import type { AssetUse } from "./AssetStudio";
@@ -27,16 +28,17 @@ export default function BoardStage({ game, shown, target, frame, onComplete, onR
   const [preferences, setPreferences] = useState(false);
   const [help, setHelp] = useState(false);
   const [tile, setTile] = useState<number>();
+  const [prices, setPrices] = useState(false);
   const local = game.players.find((player) => player.id === localId);
-  const current = game.players.find((player) => player.id === game.activePlayerId);
+  const current = game.players.find((player) => player.id === decisionPlayerId(game));
   const location = getTile(game.pendingPurchase?.propertyId ?? current?.position ?? 0, game.boardSize);
   const locationOwner = game.players.find((player) => player.id === game.properties[location.position]?.ownerId);
-  const instruction = game.phase === "lobby" ? "Invite your friends, then start" : game.phase === "awaitingRoll" ? "Roll the dice" : game.phase === "awaitingBuy" ? "Buy this property or auction it" : game.phase === "awaitingAuction" ? "Open auction · bid or pass" : game.phase === "awaitingTradeResponse" ? "A trade is waiting for an answer" : game.phase === "awaitingMove" ? "Dice rolling…" : game.phase === "gameOver" ? "Game complete" : "Manage your deeds, then end your turn";
+  const instruction = game.phase === "awaitingDebt" ? "Settle the negative balance before play continues" : game.phase === "lobby" ? "Invite your friends, then start" : game.phase === "awaitingRoll" ? "Roll the dice" : game.phase === "awaitingBuy" ? "Buy this property or auction it" : game.phase === "awaitingAuction" ? "Open auction · bid or pass" : game.phase === "awaitingTradeResponse" ? "A trade is waiting for an answer" : game.phase === "awaitingMove" ? "Dice rolling…" : game.phase === "gameOver" ? "Game complete" : "Manage your deeds, then end your turn";
   useGameAudio(game, settings);
   const unityReady = useCallback((ready: boolean) => { onReady(ready); onPlayable(ready); }, [onReady, onPlayable]);
   useEffect(() => { const unity = settings.view === "3d" && settings.renderer === "unity"; if (!unity) onReady(false); onPlayable(!unity); }, [settings.view, settings.renderer, onReady, onPlayable]);
   useEffect(() => {
-    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { setTile(undefined); setHelp(false); setPreferences(false); setStudio(undefined); } };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { setTile(undefined); setHelp(false); setPreferences(false); setStudio(undefined); setPrices(false); } };
     window.addEventListener("keydown", escape);
     return () => window.removeEventListener("keydown", escape);
   }, []);
@@ -49,7 +51,7 @@ export default function BoardStage({ game, shown, target, frame, onComplete, onR
     setStudio(undefined);
   };
   return <section className="board-stage" aria-label="Interactive table">
-    <div className="play-turn-banner" style={{ "--turn-color": current?.color ?? "#77c5a1" } as CSSProperties}><span className="play-turn-dot" /><div><b>{current ? `${current.name}${current.id === localId ? " (you)" : ""}’s turn` : `Room ${game.roomCode}`}</b><span>{instruction}</span></div><strong>{game.boardSize}<small>SPACES</small></strong></div>
+    <div className="play-turn-banner" style={{ "--turn-color": current?.color ?? "#77c5a1" } as CSSProperties}><span className="play-turn-dot" /><div><b>{game.winnerId ? `${game.players.find(player => player.id === game.winnerId)?.name ?? "The last player"} wins!` : current ? `${current.name}${current.id === localId ? " (you)" : ""}${game.debts?.length ? " · debt settlement" : "’s turn"}` : `Room ${game.roomCode}`}</b><span>{instruction}</span></div><strong>{game.boardSize}<small>SPACES</small></strong></div>
     <div className="table-toolbar" aria-label="Table tools">
       <button type="button" className="collection-button" onClick={() => setStudio("token")} aria-label="Open token collection">◇ <span>Pieces</span></button>
       <button type="button" aria-expanded={preferences} onClick={() => setPreferences((open) => !open)} aria-label="Game settings">⚙ <span>Settings</span></button>
@@ -71,13 +73,18 @@ export default function BoardStage({ game, shown, target, frame, onComplete, onR
     </div>}
     {error && <p className="asset-notice">{error} <button type="button" onClick={reload}>Retry collection</button></p>}
     {settings.view === "3d" ? <Suspense fallback={<div className="scene-loading"><span className="pulse-token" /><b>Building your 3D table…</b><small>The rules and room are ready.</small></div>}>
-      {settings.renderer === "unity" ? <UnityBoard game={shown} target={target} settings={settings} frame={frame} onSelect={setTile} onComplete={onComplete} onReady={unityReady} onFallback={() => update({ view: "2d" })} /> : <ThreeBoard game={shown} settings={settings} onSelect={setTile} onFallback={() => update({ view: "2d" })} onCamera={() => update({ camera: settings.camera === "top" ? "perspective" : "top" })} />}
+      {settings.renderer === "unity" ? <UnityBoard game={shown} target={target} settings={settings} frame={frame} onSelect={setTile} onComplete={onComplete} onReady={unityReady} onFallback={() => update({ view: "2d" })} onReadPrices={() => setPrices(true)} /> : <ThreeBoard game={shown} settings={settings} onSelect={setTile} onFallback={() => update({ view: "2d" })} onCamera={() => update({ camera: settings.camera === "top" ? "perspective" : "top" })} />}
     </Suspense> : render2D(setTile)}
     <div className="landing-ribbon"><div><small>{game.phase === "lobby" ? "Tap any space to inspect it" : `${current?.name ?? "Player"} is at`}</small><b>{location.name}</b><span>{location.region && `${location.region} · `}{isPurchasableTile(location) ? `${money(location.price)} · ${locationOwner ? `Owned by ${locationOwner.name}` : "Unowned deed"}` : location.kind === "tax" ? `Pay ${money(location.amount)}` : location.kind === "go" ? "Collect ₹200 when passing GO" : instruction}</span></div><button type="button" onClick={() => setTile(location.position)}>Full details ↗</button></div>
     <div className="table-caption"><label className="tile-jump"><span className="sr-only">Inspect any board tile</span><select aria-label="Inspect any board tile" value="" onChange={(event) => { if (event.target.value) setTile(Number(event.target.value)); }}><option value="">Explore every property ↗</option>{getBoard(game.boardSize).map((entry) => <option value={entry.position} key={entry.position}>{entry.position + 1}. {entry.name}{entry.region ? ` — ${entry.region}` : ""}</option>)}</select></label></div>
     <div className="my-piece-strip"><span>Your setup</span><button type="button" onClick={() => setStudio("token")}>{byId.get(local?.tokenId ?? catalog?.featured.tokens[0] ?? "")?.label ?? "Choose a 3D piece"} ↗</button><button type="button" onClick={() => setStudio("dice")}>Change dice ↗</button><button type="button" onClick={() => setStudio("scenery")}>Change city ↗</button></div>
     {studio && <Suspense fallback={<div className="asset-notice">Opening your collection…</div>}><AssetStudio initialCategory={studio} color={local?.color} selectedId={studio === "dice" ? local?.diceId : studio === "token" ? local?.tokenId : undefined} onClose={() => setStudio(undefined)} onChoose={choose} /></Suspense>}
     {tile !== undefined && <TileInspector game={game} position={tile} onClose={() => setTile(undefined)} />}
+    {prices && <div className="modal-backdrop" onClick={() => setPrices(false)}><section className="price-reader" role="dialog" aria-modal="true" aria-labelledby="prices-title" onClick={event => event.stopPropagation()}>
+      <header><div><p className="eyebrow">Indian property guide</p><h2 id="prices-title">Property prices</h2></div><button type="button" autoFocus aria-label="Close property prices" onClick={() => setPrices(false)}>×</button></header>
+      <p>Bank prices in rupees. Tap a place for its full rent and building costs.</p>
+      <div className="price-reader-list">{getBoard(game.boardSize).filter(isPurchasableTile).map(entry => <button type="button" key={entry.position} style={{ "--deed-color": isStreetTile(entry) ? GROUP_COLORS[entry.group] : "#778c73" } as CSSProperties} onClick={() => { setPrices(false); setTile(entry.position); }}><span><b>{entry.name}</b><small>{entry.region}</small></span><strong>{money(entry.price)}</strong></button>)}</div>
+    </section></div>}
     {help && <div className="modal-backdrop" onClick={() => setHelp(false)}>
       <section className="rules-modal" role="dialog" aria-modal="true" aria-labelledby="rules-title" onClick={(event) => event.stopPropagation()}>
         <button className="icon-button" type="button" onClick={() => setHelp(false)} aria-label="Close rules">×</button>
@@ -88,7 +95,7 @@ export default function BoardStage({ game, shown, target, frame, onComplete, onR
           <li>Own a full colour set to double its base rent. Build evenly across the set: four houses, then a hotel.</li>
           <li>On your turn, trade cash and unimproved deeds, mortgage for cash, or sell buildings at half cost.</li>
           <li>Doubles earn another roll; three consecutive doubles send you to Jail. Pay ₹50, use a card or try for doubles.</li>
-          <li>Rent, tax and cards resolve automatically. Cash may go negative after a bill; mortgage or sell improvements on your turn to recover. Negative net worth means bankruptcy. Last player standing wins.</li>
+          <li>Rent, tax and cards resolve automatically. Negative cash pauses normal play until you sell buildings, mortgage, trade, or declare bankruptcy. Negative net worth eliminates you automatically. Last player standing wins.</li>
         </ol>
         <p>2–3 players: 40 spaces · 4: 48 · 5: 56 · 6: 64. The map locks when the game starts. Keep your tab open on your turn; reload to reclaim your seat if the connection closes.</p>
         <button className="primary-button" type="button" onClick={() => setHelp(false)}>Got it. Let’s play.</button>

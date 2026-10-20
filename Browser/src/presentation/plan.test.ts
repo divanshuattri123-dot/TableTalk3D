@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createInitialState, reduceGame } from "../engine/reducer";
-import { planPresentation, routeBetween, shouldSendMove } from "./plan";
+import { canCompleteFrame, planPresentation, routeBetween, shouldSendMove } from "./plan";
+import { COMMUNITY_CARDS } from "../engine/board";
 import type { GameState } from "../engine/types";
 
 const start = () => [
@@ -11,6 +12,15 @@ const start = () => [
 const at = (state: GameState, position: number) => ({ ...state, players: state.players.map(p => p.id === "a" ? { ...p, position } : p) });
 
 describe("pure presentation planning", () => {
+  it.each(COMMUNITY_CARDS.map((card, index) => ({ ...card, index })))("preserves the full Community Chest effect for card $index", ({ index, text }) => {
+    const rolled = reduceGame(start(), { type: "ROLL", playerId: "a", dice: [1, 1] });
+    const next = reduceGame(rolled, { type: "MOVE_RESULT", playerId: "a", cardDraws: [{ deck: "community", index }] });
+    const frame = planPresentation(rolled, next).find(frame => frame.kind === "card");
+    expect(frame).toMatchObject({ deck: "community", text });
+    expect(canCompleteFrame(frame, frame!.id, "animation")).toBe(false);
+    expect(canCompleteFrame(frame, frame!.id, "reader")).toBe(true);
+    expect(canCompleteFrame(frame, "stale-card", "reader")).toBe(false);
+  });
   it("does not replay a match on load, echo or stale snapshot", () => {
     const state = start();
     expect(planPresentation(undefined, state)).toEqual([]);
