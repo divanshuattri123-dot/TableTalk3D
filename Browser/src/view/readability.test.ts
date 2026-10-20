@@ -49,6 +49,11 @@ describe("mobile board clarity", () => {
     const lines = fitBoardName("Mattancherry", 21, 3, text => text.length * 4).lines;
     expect(lines.every(line => line.length > 1)).toBe(true);
   });
+  it("does not drop narrow six-player labels on a smaller landscape phone", () => {
+    const layout = screenLabelLayout({ id: 37, x: .5, y: .2, w: 12.5 / 667, h: 27 / 375, visible: true }, 667, 375, 64);
+    expect(layout.visible).toBe(true); expect(layout.showName).toBe(true);
+    expect(layout.showCurrency).toBe(false);
+  });
   it("hides clipped and behind-camera labels rather than leaving stale prices on screen", () => {
     const anchor = { id: 1, x: .5, y: .5, w: .08, h: .05, visible: false };
     expect(screenLabelLayout(anchor, 390, 844).visible).toBe(false);

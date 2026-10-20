@@ -23,6 +23,7 @@ export default function ScreenBoardLabels({ size }: { size: BoardSize }) {
         node.style.setProperty("--name-size", `${layout.nameSize}px`);
         node.style.setProperty("--price-size", `${layout.priceSize}px`);
         node.dataset.side = String(layout.side);
+        node.dataset.currency = String(layout.showCurrency);
         const key = `${Math.round(layout.width)}:${Math.round(layout.height)}:${layout.nameSize}`;
         if (!layout.visible || fitted.get(anchor.id) === key) continue;
         fitted.set(anchor.id, key);

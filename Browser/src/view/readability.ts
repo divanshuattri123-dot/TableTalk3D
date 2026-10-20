@@ -14,9 +14,10 @@ export function screenLabelLayout(anchor: LabelAnchor, width: number, height: nu
   const side = Math.floor(anchor.id / (boardSize / 4));
   return {
     x: anchor.x * width, y: anchor.y * height, width: w, height: h,
-    visible: anchor.visible && w >= 13 && h >= 12 && anchor.x + anchor.w / 2 > 0 && anchor.x - anchor.w / 2 < 1 && anchor.y + anchor.h / 2 > 0 && anchor.y - anchor.h / 2 < 1,
+    visible: anchor.visible && w > 0 && h > 0 && anchor.x + anchor.w / 2 > 0 && anchor.x - anchor.w / 2 < 1 && anchor.y + anchor.h / 2 > 0 && anchor.y - anchor.h / 2 < 1,
     nameSize: Math.round(Math.max(8, Math.min(16, w * .34, h / 2.5)) * 2) / 2,
     priceSize: Math.max(8, Math.min(14, (side % 2 ? h : w) * .34)),
+    showCurrency: (side % 2 ? h : w) >= 20,
     side,
     showName: true
   };
