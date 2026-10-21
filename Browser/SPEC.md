@@ -51,8 +51,16 @@ than a hard-coded index. The classic 40-tile game remains unchanged. Additional
 groups have listed prices/rent and obey the same even-build/mortgage rules.
 Bank inventory starts at 32 houses/12 hotels, plus 16 houses/4 hotels per tier.
 
-Player cosmetics add optional tokenId/diceId fields. SET_APPEARANCE updates only
+Player cosmetics add optional tokenId/diceId fields. SET_APPEARANCE updates
 those fields for an existing player, without changing the turn or economics.
+Token colours must be unique within a room. JOIN rejects an occupied colour;
+hexadecimal letter case and short/long hex notation are treated as the same
+colour. Existing player IDs remain idempotent on reload. SET_APPEARANCE may also
+change a player's colour, but only in the lobby and only to an unoccupied colour.
+START refuses a legacy lobby with duplicate colours until players choose distinct
+ones. The welcome screen previews occupied colours from canonical room snapshots;
+simultaneous joins are still decided sequentially by the shared reducer. A rejected
+join stays on a colour-choice screen and can retry without taking a phantom seat.
 Asset IDs are looked up in a static catalog; no browser objects or asset loading
 ever enters the reducer. It remains a pure deterministic state transition.
 
@@ -162,7 +170,7 @@ action types:
 
 | Action | Required payload | Effect |
 | --- | --- | --- |
-| JOIN | player | Adds a unique player in the lobby, maximum six. |
+| JOIN | player | Adds a unique player with an unoccupied token colour in the lobby, maximum six. |
 | START | playerId, firstPlayerId | Host starts with at least two players and an eligible supplied first player. |
 | ROLL | playerId, dice: [number, number] | Validates and stores dice, resolving jail/doubles rules but not movement. |
 | MOVE_RESULT | playerId, cardDraws? | Moves by stored dice and resolves landing effects. |

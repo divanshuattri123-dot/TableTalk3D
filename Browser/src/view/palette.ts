@@ -7,4 +7,4 @@ export const GROUP_COLORS: Record<ColorGroup, string> = {
   copper: "#bd7a4a", sky: "#49a9db", rose: "#d45984", mint: "#60bca0",
   indigo: "#5a62b8", amber: "#dca541", lavender: "#ac8dcc", turquoise: "#3cbdb7"
 };
-export const PLAYER_COLORS = ["#ed6266", "#4e9fef", "#37b995", "#efb447", "#ac81e4", "#ed79bc"];
+export { PLAYER_COLORS } from "../engine/playerColors";

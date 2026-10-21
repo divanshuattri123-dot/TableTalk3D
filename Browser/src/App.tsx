@@ -24,6 +24,7 @@ import type {
 import type { CSSProperties } from "react";
 import { canTradeProperty, decisionPlayerId, netWorth } from "./engine/reducer";
 import { formatRupees } from "./engine/currency";
+import { isPlayerColorTaken, playerColorKey } from "./engine/playerColors";
 import { usePresentation } from "./presentation/usePresentation";
 import { shouldSendMove } from "./presentation/plan";
 import EventStage, { PlayerPortrait } from "./view/EventStage";
@@ -147,7 +148,8 @@ const partyHost = (): string => {
   return import.meta.env.DEV ? `${window.location.hostname}:1999` : window.location.host;
 };
 
-function useGameRoom(session: Session | undefined) {
+function useGameRoom(session: Session | undefined, previewRoomCode = "") {
+  const roomCode = session?.roomCode ?? previewRoomCode;
   const socketRef = useRef<PartySocket | null>(null);
   const stateRef = useRef<GameState | undefined>(undefined);
   const [game, setGame] = useState<GameState>();
@@ -155,7 +157,7 @@ function useGameRoom(session: Session | undefined) {
   const [error, setError] = useState<string>();
 
   useEffect(() => {
-    if (!session) return;
+    if (!roomCode) return;
     setGame(undefined);
     stateRef.current = undefined;
     setError(undefined);
@@ -163,7 +165,7 @@ function useGameRoom(session: Session | undefined) {
 
     const socket = new PartySocket({
       host: partyHost(),
-      room: session.roomCode,
+      room: roomCode,
       party: "main",
       protocol: window.location.protocol === "https:" ? "wss" : "ws",
       maxRetries: 0
@@ -172,7 +174,7 @@ function useGameRoom(session: Session | undefined) {
 
     const onOpen = () => {
       setConnection("connected");
-      socket.send(JSON.stringify({ type: "action", action: { type: "JOIN", player: session.player } }));
+      if (session) socket.send(JSON.stringify({ type: "action", action: { type: "JOIN", player: session.player } }));
     };
     const onMessage = (event: MessageEvent) => {
       try {
@@ -197,7 +199,7 @@ function useGameRoom(session: Session | undefined) {
       socket.close(1000, "Leaving game");
       socketRef.current = null;
     };
-  }, [session?.player.color, session?.player.id, session?.player.name, session?.roomCode]);
+  }, [session?.player.color, session?.player.id, session?.player.name, roomCode]);
 
   const sendAction = useCallback((action: GameAction) => {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
@@ -208,7 +210,14 @@ function useGameRoom(session: Session | undefined) {
     socketRef.current.send(JSON.stringify({ type: "action", action }));
   }, []);
 
-  return { game, connection, error, sendAction };
+  return { game: game?.roomCode === roomCode ? game : undefined, connection, error, sendAction };
+}
+
+function TokenColorPicker({ color, players = [], localId, onChoose }: { color: string; players?: readonly Player[]; localId?: string; onChoose: (color: string) => void }) {
+  return <fieldset className="color-picker"><legend>Choose a token colour</legend><div>{COLORS.map(swatch => {
+    const owner = players.find(player => player.id !== localId && playerColorKey(player.color) === swatch);
+    return <button key={swatch} className={`color-choice ${playerColorKey(color) === swatch ? "chosen" : ""}`} style={{ "--swatch": swatch } as CSSProperties} onClick={() => onChoose(swatch)} type="button" disabled={Boolean(owner)} aria-pressed={playerColorKey(color) === swatch} aria-label={owner ? `${swatch} taken by ${owner.name}` : `Use ${swatch} token`} title={owner ? `Taken by ${owner.name}` : "Available colour"} />;
+  })}</div></fieldset>;
 }
 
 function App() {
@@ -216,6 +225,12 @@ function App() {
   const [roomInput, setRoomInput] = useState(roomFromUrl());
   const [color, setColor] = useState(COLORS[0] as string);
   const [session, setSession] = useState<Session | undefined>(savedSession);
+  const previewCode = /^[A-Z]{4}$/.test(roomInput) ? roomInput : "";
+  const preview = useGameRoom(undefined, session ? "" : previewCode);
+  const returningId = savedSession(previewCode)?.player.id;
+  const taken = isPlayerColorTaken(preview.game?.players ?? [], color, returningId);
+  const returning = preview.game?.players.some(player => player.id === returningId);
+  const joinReady = preview.game && !taken && (returning || preview.game.phase === "lobby" && preview.game.players.length < 6);
   const { catalog, byId, error, reload } = useAssets();
   const { update } = useViewSettings();
   const [tokenId, setTokenId] = useState<string>();
@@ -246,7 +261,11 @@ function App() {
   };
 
   if (session) {
-    return <GameRoom session={session} onLeave={() => {
+    return <GameRoom session={session} onChooseColor={nextColor => {
+      const nextSession = { ...session, player: { ...session.player, color: nextColor } };
+      try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextSession)); } catch { /* Colour selection still works without saved seats. */ }
+      setColor(nextColor); setSession(nextSession);
+    }} onLeave={() => {
       setName(session.player.name);
       setRoomInput(session.roomCode);
       setSession(undefined);
@@ -281,22 +300,8 @@ function App() {
           placeholder="What should we call you?"
           autoComplete="nickname"
         />
-        <fieldset className="color-picker">
-          <legend>Choose a token color</legend>
-          <div>
-            {COLORS.map((swatch) => (
-              <button
-                key={swatch}
-                className={`color-choice ${color === swatch ? "chosen" : ""}`}
-                style={{ "--swatch": swatch } as CSSProperties}
-                onClick={() => setColor(swatch)}
-                type="button"
-                aria-pressed={color === swatch}
-                aria-label={`Use ${swatch} token`}
-              />
-            ))}
-          </div>
-        </fieldset>
+        <TokenColorPicker color={color} players={preview.game?.players} localId={returningId} onChoose={setColor} />
+        {previewCode && <p className="colour-room-status" role="status">{!preview.game ? preview.error || (preview.connection === "offline" ? "Could not check this table. Reload to try again." : "Checking available colours…") : !returning && preview.game.phase !== "lobby" ? "This game has already started." : !returning && preview.game.players.length >= 6 ? "This table is full." : taken ? "That colour is taken. Choose an available colour to join." : `${preview.game.players.length} / 6 seats · A different colour for every player.`}</p>}
         <div className="appearance-picker"><button type="button" onClick={() => setStudio("token")}><span>YOUR PIECE</span><b>{token?.label ?? "Sports car"}</b><i>Change ↗</i></button><button type="button" onClick={() => setStudio("dice")}><span>YOUR DICE</span><b>{die?.label ?? "Paris dice"}</b><i>Change ↗</i></button></div>
         <div className="welcome-actions">
           <button className="primary-button" disabled={!name.trim()} onClick={() => begin(randomCode())} type="button">
@@ -314,7 +319,7 @@ function App() {
                 placeholder="ABCD"
                 spellCheck={false}
               />
-              <button className="secondary-button" disabled={!name.trim() || !/^[A-Z]{4}$/.test(roomInput)} onClick={() => begin(roomInput)} type="button">
+              <button className="secondary-button" disabled={!name.trim() || !joinReady} onClick={() => begin(roomInput)} type="button">
                 Join
               </button>
             </div>
@@ -330,7 +335,7 @@ function App() {
   );
 }
 
-function GameRoom({ session, onLeave }: { session: Session; onLeave: () => void }) {
+function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLeave: () => void; onChooseColor: (color: string) => void }) {
   const { game, connection, error, sendAction } = useGameRoom(session);
   const [copied, setCopied] = useState(false);
   const [unityReady, setUnityReady] = useState(false);
@@ -380,7 +385,7 @@ function GameRoom({ session, onLeave }: { session: Session; onLeave: () => void 
     }
   };
 
-  if (!game) {
+  if (!game || !me && game.phase === "lobby" && !game.notice) {
     return (
       <main className="loading-shell">
         <div className="loading-card">
@@ -394,6 +399,8 @@ function GameRoom({ session, onLeave }: { session: Session; onLeave: () => void 
       </main>
     );
   }
+
+  if (!me && game.phase === "lobby") return <main className="loading-shell"><section className="loading-card"><p className="eyebrow">Room {session.roomCode}</p><h1>Choose an available colour</h1><p role="status">{game.notice ?? "Each player needs a different token colour."}</p><TokenColorPicker color={session.player.color} players={game.players} onChoose={onChooseColor} /><button className="secondary-button" onClick={onLeave} type="button">Back</button></section></main>;
 
   const current = game.players.find((player) => player.id === decisionPlayerId(game));
   const isCurrent = me?.id === decisionPlayerId(game) && !me?.bankrupt && !motion.busy && sceneUsable;
@@ -464,14 +471,18 @@ function Lobby({
     if (!player) return;
     sendAction({ type: "START", playerId: localId, firstPlayerId: player.id });
   };
+  const local = game.players.find(player => player.id === localId);
+  const duplicateColours = game.players.some(player => isPlayerColorTaken(game.players, player.color, player.id));
   return (
     <section className="lobby-panel">
       <p className="eyebrow">Seats at the table</p>
       <h2>{game.players.length} / 6 players</h2>
       <div className="map-size-note"><b>{game.boardSize} spaces</b><span>{game.players.length < 4 ? "Classic neighbourhood" : "Expanded neighbourhood"}</span><small>4 players → 48 · 5 → 56 · 6 → 64. Locks at start.</small></div>
       <PlayerRoster game={game} localId={localId} />
+      {local && <details className="lobby-colours"><summary>Your token colour</summary><TokenColorPicker color={local.color} players={game.players} localId={localId} onChoose={color => sendAction({ type: "SET_APPEARANCE", playerId: localId, color })} /></details>}
+      {duplicateColours && <p className="inline-error" role="status">Every player needs a different colour. Open “Your token colour” to choose a free one.</p>}
       {isHost ? (
-        <button className="primary-button full-width" disabled={game.players.length < 2} onClick={start} type="button">
+        <button className="primary-button full-width" disabled={game.players.length < 2 || duplicateColours} onClick={start} type="button">
           {game.players.length < 2 ? "Waiting for one friend" : "Start the game"}
         </button>
       ) : (

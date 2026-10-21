@@ -8,6 +8,7 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "test:rooms": "node scripts/verify-room.mjs",
+    "test:colors": "node scripts/verify-player-colors.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json"

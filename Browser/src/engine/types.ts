@@ -185,7 +185,7 @@ export type PayKind = "jailFine" | "jailCard";
 
 export type GameAction =
   | { type: "JOIN"; player: PlayerInput }
-  | { type: "SET_APPEARANCE"; playerId: string; tokenId?: string; diceId?: string }
+  | { type: "SET_APPEARANCE"; playerId: string; tokenId?: string; diceId?: string; color?: string }
   | { type: "START"; playerId: string; firstPlayerId: string }
   | { type: "ROLL"; playerId: string; dice: Dice }
   | { type: "MOVE_RESULT"; playerId: string; cardDraws?: CardDraw[] }

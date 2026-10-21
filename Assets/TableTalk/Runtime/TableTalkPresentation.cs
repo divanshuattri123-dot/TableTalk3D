@@ -152,9 +152,10 @@ namespace TableTalk
                     var plinth = GameObject.CreatePrimitive(PrimitiveType.Cylinder); plinth.name = "Player colour";
                     plinth.transform.SetParent(piece, false); plinth.transform.localPosition = new Vector3(0, -.045f, 0);
                     plinth.transform.localScale = new Vector3(.6f, .035f, .6f);
-                    plinth.GetComponent<Renderer>().sharedMaterial = Material(ColorOf(player.color), .15f, .45f);
                     Destroy(plinth.GetComponent<CapsuleCollider>()); pieces[player.id] = piece;
                 }
+                var colourBase = piece.Find("Player colour");
+                if (colourBase != null) colourBase.GetComponent<Renderer>().sharedMaterial = Material(ColorOf(player.color), .15f, .45f);
                 UpdateTokenModel(piece, player);
                 piece.gameObject.SetActive(!player.bankrupt);
                 piece.position = BoardLayout.Point(player.position, state.boardSize);

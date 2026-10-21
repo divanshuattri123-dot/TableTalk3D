@@ -12,6 +12,7 @@ import {
   isStreetTile
 } from "./board";
 import { formatRupees } from "./currency";
+import { isPlayerColorTaken, playerColorKey } from "./playerColors";
 import type {
   AuctionState,
   BoardSize,
@@ -521,10 +522,13 @@ const handleJoin = (state: GameState, action: Extract<GameAction, { type: "JOIN"
   if (!id || !name.trim() || !color || playerById(state, id)) {
     return reject(state, "Choose a unique name and player identity.");
   }
+  if (!playerColorKey(color) || isPlayerColorTaken(state.players, color)) {
+    return reject(state, "That token colour is already taken. Choose a different colour.");
+  }
   const player: Player = {
     id,
     name: name.trim(),
-    color,
+    color: playerColorKey(color),
     tokenId: action.player.tokenId,
     diceId: action.player.diceId,
     cash: 1500,
@@ -552,6 +556,9 @@ const handleStart = (state: GameState, action: Extract<GameAction, { type: "STAR
   }
   if (state.players.length < 2) {
     return reject(state, "At least two players are needed to start.");
+  }
+  if (state.players.some(player => isPlayerColorTaken(state.players, player.color, player.id))) {
+    return reject(state, "Every player must choose a different token colour before starting.");
   }
   if (!playerById(state, action.firstPlayerId)) {
     return reject(state, "Choose a player in this room to go first.");
@@ -1111,11 +1118,16 @@ const applyAction = (state: GameState, action: GameAction): GameState => {
   switch (action.type) {
     case "JOIN":
       return handleJoin(state, action);
-    case "SET_APPEARANCE":
-      return playerById(state, action.playerId)
-        ? withPlayer(state, action.playerId, (player) => ({ ...player,
-          tokenId: action.tokenId ?? player.tokenId, diceId: action.diceId ?? player.diceId }))
-        : reject(state, "That player is not in this room.");
+    case "SET_APPEARANCE": {
+      if (!playerById(state, action.playerId)) return reject(state, "That player is not in this room.");
+      if (action.color !== undefined && (state.phase !== "lobby" || !playerColorKey(action.color) || isPlayerColorTaken(state.players, action.color, action.playerId))) {
+        return reject(state, "Choose an available token colour before the game starts.");
+      }
+      const next = withPlayer(state, action.playerId, (player) => ({ ...player,
+          tokenId: action.tokenId ?? player.tokenId, diceId: action.diceId ?? player.diceId,
+          color: action.color === undefined ? player.color : playerColorKey(action.color) }));
+      return action.color === undefined ? next : addEvent(next, `${playerName(state, action.playerId)} chose a different token colour.`);
+    }
     case "START":
       return handleStart(state, action);
     case "ROLL":

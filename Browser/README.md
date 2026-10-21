@@ -40,6 +40,17 @@ pipeline remains in the original development workspace; generated binaries and
 the extracted asset archive are intentionally not copied into this static-site
 folder.
 
+Each player must use a different token colour in a room. Entering a room code
+previews occupied colours without taking a seat. Taken swatches are crossed out
+and disabled; the shared reducer also rejects a colour collision if two friends
+join simultaneously. A rejected join can pick another colour and retry. Players
+may change to a free colour under “Your token colour” in the lobby, but colours
+lock once play starts. Legacy lobbies with duplicates must resolve them before
+Start becomes available.
+`npm run test:colors` exercises concurrent joins, retries, colour changes and
+the start lock against a real local room server; set `ROOM_SERVER_URL` to test a
+deployed server instead.
+
 The cinematic Unity city is the default renderer. Saved preferences from the
 older collection-only release migrate back to it. The table fills the viewport;
 Create/Join requests native full screen when available, with a toggle inside the

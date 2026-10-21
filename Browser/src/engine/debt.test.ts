@@ -4,7 +4,7 @@ import type { GameAction, GameState, Player, PropertyState } from "./types";
 
 const start = (count = 2) => {
   let state = createInitialState("DEBT");
-  for (let i = 1; i <= count; i++) state = reduceGame(state, { type: "JOIN", player: { id: `p${i}`, name: `Player ${i}`, color: "#456789" } });
+  for (let i = 1; i <= count; i++) state = reduceGame(state, { type: "JOIN", player: { id: `p${i}`, name: `Player ${i}`, color: `#45678${i}` } });
   return reduceGame(state, { type: "START", playerId: "p1", firstPlayerId: "p1" });
 };
 const player = (s: GameState, id: string, patch: Partial<Player>): GameState => ({ ...s, players: s.players.map(p => p.id === id ? { ...p, ...patch } : p) });
