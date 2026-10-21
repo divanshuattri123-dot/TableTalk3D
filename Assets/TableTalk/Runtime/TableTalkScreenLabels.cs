@@ -20,7 +20,8 @@ namespace TableTalk
         bool screenLabels, labelPositionsDirty;
         Matrix4x4 lastLabelMatrix;
         int lastLabelBoardSize;
-        float nextLabelUpdate;
+        ScreenLabelPacket projectedLabels;
+        readonly Vector3[] labelCorners = new Vector3[4];
 
         void ConfigureScreenLabels(bool enabled)
         {
@@ -30,17 +31,21 @@ namespace TableTalk
 
         public ScreenLabelPacket ProjectScreenLabels()
         {
-            var packet = new ScreenLabelPacket { size = shown.boardSize, labels = new ScreenLabelAnchor[shown.tiles.Length] };
-            var corners = new Vector3[4];
+            if (projectedLabels == null || projectedLabels.size != shown.boardSize)
+            {
+                projectedLabels = new ScreenLabelPacket { size = shown.boardSize, labels = new ScreenLabelAnchor[shown.tiles.Length] };
+                for (int i = 0; i < shown.tiles.Length; i++) projectedLabels.labels[i] = new ScreenLabelAnchor { id = shown.tiles[i].id };
+            }
+            var packet = projectedLabels;
             for (int i = 0; i < shown.tiles.Length; i++)
             {
                 int id = shown.tiles[i].id;
-                var anchor = new ScreenLabelAnchor { id = id }; packet.labels[i] = anchor;
+                var anchor = packet.labels[i];
                 if (!tileLabels.TryGetValue(id, out var label)) continue;
-                label.rectTransform.GetWorldCorners(corners);
+                label.rectTransform.GetWorldCorners(labelCorners);
                 var min = Vector2.one * float.MaxValue; var max = Vector2.one * float.MinValue;
                 bool inFront = true;
-                foreach (var corner in corners)
+                foreach (var corner in labelCorners)
                 {
                     var point = boardCamera.WorldToViewportPoint(corner); inFront &= point.z > 0;
                     min = Vector2.Min(min, point); max = Vector2.Max(max, point);
@@ -54,12 +59,11 @@ namespace TableTalk
 
         void PublishScreenLabels()
         {
-            if (!webMode || !screenLabels || shown == null || Time.unscaledTime < nextLabelUpdate) return;
+            if (!webMode || !screenLabels || shown == null) return;
             var matrix = boardCamera.projectionMatrix * boardCamera.worldToCameraMatrix;
             if (!labelPositionsDirty && lastLabelBoardSize == shown.boardSize && matrix == lastLabelMatrix) return;
-            nextLabelUpdate = Time.unscaledTime + 1f / 30;
             labelPositionsDirty = false; lastLabelBoardSize = shown.boardSize; lastLabelMatrix = matrix;
-            // Browser text stays sharp even when the 3D scene uses a battery-saving render target.
+            // Project after camera input in the same frame; throttling made signs lag behind dragged tiles.
             EmitWeb("labels", JsonUtility.ToJson(ProjectScreenLabels()));
         }
     }

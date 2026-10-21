@@ -40,8 +40,7 @@ Progress already discarded by the former memory-only server cannot be recovered.
 
 Dragging the 3D board does not select browser text or create image drag ghosts.
 Trade offers never replay the previous dice animation; dice animation is limited
-to actual roll outcomes. The renderer and original city remain unchanged in this
-reliability release.
+to actual roll outcomes. The original detailed city geometry is retained.
 
 ## Local run
 
@@ -103,6 +102,16 @@ only in the presentation layer; they never change the deterministic game state.
 The scene respects the browser's reduced-motion setting. The static landscape is
 batched separately from moving actors, and decorative geometry has no physics
 colliders. Native city assets and gameplay rules remain unchanged.
+
+Native release 0.5.0 restores the colour/lighting profile's missing serialized
+effect references: ACES tonemapping, moderate contrast/saturation, restrained
+quarter-resolution bloom and a light vignette. The same detailed towers,
+stations, low-rise buildings, rooftops and gardens are retained, not replaced by
+generic blocks. Browser signs now project after camera movement in the same
+rendered frame; reusable projection buffers avoid per-frame anchor allocations.
+Panning is bounded so a swipe cannot throw the entire board out of sight.
+Automatic mobile/battery-saver graphics targets 30 fps; high detail targets 60 fps.
+These are frame caps, not claims of measured performance on every phone.
 
 ## Engine
 

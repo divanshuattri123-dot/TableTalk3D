@@ -44,6 +44,15 @@ describe("durable room checkpoints", () => {
     await restarted.apply(action("BUY", { propertyId: 3 }), "buy");
     expect(restarted.state).toEqual(saved);
   });
+  it("has no one-hour expiry on a saved in-progress match", async () => {
+    const { storage, room } = await startedRoom(); await buyFirst(room); const saved = structuredClone(room.state);
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(Date.now() + 2 * 60 * 60 * 1000);
+      const restarted = new SavedRoom(storage, "TEST"); await restarted.load(); expect(restarted.state).toEqual(saved);
+      await restarted.apply(action("END_TURN"), "two-hours-later"); expect(restarted.state.activePlayerId).toBe("p2");
+    } finally { vi.useRealTimers(); }
+  });
   it("never confirms or remembers a failed write, and the same action can safely retry", async () => {
     const { storage, room } = await startedRoom(); const before = structuredClone(room.state);
     storage.put.mockRejectedValueOnce(new Error("storage unavailable"));
@@ -136,6 +145,11 @@ describe("automatic room recovery", () => {
     const c = channel(); c.link.open(); c.snapshot(); c.link.resume();
     expect(c.socket.send).toHaveBeenLastCalledWith('{"type":"sync"}'); c.advance(31_000); c.link.resume();
     expect(c.socket.reconnect).toHaveBeenCalledOnce();
+  });
+  it("recovers an unacknowledged action after an hour-long phone sleep", () => {
+    const c = channel(); c.link.open(); c.snapshot(); c.link.sendAction(action("END_TURN"));
+    const first = c.socket.send.mock.lastCall?.[0]; c.advance(60 * 60 * 1000); c.link.resume();
+    expect(c.socket.reconnect).toHaveBeenCalledOnce(); c.link.open(); c.snapshot(); expect(c.socket.send).toHaveBeenLastCalledWith(first);
   });
   it("retries unacknowledged actions without generating a new receipt", () => {
     const c = channel(); c.link.open(); c.snapshot(); c.link.sendAction(action("END_TURN"));

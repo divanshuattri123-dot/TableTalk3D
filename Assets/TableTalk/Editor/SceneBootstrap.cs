@@ -105,6 +105,7 @@ namespace TableTalk.Editor
             var vignette = profile.Add<Vignette>(true); vignette.intensity.value = .18f; vignette.smoothness.value = .4f;
             var colours = profile.Add<ColorAdjustments>(true); colours.saturation.value = 12; colours.contrast.value = 7;
             AssetDatabase.CreateAsset(profile, "Assets/TableTalk/Settings/CityPostProcess.asset");
+            foreach (var component in profile.components) AssetDatabase.AddObjectToAsset(component, profile);
             var volume = new GameObject("Colour and tone", typeof(Volume)).GetComponent<Volume>(); volume.isGlobal = true; volume.sharedProfile = profile;
 
             var paletteImporter = (TextureImporter)AssetImporter.GetAtPath(Art + "/CityPalette.png");

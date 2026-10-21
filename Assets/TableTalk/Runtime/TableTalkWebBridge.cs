@@ -61,6 +61,7 @@ namespace TableTalk
             var settings = JsonUtility.FromJson<VisualSettings>(json);
             if (settings == null) return;
             bool low = settings.quality == "low" || settings.quality == "auto" && settings.mobile;
+            Application.targetFrameRate = low ? 30 : 60;
             bool night = settings.theme == "night";
             angledView = settings.camera == "perspective";
             worldMotionReduced = settings.reducedMotion;
@@ -71,6 +72,7 @@ namespace TableTalk
             {
                 RenderSettings.sun.intensity = night ? .8f : 2.1f;
                 RenderSettings.sun.color = ColorOf(night ? "#a9c6ec" : "#fff7df");
+                RenderSettings.sun.shadowStrength = low ? .72f : .82f;
             }
             RenderSettings.ambientSkyColor = ColorOf(night ? "#718bb4" : "#c7dcf6");
             RenderSettings.ambientEquatorColor = ColorOf(night ? "#506d78" : "#a5bdba");
@@ -273,7 +275,11 @@ namespace TableTalk
         }
         void LateUpdate()
         {
+            UpdateBoardInput();
             PublishScreenLabels();
+        }
+        void UpdateBoardInput()
+        {
             if (!webMode || shown == null || webMotion != null) return;
             var mouse = Mouse.current;
             if (mouse != null && Mathf.Abs(mouse.scroll.ReadValue().y) > .1f)
@@ -298,6 +304,14 @@ namespace TableTalk
                 var previousRay = boardCamera.ScreenPointToRay(lastDrag); var currentRay = boardCamera.ScreenPointToRay(point);
                 if (plane.Raycast(previousRay, out var previousDistance) && plane.Raycast(currentRay, out var currentDistance))
                     boardCamera.transform.position += previousRay.GetPoint(previousDistance) - currentRay.GetPoint(currentDistance);
+                var centreRay = boardCamera.ViewportPointToRay(new Vector3(.5f, .5f));
+                if (plane.Raycast(centreRay, out var centreDistance))
+                {
+                    var target = centreRay.GetPoint(centreDistance);
+                    float limit = BoardLayout.Span(shown.boardSize) * .5f * (1 - 1 / cameraZoom + .06f);
+                    // A swipe at whole-map scale must not fling the entire board out of view.
+                    boardCamera.transform.position += new Vector3(Mathf.Clamp(target.x, -limit, limit) - target.x, 0, Mathf.Clamp(target.z, -limit, limit) - target.z);
+                }
             }
             lastDrag = point;
         }
