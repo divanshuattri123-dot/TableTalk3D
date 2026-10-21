@@ -285,3 +285,8 @@ body.in-game { overflow: hidden; overscroll-behavior: none; }
   .immersive-game .bankruptcy-confirm p { font-size: 12px; }
   .immersive-game .bankruptcy-confirm button { font-size: 11px; }
 }
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 600px) and (max-width: 720px) {
+  .immersive-game .side-rail, .immersive-game .live-seats { width: 170px; }
+  .immersive-game .play-turn-banner { width: 145px; }
+  .immersive-game .unity-camera-tools, .immersive-game .scene-tools { flex-direction: column; bottom: 80px; gap: 4px; }
+}
