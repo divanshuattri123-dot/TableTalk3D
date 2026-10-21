@@ -157,6 +157,7 @@ function App() {
   const [tokenId, setTokenId] = useState<string>();
   const [diceId, setDiceId] = useState<string>();
   const [studio, setStudio] = useState<string>();
+  useEffect(() => { if (session) writeSeat(session, seatStores()); }, [session]);
   const token = byId.get(tokenId ?? catalog?.featured.tokens[0] ?? "");
   const die = byId.get(diceId ?? catalog?.featured.dice[0] ?? "");
   const chooseAsset = (asset: GameAsset, use: AssetUse) => {
