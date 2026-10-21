@@ -44,7 +44,7 @@ body.in-game { overflow: hidden; overscroll-behavior: none; }
 .screen-tile-price i { font-style: normal; }
 .color-choice:disabled { position: relative; opacity: .45; cursor: not-allowed; }
 .color-choice:disabled::after { content: ""; position: absolute; width: 120%; height: 3px; top: calc(50% - 1.5px); left: -10%; background: #253e3a; transform: rotate(-45deg); box-shadow: 0 0 0 1px #fff9e0; }
-.colour-room-status { margin: -8px 0 16px; color: #45604d; font-size: 12px; line-height: 1.5; }
+.colour-room-status { margin: -8px 0 16px; color: #d5dfcf; font-size: 12px; line-height: 1.5; }
 .lobby-colours { margin-top: 10px; color: #3b573e; font-size: 12px; }
 .lobby-colours summary { cursor: pointer; min-height: 32px; padding: 8px 0; }
 .lobby-colours .color-picker { margin: 8px 0 14px; }
