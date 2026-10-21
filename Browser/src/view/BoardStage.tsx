@@ -97,7 +97,7 @@ export default function BoardStage({ game, shown, target, frame, onComplete, onR
           <li>Doubles earn another roll; three consecutive doubles send you to Jail. Pay ₹50, use a card or try for doubles.</li>
           <li>Rent, tax and cards resolve automatically. Negative cash pauses normal play until you sell buildings, mortgage, trade, or declare bankruptcy. Negative net worth eliminates you automatically. Last player standing wins.</li>
         </ol>
-        <p>2–3 players: 40 spaces · 4: 48 · 5: 56 · 6: 64. The map locks when the game starts. Keep your tab open on your turn; reload to reclaim your seat if the connection closes.</p>
+        <p>2–3 players: 40 spaces · 4: 48 · 5: 56 · 6: 64. The map locks when the game starts. Confirmed moves are saved automatically. If the connection drops, keep the table open — it reconnects to your seat. You can also reopen this room link in the same browser.</p>
         <button className="primary-button" type="button" onClick={() => setHelp(false)}>Got it. Let’s play.</button>
       </section>
     </div>}

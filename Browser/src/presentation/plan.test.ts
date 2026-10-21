@@ -78,6 +78,26 @@ describe("pure presentation planning", () => {
     const before = JSON.stringify([state, next]); planPresentation(state, next);
     expect(JSON.stringify([state, next])).toBe(before);
   });
+  it("does not replay old dice when offering a trade before a doubles extra roll", () => {
+    let state = reduceGame(start(), { type: "ROLL", playerId: "a", dice: [1, 1] });
+    state = reduceGame(state, { type: "MOVE_RESULT", playerId: "a", cardDraws: [{ deck: "community", index: 1 }] });
+    state = reduceGame(state, { type: "END_TURN", playerId: "a" });
+    expect(state.phase).toBe("awaitingRoll"); expect(state.lastRoll).toBeDefined();
+    const offered = reduceGame(state, { type: "TRADE_OFFER", playerId: "a", offerId: "t", toPlayerId: "b", offeredCash: 10, offeredPropertyIds: [], requestedCash: 0, requestedPropertyIds: [] });
+    expect(offered.phase).toBe("awaitingTradeResponse");
+    expect(planPresentation(state, offered).some(f => f.kind === "dice")).toBe(false);
+    const declined = reduceGame(offered, { type: "TRADE_DECLINE", playerId: "b", offerId: "t" });
+    expect(planPresentation(offered, declined).map(f => f.kind)).toEqual(["trade"]);
+    const rolled = reduceGame(declined, { type: "ROLL", playerId: "a", dice: [1, 1] });
+    expect(planPresentation(declined, rolled).filter(f => f.kind === "dice")).toHaveLength(1);
+  });
+  it("does not animate stale dice when a pre-roll trade is accepted", () => {
+    const state = { ...start(), lastRoll: { playerId: "a", dice: [3, 4] as const, total: 7, doubles: false, grantsExtraRoll: false } };
+    const offered = reduceGame(state, { type: "TRADE_OFFER", playerId: "a", offerId: "t", toPlayerId: "b", offeredCash: 10, offeredPropertyIds: [], requestedCash: 0, requestedPropertyIds: [] });
+    const accepted = reduceGame(offered, { type: "TRADE_ACCEPT", playerId: "b", offerId: "t" });
+    expect([...planPresentation(state, offered), ...planPresentation(offered, accepted)].some(f => f.kind === "dice")).toBe(false);
+    expect(accepted.players[0]?.cash).toBe(1490);
+  });
   it("uses journal IDs when two friends choose the same display name", () => {
     const initial = start();
     const sameName = { ...initial, activePlayerId: "b", players: initial.players.map(p => ({ ...p, name: "Friend" })) };

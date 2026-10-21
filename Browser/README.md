@@ -21,6 +21,28 @@ Cloudflare host values from `.github/workflows/deploy-pages.yml`. These are
 public service addresses, not credentials. GitHub Pages only hosts static
 files; it cannot run the room server.
 
+## Saved matches and reconnecting
+
+Every confirmed action is checkpointed in the existing room's Durable Object
+storage before broadcasting. Server restarts, hibernation and new deployments
+restore cash, deeds, player positions, the active turn and pending rolls,
+auctions, trades or debt. There is no one-hour match timeout. No account,
+external database or paid service has been added.
+
+After an interruption the browser keeps the board visible, reconnects
+automatically and waits for the canonical snapshot before enabling turn controls.
+An unacknowledged action retries with its original receipt, so rent, purchases
+and dice do not apply twice. Heartbeats recover silent broken connections;
+returning to a phone tab triggers a resync. Keep the room link/code. Reopening
+that link in the same browser restores the saved seat even after closing its tab.
+Clearing browser data removes that local identity, not the server checkpoint.
+Progress already discarded by the former memory-only server cannot be recovered.
+
+Dragging the 3D board does not select browser text or create image drag ghosts.
+Trade offers never replay the previous dice animation; dice animation is limited
+to actual roll outcomes. The renderer and original city remain unchanged in this
+reliability release.
+
 ## Local run
 
 Install Node.js 22.12 or newer, then run:

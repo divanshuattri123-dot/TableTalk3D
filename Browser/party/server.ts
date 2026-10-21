@@ -1,14 +1,12 @@
 import { Server, routePartykitRequest } from "partyserver";
 import type { Connection } from "partyserver";
-import { createInitialState, reduceGame } from "../src/engine/reducer";
-import type { GameAction, GameState } from "../src/engine/types";
-
-type ClientMessage = { type: "action"; action: GameAction };
-type ServerMessage = { type: "state"; state: GameState } | { type: "error"; message: string };
+import type { ClientMessage, ServerMessage } from "../src/network/protocol";
+import { SavedRoom } from "./roomStore";
 
 const asClientMessage = (raw: string): ClientMessage | undefined => {
   try {
     const parsed = JSON.parse(raw) as Partial<ClientMessage>;
+    if (parsed.type === "sync") return { type: "sync" };
     if (parsed.type !== "action" || !parsed.action || typeof parsed.action !== "object") {
       return undefined;
     }
@@ -21,15 +19,17 @@ const asClientMessage = (raw: string): ClientMessage | undefined => {
 interface Env { Main: DurableObjectNamespace<GameRoom>; ASSETS: Fetcher }
 
 export class GameRoom extends Server<Env> {
-  static options = { hibernate: false };
-  state = createInitialState();
+  static options = { hibernate: true };
+  private room!: SavedRoom;
 
-  onStart() {
-    this.state = createInitialState(this.name.toUpperCase());
+  async onStart() {
+    this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+    this.room = new SavedRoom(this.ctx.storage, this.name.toUpperCase());
+    await this.room.load();
   }
 
   onConnect(connection: Connection) {
-    this.send(connection, { type: "state", state: this.state });
+    this.send(connection, { type: "state", state: this.room.state });
   }
 
   onClose(connection: Connection) {
@@ -37,7 +37,8 @@ export class GameRoom extends Server<Env> {
     connection.close(1000, "Leaving table");
   }
 
-  onMessage(sender: Connection, message: string | ArrayBuffer) {
+  async onMessage(sender: Connection, message: string | ArrayBuffer) {
+    if (message === "ping") { sender.send("pong"); return; }
     if (typeof message !== "string") {
       this.send(sender, { type: "error", message: "Game actions must be JSON." });
       return;
@@ -48,10 +49,14 @@ export class GameRoom extends Server<Env> {
       return;
     }
 
-    // The reducer is shared with the client, so it is the sole game-rule gate.
-    // This room holds only the canonical in-memory state and fans it out.
-    this.state = reduceGame(this.state, incoming.action);
-    this.broadcast(JSON.stringify({ type: "state", state: this.state } satisfies ServerMessage));
+    if (incoming.type === "sync") { this.send(sender, { type: "state", state: this.room.state }); return; }
+    try {
+      const state = await this.room.apply(incoming.action, incoming.id);
+      this.broadcast(JSON.stringify({ type: "state", state, ackId: incoming.id } satisfies ServerMessage));
+    } catch (error) {
+      console.error("Room checkpoint failed", error);
+      this.send(sender, { type: "error", message: "Could not save this move yet. Reconnecting to retry safely.", id: incoming.id, retryable: true });
+    }
   }
 
   private send(connection: Connection, message: ServerMessage) {

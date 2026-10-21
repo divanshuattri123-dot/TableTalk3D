@@ -17,8 +17,26 @@ The shared engine has this sole public transition contract:
 Hosting update, 19 October 2026: PartyKit's managed platform no longer accepts
 deployments. With the user's approval, the room wrapper now uses its official
 successor PartyServer on Cloudflare Workers Free. The PartySocket protocol and
-engine action contract are unchanged. Room game state remains in memory only;
-no game data is written to Durable Object storage.
+engine action contract are unchanged.
+
+Reliability update, 21 October 2026: each room now checkpoints its canonical
+GameState and the last 512 action receipts in its existing Durable Object's
+built-in storage. The checkpoint commits before the move is broadcast. Startup
+and hibernation wake restore that checkpoint, including pending dice, auctions,
+trades, debt, cash, ownership and the event journal. A storage failure leaves the
+previous canonical state intact and reports a retryable error; it never announces
+an unsaved move as confirmed. The reducer itself remains pure and has no I/O.
+
+Clients reconnect automatically with bounded backoff, retain the last displayed
+state, and wait for a canonical snapshot before enabling game actions. Unacknowledged
+actions retry with the same receipt so purchases/rent/dice cannot execute twice.
+Heartbeats detect silent dead sockets. Returning from a backgrounded phone tab
+or an online event requests a resync. Hibernation keeps idle sockets alive without
+keeping room code resident. Seats are saved per room in tab and browser storage;
+the old tab-only format is readable. Reopening the same room link in the same
+browser restores that seat. No account, external database, or paid service is added.
+Clearing browser storage loses the local seat identity, not the server's match.
+Previously discarded memory-only matches cannot be reconstructed retroactively.
 
 It is a pure, immutable reducer. It has no React, PartyKit, browser, timer,
 Date, I/O, or random-number dependency. Inputs that would normally be random

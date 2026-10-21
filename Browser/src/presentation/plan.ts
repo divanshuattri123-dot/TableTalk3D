@@ -32,7 +32,8 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
     destinations.set(roll.playerId, ((positions.get(roll.playerId) ?? 0) + roll.total) % next.boardSize);
   }
   let backwards = false;
-  if (previous.phase === "awaitingRoll" && next.phase !== "awaitingRoll" && next.phase !== "awaitingDebt" && next.lastRoll && !next.notice) {
+  const rollOutcome = next.phase === "awaitingMove" || next.phase === "awaitingJailPayment" || next.phase === "awaitingEndTurn";
+  if (previous.phase === "awaitingRoll" && rollOutcome && next.lastRoll && !next.notice) {
     add("dice", `${active?.name ?? "Player"} rolled ${next.lastRoll.dice.join(" + ")}${next.lastRoll.doubles ? " · DOUBLES!" : ""}`, 1450,
       { playerId: next.lastRoll.playerId, dice: [...next.lastRoll.dice], diceId: active?.diceId });
   }

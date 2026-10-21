@@ -1,5 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import PartySocket from "partysocket";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   getBoard,
@@ -17,7 +16,6 @@ import type {
   GameAction,
   GameState,
   Player,
-  PlayerInput,
   Tile,
   PropertyState
 } from "./engine/types";
@@ -35,25 +33,19 @@ import type { AssetUse } from "./view/AssetStudio";
 import BoardStage from "./view/BoardStage";
 import { enterGameFullscreen, exitGameFullscreen, fullscreenActive, releaseGameOrientation } from "./view/fullscreen";
 import LandscapeGate from "./view/LandscapeGate";
+import { useGameRoom } from "./network/useGameRoom";
+import type { Session } from "./network/useGameRoom";
+import { readSeat, writeSeat } from "./network/seats";
 const AssetStudio = lazy(() => import("./view/AssetStudio"));
 const ModelPreview = lazy(() => import("./view/ModelPreview"));
 
-type Session = {
-  roomCode: string;
-  player: PlayerInput;
+const seatStores = (): Storage[] => {
+  const stores: Storage[] = [];
+  try { stores.push(window.sessionStorage); } catch { /* Storage can be blocked. */ }
+  try { stores.push(window.localStorage); } catch { /* No account is required to play. */ }
+  return stores;
 };
-
-type ConnectionState = "connecting" | "connected" | "offline";
-type ServerMessage = { type: "state"; state: GameState } | { type: "error"; message: string };
-const SESSION_KEY = "table-talk-seat";
-
-const savedSession = (roomCode = roomFromUrl()): Session | undefined => {
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? "null") as Session | null;
-    if (saved?.roomCode === roomCode && saved?.player?.id) return saved;
-  } catch { /* Private browsing can disable session storage; the live game still works. */ }
-  return undefined;
-};
+const savedSession = (roomCode = roomFromUrl()) => readSeat(roomCode, seatStores());
 
 const COLORS = PLAYER_COLORS;
 const TOKEN_SHAPES = ["●", "▲", "◆", "★", "✦", "✚"];
@@ -142,77 +134,6 @@ const makeCardDraws = (state: GameState, player: Player): CardDraw[] => {
   return draws;
 };
 
-const partyHost = (): string => {
-  const configured = import.meta.env.VITE_PARTYKIT_HOST;
-  if (configured) return configured.replace(/^https?:\/\//, "").replace(/^wss?:\/\//, "");
-  return import.meta.env.DEV ? `${window.location.hostname}:1999` : window.location.host;
-};
-
-function useGameRoom(session: Session | undefined, previewRoomCode = "") {
-  const roomCode = session?.roomCode ?? previewRoomCode;
-  const socketRef = useRef<PartySocket | null>(null);
-  const stateRef = useRef<GameState | undefined>(undefined);
-  const [game, setGame] = useState<GameState>();
-  const [connection, setConnection] = useState<ConnectionState>("connecting");
-  const [error, setError] = useState<string>();
-
-  useEffect(() => {
-    if (!roomCode) return;
-    setGame(undefined);
-    stateRef.current = undefined;
-    setError(undefined);
-    setConnection("connecting");
-
-    const socket = new PartySocket({
-      host: partyHost(),
-      room: roomCode,
-      party: "main",
-      protocol: window.location.protocol === "https:" ? "wss" : "ws",
-      maxRetries: 0
-    });
-    socketRef.current = socket;
-
-    const onOpen = () => {
-      setConnection("connected");
-      if (session) socket.send(JSON.stringify({ type: "action", action: { type: "JOIN", player: session.player } }));
-    };
-    const onMessage = (event: MessageEvent) => {
-      try {
-        const message = JSON.parse(String(event.data)) as ServerMessage;
-        if (message.type === "state") {
-          stateRef.current = message.state;
-          setGame(message.state);
-        }
-        if (message.type === "error") setError(message.message);
-      } catch {
-        setError("The room sent a response this browser could not read.");
-      }
-    };
-    const onClose = () => setConnection("offline");
-    const onError = () => setError("Could not reach this room. Check the game server, then reload.");
-
-    socket.addEventListener("open", onOpen);
-    socket.addEventListener("message", onMessage);
-    socket.addEventListener("close", onClose);
-    socket.addEventListener("error", onError);
-    return () => {
-      socket.close(1000, "Leaving game");
-      socketRef.current = null;
-    };
-  }, [session?.player.color, session?.player.id, session?.player.name, roomCode]);
-
-  const sendAction = useCallback((action: GameAction) => {
-    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-      setError("The connection closed. Reload to return to your seat.");
-      return;
-    }
-    // Only canonical snapshots enter the animation queue; optimistic echoes can replay a sale.
-    socketRef.current.send(JSON.stringify({ type: "action", action }));
-  }, []);
-
-  return { game: game?.roomCode === roomCode ? game : undefined, connection, error, sendAction };
-}
-
 function TokenColorPicker({ color, players = [], localId, onChoose }: { color: string; players?: readonly Player[]; localId?: string; onChoose: (color: string) => void }) {
   return <fieldset className="color-picker"><legend>Choose a token colour</legend><div>{COLORS.map(swatch => {
     const owner = players.find(player => player.id !== localId && playerColorKey(player.color) === swatch);
@@ -256,14 +177,14 @@ function App() {
       player: { id: savedSession(normalized)?.player.id ?? randomId(), name: name.trim().slice(0, 24), color, tokenId: token?.id, diceId: die?.id }
     };
     window.history.replaceState({}, "", `${window.location.pathname}?room=${normalized}`);
-    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextSession)); } catch { /* Seat persistence is optional. */ }
+    writeSeat(nextSession, seatStores());
     setSession(nextSession);
   };
 
   if (session) {
     return <GameRoom session={session} onChooseColor={nextColor => {
       const nextSession = { ...session, player: { ...session.player, color: nextColor } };
-      try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextSession)); } catch { /* Colour selection still works without saved seats. */ }
+      writeSeat(nextSession, seatStores());
       setColor(nextColor); setSession(nextSession);
     }} onLeave={() => {
       setName(session.player.name);
@@ -326,7 +247,7 @@ function App() {
           </div>
         </div>
         {error && <p className="inline-error">{error} <button type="button" onClick={reload}>Retry</button></p>}
-        <p className="welcome-note">No install. No sign-up. Just a link.<br />Temporary rooms · Live multiplayer · Touch-friendly 3D</p>
+        <p className="welcome-note">No install. No sign-up. Just a link.<br />Saved rooms · Automatic reconnect · Touch-friendly 3D</p>
       </section>
       </div>
       <footer className="welcome-bottom"><span>A property trading game for your own crew.</span><button type="button" onClick={() => setStudio("all")}>Browse all {catalog ? catalog.assets.length.toLocaleString() : "6,430"} assets ↗</button></footer>
@@ -336,7 +257,7 @@ function App() {
 }
 
 function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLeave: () => void; onChooseColor: (color: string) => void }) {
-  const { game, connection, error, sendAction } = useGameRoom(session);
+  const { game, connection, error, sendAction, reconnect } = useGameRoom(session);
   const [copied, setCopied] = useState(false);
   const [unityReady, setUnityReady] = useState(false);
   const [drawer, setDrawer] = useState<"players" | "log">();
@@ -370,9 +291,8 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
 
   useEffect(() => {
     if (!game || !me || !sceneUsable || !moveKey || sentMove.current === moveKey || !shouldSendMove(game, me.id, motion.busy)) return;
-    sentMove.current = moveKey;
-    sendAction({ type: "MOVE_RESULT", playerId: me.id, cardDraws: makeCardDraws(game, me) });
-  }, [game, me, moveKey, motion.busy, sceneUsable, sendAction]);
+    if (connection === "connected" && sendAction({ type: "MOVE_RESULT", playerId: me.id, cardDraws: makeCardDraws(game, me) })) sentMove.current = moveKey;
+  }, [game, me, moveKey, motion.busy, sceneUsable, sendAction, connection]);
 
   const copyRoomLink = async () => {
     const link = `${window.location.origin}${window.location.pathname}?room=${session.roomCode}`;
@@ -392,8 +312,9 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
           <span className="pulse-token" style={{ background: session.player.color }} />
           <p className="eyebrow">Room {session.roomCode}</p>
           <h1>Opening the table…</h1>
-          <p>{connection === "offline" ? "The game server is unreachable. Reload after it is running." : "Connecting your seat."}</p>
+          <p>{connection === "offline" ? "You are offline. Your saved table will reconnect when the internet returns." : "Connecting to your saved seat. This will retry automatically."}</p>
           {error && <p className="inline-error">{error}</p>}
+          <button className="secondary-button" onClick={reconnect} type="button">Try reconnecting now</button>
           <button className="secondary-button" onClick={onLeave} type="button">Back</button>
         </div>
       </main>
@@ -403,7 +324,7 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
   if (!me && game.phase === "lobby") return <main className="loading-shell"><section className="loading-card"><p className="eyebrow">Room {session.roomCode}</p><h1>Choose an available colour</h1><p role="status">{game.notice ?? "Each player needs a different token colour."}</p><TokenColorPicker color={session.player.color} players={game.players} onChoose={onChooseColor} /><button className="secondary-button" onClick={onLeave} type="button">Back</button></section></main>;
 
   const current = game.players.find((player) => player.id === decisionPlayerId(game));
-  const isCurrent = me?.id === decisionPlayerId(game) && !me?.bankrupt && !motion.busy && sceneUsable;
+  const isCurrent = connection === "connected" && me?.id === decisionPlayerId(game) && !me?.bankrupt && !motion.busy && sceneUsable;
   const isHost = game.players[0]?.id === me?.id;
   const shareText = copied ? "Link copied" : "Copy room link";
 
@@ -426,6 +347,7 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
       </header>
 
       {error && <p className="global-error">{error}</p>}
+      {connection !== "connected" && <div className="connection-recovery" role="status"><strong>{connection === "offline" ? "You’re offline" : "Reconnecting to your table…"}</strong><span>Confirmed moves are saved. Keep this room open.</span><button type="button" onClick={reconnect}>Retry now</button></div>}
       {game.notice && <p className="global-error" role="status">{game.notice}</p>}
       {screenNotice && <p className="fullscreen-notice" role="status">{screenNotice}</p>}
 
@@ -449,7 +371,7 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
 
       {drawer && <div className="hud-drawer-backdrop" onClick={() => setDrawer(undefined)}><section className="hud-drawer" role="dialog" aria-modal="true" aria-labelledby="hud-drawer-title" onClick={event => event.stopPropagation()}><header><h2 id="hud-drawer-title">{drawer === "players" ? "At the table" : "Table chatter"}</h2><button type="button" autoFocus onClick={() => setDrawer(undefined)} aria-label="Close panel">×</button></header>{drawer === "players" ? <PlayerRoster game={game} localId={session.player.id} /> : <EventLog game={game} />}</section></div>}
 
-      <EventStage game={game} frame={motion.frame} busy={motion.busy || !sceneUsable} localId={session.player.id} sendAction={sendAction} onCardRead={motion.acknowledgeCard} />
+      <EventStage game={game} frame={motion.frame} busy={connection !== "connected" || motion.busy || !sceneUsable} localId={session.player.id} sendAction={sendAction} onCardRead={motion.acknowledgeCard} />
       <LandscapeGate onLeave={onLeave} />
     </main>
   );

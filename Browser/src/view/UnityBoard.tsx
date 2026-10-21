@@ -109,7 +109,7 @@ export default function UnityBoard({ game, target, settings, frame, onSelect, on
     return () => { cancelled = true; };
   }, [ready, game.players, byId]);
   return <div className="unity-board-shell" data-renderer={ready ? "unity-ready" : "unity-loading"}>
-    <canvas id="unity-canvas" ref={canvas} className="unity-canvas" tabIndex={0} aria-label="Interactive 3D city board. Drag to pan, pinch or use buttons to zoom." />
+    <canvas id="unity-canvas" ref={canvas} className="unity-canvas" draggable={false} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()} tabIndex={0} aria-label="Interactive 3D city board. Drag to pan, pinch or use buttons to zoom." />
     {ready && <ScreenBoardLabels size={game.boardSize} />}
     {!ready && !failure && <div className="unity-loading"><span className="pulse-token" /><h2>Opening your city</h2><p>Loading the Unity 3D player · {Math.round(progress * 100)}%</p><progress max="1" value={progress} /><small>Only the active city and pieces are loaded, not the entire collection.</small></div>}
     {failure && <div className="unity-loading" role="alert"><h2>3D could not start</h2><p>{failure}</p><button type="button" onClick={onFallback}>Play in 2D</button></div>}
