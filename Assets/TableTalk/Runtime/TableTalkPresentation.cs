@@ -281,6 +281,7 @@ namespace TableTalk
 
         void Update()
         {
+            TickLivingWorld();
             if (boardCamera != null && Mathf.Abs(previousAspect - boardCamera.aspect) > .001f)
             {
                 previousAspect = boardCamera.aspect;

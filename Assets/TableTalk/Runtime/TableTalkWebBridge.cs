@@ -63,6 +63,7 @@ namespace TableTalk
             bool low = settings.quality == "low" || settings.quality == "auto" && settings.mobile;
             bool night = settings.theme == "night";
             angledView = settings.camera == "perspective";
+            worldMotionReduced = settings.reducedMotion;
             ConfigureScreenLabels(settings.screenLabels);
             QualitySettings.shadowDistance = low ? 18 : 38;
             QualitySettings.shadowResolution = low ? ShadowResolution.Low : ShadowResolution.Medium;

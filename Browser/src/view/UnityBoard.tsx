@@ -88,7 +88,7 @@ export default function UnityBoard({ game, target, settings, frame, onSelect, on
     if (ready && frame) instance.current?.SendMessage("GamePresentation", "PresentFrame", JSON.stringify({ ...frame, board: unitySnapshot(target) }));
   }, [frame, ready, target]);
   useEffect(() => {
-    if (ready) instance.current?.SendMessage("GamePresentation", "SetVisualSettings", JSON.stringify({ quality: settings.quality, theme: settings.theme, camera: settings.camera, reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches, mobile, screenLabels: mobile }));
+    if (ready) instance.current?.SendMessage("GamePresentation", "SetVisualSettings", JSON.stringify({ quality: settings.quality, theme: settings.theme, camera: settings.camera, reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches, mobile, screenLabels: true }));
   }, [ready, settings.quality, settings.theme, settings.camera, mobile]);
   useEffect(() => {
     if (!ready) return;
@@ -110,7 +110,7 @@ export default function UnityBoard({ game, target, settings, frame, onSelect, on
   }, [ready, game.players, byId]);
   return <div className="unity-board-shell" data-renderer={ready ? "unity-ready" : "unity-loading"}>
     <canvas id="unity-canvas" ref={canvas} className="unity-canvas" tabIndex={0} aria-label="Interactive 3D city board. Drag to pan, pinch or use buttons to zoom." />
-    {ready && mobile && <ScreenBoardLabels size={game.boardSize} />}
+    {ready && <ScreenBoardLabels size={game.boardSize} />}
     {!ready && !failure && <div className="unity-loading"><span className="pulse-token" /><h2>Opening your city</h2><p>Loading the Unity 3D player · {Math.round(progress * 100)}%</p><progress max="1" value={progress} /><small>Only the active city and pieces are loaded, not the entire collection.</small></div>}
     {failure && <div className="unity-loading" role="alert"><h2>3D could not start</h2><p>{failure}</p><button type="button" onClick={onFallback}>Play in 2D</button></div>}
     {assetError && <p className="asset-notice">{assetError}</p>}

@@ -50,14 +50,26 @@ request landscape orientation where the browser supports it. Portrait phones
 show a rotate-phone screen; browsers that refuse orientation/fullscreen still
 work after physically rotating the phone. Leaving the table releases the lock.
 
-Mobile names and prices are a browser-text layer anchored to Unity's projected
-tile bounds, so reduced 3D quality does not blur them. Names stay visible at
-whole-map scale, with prices on the inner tile edge instead of occupying the name
-area. Complete names wrap to fit without ellipses; type grows as the player zooms.
-The in-game ₹ button opens all bank prices and
-links to the full deed inspector. Canvas resolution tracks resizing and quality
+Desktop and mobile names and prices are a browser-text layer anchored to Unity's
+projected tile bounds, so reduced 3D quality does not blur them. Names stay visible at
+whole-map scale. Prices sit horizontally below the names, inside each tile.
+The self-hosted Barlow Condensed typeface keeps the printed-board layout compact;
+names wrap only between words, so Chance and other words never split into pieces.
+Original vector signs distinguish Chance, Community Chest, stations, utilities,
+taxes and all four corners. These stay sharp independently of 3D render resolution.
+Type grows as the player zooms. The [Barlow Condensed source](https://github.com/google/fonts/tree/main/ofl/barlowcondensed)
+is bundled locally; its license is included in `public/fonts/`.
+The in-game ₹ button opens all bank prices and links to the full deed inspector.
+Canvas resolution tracks resizing and quality
 changes without restarting the room or Unity player. See Unity's supported
 [manual canvas sizing](https://docs.unity3d.com/Manual/webgl-canvas-size.html).
+
+The native city is surrounded by curved highways, alternating crop fields, a
+coastal river and a bridge. Cars, tractors, a boat and wind-turbine rotors animate
+only in the presentation layer; they never change the deterministic game state.
+The scene respects the browser's reduced-motion setting. The static landscape is
+batched separately from moving actors, and decorative geometry has no physics
+colliders. Native city assets and gameplay rules remain unchanged.
 
 ## Engine
 

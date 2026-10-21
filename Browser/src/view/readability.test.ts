@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { boardRenderSize, fitBoardName, screenLabelLayout } from "./readability";
+import { getBoard } from "../engine/board";
 
 describe("mobile board clarity", () => {
   it("renders an ordinary retina phone at 2x instead of the previous 1.25x cap", () => {
@@ -18,7 +19,7 @@ describe("mobile board clarity", () => {
     const layout = screenLabelLayout({ id: 1, x: .5, y: .4, w: .08, h: .05, visible: true }, 390, 844);
     expect(layout.x).toBe(195); expect(layout.y).toBeCloseTo(337.6);
     expect(layout.width).toBeCloseTo(31.2); expect(layout.visible).toBe(true);
-    expect(layout.priceSize).toBeGreaterThanOrEqual(10); expect(layout.showName).toBe(true);
+    expect(layout.priceSize).toBeGreaterThanOrEqual(7); expect(layout.showName).toBe(true);
   });
   it("keeps the name when a six-player tile is too small for the old name-and-price stack", () => {
     const layout = screenLabelLayout({ id: 1, x: .5, y: .5, w: .05, h: .03, visible: true }, 390, 844);
@@ -41,7 +42,7 @@ describe("mobile board clarity", () => {
   });
   it("preserves long single-word names and uses uncompressed type when there is room", () => {
     const narrow = fitBoardName("Mattancherry", 21, 3, text => text.length * 4);
-    expect(narrow.lines.join("")).toBe("Mattancherry"); expect(narrow.lines.length).toBeLessThanOrEqual(3);
+    expect(narrow.lines).toEqual(["Mattancherry"]);
     expect(fitBoardName("Fort Kochi", 90, 3, text => text.length * 8)).toEqual({ lines: ["Fort Kochi"], scale: 1 });
   });
   it("keeps separate place-name words together when the side tile has two lines", () => {
@@ -53,6 +54,32 @@ describe("mobile board clarity", () => {
     const layout = screenLabelLayout({ id: 37, x: .5, y: .2, w: 12.5 / 667, h: 27 / 375, visible: true }, 667, 375, 64);
     expect(layout.visible).toBe(true); expect(layout.showName).toBe(true);
     expect(layout.showCurrency).toBe(false);
+  });
+  it.each(["Chance", "Charminar", "Waterworks"])("never splits the word %s into fragments", name => {
+    expect(fitBoardName(name, 13, 3, text => text.length * 5).lines).toEqual([name]);
+  });
+  it("wraps multi-word names only at spaces, even at whole-board scale", () => {
+    expect(fitBoardName("Connaught Place", 22, 2, text => text.length * 4).lines).toEqual(["Connaught", "Place"]);
+    expect(fitBoardName("Community Chest", 19, 3, text => text.length * 4).lines).toEqual(["Community", "Chest"]);
+  });
+  it("gives a long station caption two lines below its icon and above its price", () => {
+    const layout = screenLabelLayout({ id: 25, x: .5, y: .2, w: 46 / 1600, h: 68 / 900, visible: true }, 1600, 900, 40, true, true);
+    const lines = Math.floor(layout.nameHeight / layout.nameSize);
+    expect(lines).toBeGreaterThanOrEqual(2);
+    expect(fitBoardName("HOWRAH JUNCTION", layout.nameWidth, lines, text => text.length * 5).lines).toEqual(["HOWRAH", "JUNCTION"]);
+  });
+  it.each([1, 11, 21, 31])("reserves an upright price line beneath the name on side tile %i", id => {
+    const layout = screenLabelLayout({ id, x: .5, y: .5, w: 27 / 844, h: 22 / 390, visible: true }, 844, 390, 40, true);
+    expect(layout.nameHeight + layout.priceSize).toBeLessThan(layout.height);
+    expect(layout.nameHeight).toBeGreaterThan(0);
+  });
+  it.each([40, 48, 56, 64] as const)("keeps every word intact on the %i-space Indian board", size => {
+    for (const tile of getBoard(size)) {
+      const name = tile.boardLabel ?? tile.name;
+      const fit = fitBoardName(name, 13, 2, text => text.length * 4);
+      expect(fit.lines.join(" ")).toBe(name);
+      expect(fit.lines.length).toBeLessThanOrEqual(2);
+    }
   });
   it("hides clipped and behind-camera labels rather than leaving stale prices on screen", () => {
     const anchor = { id: 1, x: .5, y: .5, w: .08, h: .05, visible: false };

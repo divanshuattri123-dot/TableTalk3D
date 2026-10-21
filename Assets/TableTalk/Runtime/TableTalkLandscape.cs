@@ -27,25 +27,13 @@ namespace TableTalk
             grass.SetTexture("_BaseMap", grassMap); grass.SetTextureScale("_BaseMap", Vector2.one * 18);
             LandscapeBox("Parkland", new Vector3(0, -.47f, 0), new Vector3(half * 2 + 40, .15f, half * 2 + 40), grass);
             var path = Material(ColorOf("#c7bf9e"), 0, .15f);
-            var road = Material(ColorOf("#3f4a49"), 0, .12f);
-            var curb = Material(ColorOf("#e8dfbb"), 0, .2f);
-            float roadEdge = half + 1.4f;
+            float roadEdge = half + .28f;
             for (int side = 0; side < 4; side++)
             {
                 bool horizontal = side % 2 == 0;
                 float sign = side < 2 ? 1 : -1;
                 Vector3 p = horizontal ? new Vector3(0, -.365f, roadEdge * sign) : new Vector3(roadEdge * sign, -.365f, 0);
-                LandscapeBox("Tree-lined avenue", p, horizontal ? new Vector3(roadEdge * 2 + 1.25f, .035f, 1.25f) : new Vector3(1.25f, .035f, roadEdge * 2 + 1.25f), road);
-                for (int edge = -1; edge <= 1; edge += 2)
-                {
-                    var offset = horizontal ? new Vector3(0, .015f, edge * .72f) : new Vector3(edge * .72f, .015f, 0);
-                    LandscapeBox("Paved promenade", p + offset, horizontal ? new Vector3(roadEdge * 2 + 1.5f, .055f, .2f) : new Vector3(.2f, .055f, roadEdge * 2 + 1.5f), path);
-                }
-                for (float along = -roadEdge + .7f; along < roadEdge; along += .72f)
-                {
-                    var dash = p + (horizontal ? Vector3.right : Vector3.forward) * along + Vector3.up * .025f;
-                    LandscapeBox("Avenue lane marking", dash, horizontal ? new Vector3(.3f, .006f, .028f) : new Vector3(.028f, .006f, .3f), curb);
-                }
+                LandscapeBox("Board-edge promenade", p, horizontal ? new Vector3(roadEdge * 2 + .25f, .035f, .2f) : new Vector3(.2f, .035f, roadEdge * 2 + .25f), path);
             }
 
             var bark = Material(ColorOf("#76634b"), 0, .08f);
@@ -59,6 +47,7 @@ namespace TableTalk
                 float along = (Hash(i * 7.1f + 2) * 2 - 1) * (half + 12);
                 float across = half + 2.7f + Hash(i * 5.3f + 8) * 9;
                 Vector3 root = side % 2 == 0 ? new Vector3(along, -.39f, across * (side == 0 ? 1 : -1)) : new Vector3(across * (side == 1 ? 1 : -1), -.39f, along);
+                if (root.x < -half - 4.5f || root.x > RiverBankX(half, root.z) - 1 || Mathf.Abs(root.x - HighwayX(half, root.z, false)) < 2.1f || Mathf.Abs(root.x - HighwayX(half, root.z, true)) < 2.1f) continue;
                 float height = 1.1f + Hash(i * 19.7f) * 1.7f;
                 float width = .45f + Hash(i * 13.2f) * .35f;
                 var top = root + new Vector3((Hash(i + 3) - .5f) * .2f, height * .73f, (Hash(i + 8) - .5f) * .2f);
@@ -89,9 +78,11 @@ namespace TableTalk
                 float radius = half + 3.2f + Hash(i + 700) * 8;
                 var p = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * radius;
                 if (Mathf.Max(Mathf.Abs(p.x), Mathf.Abs(p.z)) < half + 2.3f) continue;
+                if (p.x < -half - 4.5f || p.x > RiverBankX(half,p.z) - .5f || Mathf.Abs(p.x-HighwayX(half,p.z,false))<1.3f || Mathf.Abs(p.x-HighwayX(half,p.z,true))<1.3f) continue;
                 shrubs.Crown(p + Vector3.down * .2f, new Vector3(.25f, .2f, .32f), i);
             }
             AddLandscapeMesh("Low garden planting", shrubs, Material(ColorOf("#839858"), 0, .1f));
+            BuildLivingLandscape(half);
             StaticBatchingUtility.Combine(landscape.gameObject);
         }
 
@@ -134,6 +125,7 @@ namespace TableTalk
 
         void DisposeLandscape()
         {
+            DisposeLivingWorld();
             if (landscape != null) Destroy(landscape.gameObject);
             foreach (var mesh in landscapeMeshes) if (mesh != null) Destroy(mesh);
             foreach (var texture in landscapeTextures) if (texture != null) Destroy(texture);
@@ -147,6 +139,24 @@ namespace TableTalk
             readonly List<Vector3> vertices = new List<Vector3>();
             readonly List<Vector2> uvs = new List<Vector2>();
             readonly List<int> triangles = new List<int>();
+
+            public void Plane(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+            {
+                int start = vertices.Count; vertices.Add(a); vertices.Add(b); vertices.Add(c); vertices.Add(d);
+                uvs.Add(Vector2.zero); uvs.Add(Vector2.up); uvs.Add(Vector2.one); uvs.Add(Vector2.right);
+                Quad(start, start + 1, start + 2, start + 3);
+            }
+
+            public void SolidBox(Vector3 centre, Vector3 size)
+            {
+                Vector3 x = Vector3.right * size.x * .5f, y = Vector3.up * size.y * .5f, z = Vector3.forward * size.z * .5f;
+                Plane(centre-x-y-z, centre+x-y-z, centre+x-y+z, centre-x-y+z);
+                Plane(centre-x+y-z, centre-x+y+z, centre+x+y+z, centre+x+y-z);
+                Plane(centre-x-y-z, centre-x+y-z, centre+x+y-z, centre+x-y-z);
+                Plane(centre-x-y+z, centre+x-y+z, centre+x+y+z, centre-x+y+z);
+                Plane(centre-x-y-z, centre-x-y+z, centre-x+y+z, centre-x+y-z);
+                Plane(centre+x-y-z, centre+x+y-z, centre+x+y+z, centre+x-y+z);
+            }
 
             public void Branch(Vector3 from, Vector3 to, float radius, float tip)
             {
