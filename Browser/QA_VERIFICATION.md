@@ -102,10 +102,28 @@ one-click optimization script or paid service was installed.
   a 67.6-minute test window, with the earlier bare-harness interruption explicitly
   retained in the log. This is not described as an uninterrupted-hour soak.
 - Public Worker deployment: **d0d55b28-3e42-41d1-8a23-117d6335cd99**.
-  Exact saved-state comparison and public asset headers are checked before the
-  final live handoff below.
-- GitHub commit / Pages deployment: PENDING.
-- Public 3D/mobile screenshots: PENDING.
+  Exact pre/post-deployment full-state comparison passed for `ALBR` (event 27,
+  SHA-256 prefix `7e490e3769c7`) and the continued long-match room (event 971,
+  prefix `d914117bf588`). Gzip, Wasm MIME and cross-origin asset headers passed.
+  The deployed backend also passed the 30 core, eight colour and 90 expansion
+  action checks with real public WebSockets.
+- Code release: **b8d090fc81f6ea4fc7d61d3f3c9070a7a62729a3**. GitHub Pages
+  [run 39782540320](https://github.com/divanshuattri123-dot/TableTalk3D/actions/runs/39782540320)
+  completed successfully. This report is finalized in a subsequent docs-only commit.
+- The actual public GitHub page was rendered and played, not merely checked for
+  HTTP success. Its DOM loaded native content directory `393793e295ed`; desktop
+  city/tree shadows were visible and the browser error log was empty. A new six-seat
+  QA room completed its browser-driven dice-to-landing gate in **1,784 ms** without
+  a test-script MOVE_RESULT. A real Buy tap purchased Mattancherry Palace for ₹60.
+  Reload restored both the owned deed and the exact ₹1,440 balance.
+- Public layouts verified at 1600×900 desktop, 667×375 landscape and 568×320
+  purchase view. The public Buy button was 44 CSS pixels high and entirely inside
+  the 568×320 viewport. Whole-board mobile framing was checked after camera easing.
+  Full-board labels are naturally small on a 64-space phone overview; zoom and
+  property inspection remain available. No error messages were captured in these
+  public checks. Screenshots in the working delivery folder:
+  `outputs/qa-public-053-desktop.png`, `outputs/qa-public-053-mobile.png`, and
+  `outputs/qa-public-053-purchase-568.png`.
 
 ## Known limits and remaining rule work
 
