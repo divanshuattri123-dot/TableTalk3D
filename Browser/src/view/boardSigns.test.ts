@@ -11,7 +11,7 @@ describe("printed board signs", () => {
   });
   it("prints compact uppercase labels without changing game-place names", () => {
     expect(printedBoardLabel(getBoard(40)[7]!)).toBe("CHANCE");
-    expect(printedBoardLabel(getBoard(40)[1]!)).toBe("FORT KOCHI"); expect(getBoard(40)[1]!.name).toBe("Fort Kochi");
+    expect(printedBoardLabel(getBoard(40)[1]!)).toBe("KHUDDA LAHORA"); expect(getBoard(40)[1]!.name).toBe("Khudda Lahora");
   });
   it.each([40,48,56,64] as const)("keeps symbols, names and prices in separate regions on the %i-space board", size => {
     for (const tile of getBoard(size)) {
