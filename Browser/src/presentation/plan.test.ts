@@ -33,6 +33,7 @@ describe("pure presentation planning", () => {
     expect(shouldSendMove(rolled, "a", true)).toBe(false);
     expect(shouldSendMove(rolled, "b", false)).toBe(false);
     expect(shouldSendMove(rolled, "a", false)).toBe(true);
+    expect(shouldSendMove(rolled, "a", false, false)).toBe(false);
   });
   it("walks to a property before revealing the purchase controls", () => {
     const rolled = reduceGame(start(), { type: "ROLL", playerId: "a", dice: [1, 2] });
@@ -69,6 +70,8 @@ describe("pure presentation planning", () => {
     expect(planPresentation(state, bid)[0]?.kind).toBe("bid");
     const sold = reduceGame(bid, { type: "AUCTION_BID", playerId: "a", pass: true });
     expect(planPresentation(bid, sold).find(f => f.kind === "sold")).toMatchObject({ playerId: "b", tileId: 3 });
+    const nextAuction = { ...sold, phase: "awaitingAuction" as const, auction: { ...bid.auction!, propertyId: 1, currentBid: 0, highestBidderId: undefined } };
+    expect(planPresentation(bid, nextAuction).find(f => f.kind === "sold")?.auction).toEqual(bid.auction);
   });
   it.each([40, 48, 56, 64])("wraps a route on a %i-space board", size => {
     expect(routeBetween(size - 2, 2, size)).toEqual([size - 1, 0, 1, 2]);

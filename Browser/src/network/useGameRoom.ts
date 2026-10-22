@@ -3,13 +3,9 @@ import PartySocket from "partysocket";
 import type { GameAction, GameState, PlayerInput } from "../engine/types";
 import type { ConnectionState } from "./protocol";
 import { RoomConnection } from "./roomConnection";
+import { roomAddress } from "./address";
 
 export interface Session { roomCode: string; player: PlayerInput }
-const partyHost = () => {
-  const configured = import.meta.env.VITE_PARTYKIT_HOST;
-  if (configured) return configured.replace(/^https?:\/\//, "").replace(/^wss?:\/\//, "");
-  return import.meta.env.DEV ? `${window.location.hostname}:1999` : window.location.host;
-};
 
 export function useGameRoom(session: Session | undefined, previewRoomCode = "") {
   const roomCode = session?.roomCode ?? previewRoomCode;
@@ -20,8 +16,7 @@ export function useGameRoom(session: Session | undefined, previewRoomCode = "") 
   useEffect(() => {
     if (!roomCode) return;
     setGame(undefined); setError(undefined); setConnection("connecting");
-    const socket = new PartySocket({ host: partyHost(), room: roomCode, party: "main",
-      protocol: window.location.protocol === "https:" ? "wss" : "ws",
+    const socket = new PartySocket({ ...roomAddress(import.meta.env.VITE_PARTYKIT_HOST, window.location, import.meta.env.DEV), room: roomCode, party: "main",
       maxRetries: Infinity, minReconnectionDelay: 750, maxReconnectionDelay: 8_000,
       connectionTimeout: 10_000, maxEnqueuedMessages: 0 });
     const clientId = globalThis.crypto?.randomUUID?.() ?? `seat-${Date.now()}-${Math.random().toString(36).slice(2)}`;

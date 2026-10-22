@@ -4,6 +4,7 @@ import {
   getBoard,
   railroadPositions,
   classicPosition,
+  colorGroupTiles,
   cardAt,
   getPurchasableTile,
   getTile,
@@ -291,9 +292,9 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
     ? `${game.nextEventId}-${game.pendingRoll.dice.join("-")}` : "";
 
   useEffect(() => {
-    if (!game || !me || !sceneUsable || !moveKey || sentMove.current === moveKey || !shouldSendMove(game, me.id, motion.busy)) return;
+    if (!game || !me || !sceneUsable || !moveKey || sentMove.current === moveKey || !shouldSendMove(game, me.id, motion.busy, motion.visible)) return;
     if (connection === "connected" && sendAction({ type: "MOVE_RESULT", playerId: me.id, cardDraws: makeCardDraws(game, me) })) sentMove.current = moveKey;
-  }, [game, me, moveKey, motion.busy, sceneUsable, sendAction, connection]);
+  }, [game, me, moveKey, motion.busy, motion.visible, sceneUsable, sendAction, connection]);
 
   const copyRoomLink = async () => {
     const link = `${window.location.origin}${window.location.pathname}?room=${session.roomCode}`;
@@ -353,7 +354,7 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
       {screenNotice && <p className="fullscreen-notice" role="status">{screenNotice}</p>}
 
       <section className="game-layout">
-        <BoardStage game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />
+        <BoardStage game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />
         {game.phase !== "lobby" && <div className="live-seats" aria-label="Live player balances">{game.players.map(player => <button type="button" key={player.id} className={`${player.id === decisionPlayerId(game) ? "seat-active" : ""} ${player.bankrupt ? "seat-out" : ""}`} style={{ "--player-color": player.color } as CSSProperties} onClick={() => setDrawer("players")}><PlayerPortrait player={player} /><span><b>{player.name}{player.id === session.player.id ? " · you" : ""}</b><strong>{player.bankrupt ? "Out" : formatMoney(player.cash)}</strong>{player.inJail && <small>In jail</small>}</span></button>)}</div>}
         <aside className="side-rail" aria-label="Game controls and status">
           {game.phase === "lobby" ? (
@@ -417,8 +418,12 @@ function Lobby({
 
 function Board({ game, current, onSelect }: { game: GameState; current?: Player; onSelect: (id: number) => void }) {
   const lastRoll = game.lastRoll;
+  const [zoom, setZoom] = useState(1);
+  const viewport = useRef<HTMLElement>(null);
+  const fit = () => { setZoom(1); viewport.current?.scrollTo({ left: 0, top: 0 }); };
   return (
-    <section className="board-wrap" aria-label="Property game board">
+    <><nav className="flat-camera-tools" aria-label="2D board camera"><button type="button" onClick={fit} aria-label="Fit 2D board">⌂</button><button type="button" onClick={() => setZoom(value => Math.min(4, value + 1))} disabled={zoom === 4} aria-label="Zoom into 2D board">＋</button><button type="button" onClick={() => setZoom(value => Math.max(1, value - 1))} disabled={zoom === 1} aria-label="Zoom out of 2D board">−</button></nav>
+    <section ref={viewport} className={`board-wrap ${zoom > 1 ? "is-zoomed" : ""}`} style={{ "--flat-zoom": zoom } as CSSProperties} aria-label="Property game board">
       <div className="board" style={{ gridTemplateColumns: `repeat(${game.boardSize / 4 + 1}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${game.boardSize / 4 + 1}, minmax(0, 1fr))` }}>
         {getBoard(game.boardSize).map((tile) => {
           const players = game.players.filter((player) => !player.bankrupt && player.position === tile.position);
@@ -478,7 +483,7 @@ function Board({ game, current, onSelect }: { game: GameState; current?: Player;
           </div>
         </div>
       </div>
-    </section>
+    </section></>
   );
 }
 
@@ -566,7 +571,7 @@ function Controls({
               <button className="secondary-button" type="button" disabled={local.getOutOfJailCards === 0} onClick={() => sendAction({ type: "PAY", playerId: local.id, kind: "jailCard" })}>Use jail card</button>
             </div>
           )}
-          <button className="roll-button" type="button" onClick={() => sendAction({ type: "ROLL", playerId: local.id, dice: dice() })}>
+          <button className="roll-button" type="button" disabled={showTrade || showBuild} onClick={() => sendAction({ type: "ROLL", playerId: local.id, dice: dice() })}>
             <span>ROLL</span><i>2d6</i>
           </button>
         </div>
@@ -582,7 +587,7 @@ function Controls({
         <div className="utility-actions">
           <button className="secondary-button" type="button" onClick={() => { setShowBuild((value) => !value); setShowTrade(false); }}>{settling ? "Sell / mortgage" : "Build / mortgage"}</button>
           <button className="secondary-button" type="button" onClick={() => { setShowTrade((value) => !value); setShowBuild(false); }}>Trade</button>
-          {game.phase === "awaitingEndTurn" && <button className="primary-button" type="button" onClick={() => sendAction({ type: "END_TURN", playerId: local.id })}>{game.lastRoll?.grantsExtraRoll ? "Roll again" : "End turn"}</button>}
+          {game.phase === "awaitingEndTurn" && <button className="primary-button" type="button" disabled={showTrade || showBuild} onClick={() => sendAction({ type: "END_TURN", playerId: local.id })}>{game.lastRoll?.grantsExtraRoll ? "Roll again" : "End turn"}</button>}
           {settling && game.phase === "awaitingDebt" && <button className="bankrupt-button" type="button" onClick={() => setConfirmBankruptcy(true)}>Declare bankruptcy</button>}
         </div>
       )}
@@ -612,12 +617,20 @@ function PropertyTools({
       {properties.map((tile) => {
         if (!isPurchasableTile(tile)) return null;
         const property = game.properties[tile.position] as PropertyState;
+        const district = tile.kind === "property" ? colorGroupTiles(tile.group, game.boardSize) : [];
+        const liquidation = district.reduce((sum, member) => sum + Math.floor(game.properties[member.position]!.houses * member.houseCost / 2), 0);
+        const levels = district.map(member => game.properties[member.position]!.houses);
+        const clearSet = district.every(member => game.properties[member.position]?.ownerId === player.id && !game.properties[member.position]?.mortgaged);
+        const canBuild = tile.kind === "property" && clearSet && game.phase !== "awaitingDebt" && property.houses < 5 && property.houses === Math.min(...levels) && player.cash >= tile.houseCost && (property.houses === 4 ? game.bankHotels > 0 : game.bankHouses > 0);
+        const canSell = clearSet && property.houses > 0 && property.houses === Math.max(...levels) && (property.houses < 5 || game.bankHouses >= 4);
+        const canMortgage = property.mortgaged ? game.phase !== "awaitingDebt" && player.cash >= tile.mortgageValue + Math.ceil(tile.mortgageValue / 10) : !levels.some(level => level > 0);
         return (
           <div className="deed-row" key={tile.position}>
             <div><b>{tile.name}</b><small>{propertyLabel(property) || "Unimproved"}</small></div>
             <div className="deed-actions">
-              {tile.kind === "property" && <><button type="button" disabled={game.phase === "awaitingDebt"} aria-label={`Build on ${tile.name}`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "build" })}>+</button><button type="button" disabled={property.houses === 0} aria-label={`Sell a building on ${tile.name}`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "sell" })}>Sell {formatMoney(Math.floor(tile.houseCost / 2))}</button></>}
-              <button type="button" disabled={property.mortgaged && game.phase === "awaitingDebt"} aria-label={`${property.mortgaged ? "Unmortgage" : "Mortgage"} ${tile.name}`} onClick={() => sendAction({ type: "MORTGAGE", playerId: player.id, propertyId: tile.position, mortgage: !property.mortgaged })}>{property.mortgaged ? "Unmortgage" : `Mortgage ${formatMoney(tile.mortgageValue)}`}</button>
+              {tile.kind === "property" && <><button type="button" disabled={!canBuild} title="Build evenly on a complete, unmortgaged set with available bank stock." aria-label={`Build on ${tile.name}`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "build" })}>+</button><button type="button" disabled={!canSell} title={property.houses === 5 && game.bankHouses < 4 ? "No replacement houses: use Sell district buildings instead." : "Sell evenly from the most developed properties."} aria-label={`Sell a building on ${tile.name}`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "sell" })}>Sell {formatMoney(Math.floor(tile.houseCost / 2))}</button></>}
+              {tile.kind === "property" && property.houses === 5 && game.bankHouses < 4 && <button type="button" aria-label={`Sell all buildings in ${tile.group} district`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "sellGroup" })}>Sell district buildings {formatMoney(liquidation)}</button>}
+              <button type="button" disabled={!canMortgage} title="Sell every building in the district before mortgaging. Repaying a mortgage includes 10% interest." aria-label={`${property.mortgaged ? "Unmortgage" : "Mortgage"} ${tile.name}`} onClick={() => sendAction({ type: "MORTGAGE", playerId: player.id, propertyId: tile.position, mortgage: !property.mortgaged })}>{property.mortgaged ? "Unmortgage" : `Mortgage ${formatMoney(tile.mortgageValue)}`}</button>
             </div>
           </div>
         );
@@ -657,6 +670,9 @@ function TradeComposer({ game, local, sendAction }: { game: GameState; local: Pl
   const [offeredIds, setOfferedIds] = useState<number[]>([]);
   const [requestedIds, setRequestedIds] = useState<number[]>([]);
   const target = game.players.find((player) => player.id === toPlayerId);
+  const giving = Math.max(0, Math.floor(Number(offeredCash) || 0)), asking = Math.max(0, Math.floor(Number(requestedCash) || 0));
+  const hasTerms = giving > 0 || asking > 0 || offeredIds.length > 0 || requestedIds.length > 0;
+  const affordable = giving <= Math.max(0, local.cash) && asking <= Math.max(0, target?.cash ?? 0);
   const mine = getBoard(game.boardSize).filter((tile) => canTradeProperty(game, tile.position, local.id));
   const theirs = getBoard(game.boardSize).filter((tile) => canTradeProperty(game, tile.position, toPlayerId));
   const toggle = (propertyId: number, list: number[], setList: (items: number[]) => void) => setList(list.includes(propertyId) ? list.filter((value) => value !== propertyId) : [...list, propertyId]);
@@ -682,7 +698,9 @@ function TradeComposer({ game, local, sendAction }: { game: GameState; local: Pl
       <div className="cash-inputs"><label>Give ₹<input className="text-input" type="number" min="0" value={offeredCash} onChange={(event) => setOfferedCash(event.target.value)} /></label><label>Ask ₹<input className="text-input" type="number" min="0" value={requestedCash} onChange={(event) => setRequestedCash(event.target.value)} /></label></div>
       <PropertyChecks title="Your deeds" properties={mine} selected={offeredIds} toggle={(id) => toggle(id, offeredIds, setOfferedIds)} />
       <PropertyChecks title={`${target?.name ?? "Their"} deeds`} properties={theirs} selected={requestedIds} toggle={(id) => toggle(id, requestedIds, setRequestedIds)} />
-      <button className="primary-button" disabled={!toPlayerId} type="button" onClick={sendOffer}>Send trade offer</button>
+      {!hasTerms && <p className="waiting-note">Choose cash or a deed to include in the offer.</p>}
+      {!affordable && <p className="inline-error" role="status">Cash in the offer must be available in each player’s balance.</p>}
+      <button className="primary-button" disabled={!target || !hasTerms || !affordable} type="button" onClick={sendOffer}>Send trade offer</button>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { cardAt, classicPosition, getBoard, railroadPositions } from "../engine/board";
-import type { GameState } from "../engine/types";
+import type { AuctionState, GameState } from "../engine/types";
 
 export type MotionKind = "turn" | "dice" | "move" | "card" | "jail" | "release" | "money" | "purchase" | "bid" | "sold" | "build" | "mortgage" | "trade" | "bankrupt" | "winner";
 export interface PresentationFrame {
@@ -7,6 +7,7 @@ export interface PresentationFrame {
   playerId?: string; tileId?: number; route?: number[]; dice?: number[];
   deck?: string; amount?: number; recipientId?: string; backwards?: boolean;
   diceId?: string;
+  auction?: AuctionState;
 }
 
 export const canCompleteFrame = (frame: PresentationFrame | undefined, id: string, source: "animation" | "reader") =>
@@ -73,9 +74,9 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
     }
     if (event.text.includes(" bought ") || (previous.auction && event.text.includes(" won "))) {
       const tileId = previous.pendingPurchase?.propertyId ?? previous.auction?.propertyId;
-      add(previous.auction ? "sold" : "purchase", event.text, 1800, { playerId, tileId }); continue;
+      add(previous.auction ? "sold" : "purchase", event.text, 1800, { playerId, tileId, auction: previous.auction }); continue;
     }
-    if (event.text.includes("improved ") || event.text.includes("sold one improvement")) {
+    if (event.text.includes("improved ") || event.text.includes("sold one improvement") || event.text.includes("sold all district buildings")) {
       add("build", event.text, 1300, { playerId, tileId: board.find(t => previous.properties[t.position]?.houses !== next.properties[t.position]?.houses)?.position }); continue;
     }
     if (event.text.includes("mortgaged ")) {
@@ -97,5 +98,5 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
   return frames;
 }
 
-export const shouldSendMove = (game: GameState, localId: string, presenting: boolean) =>
-  !presenting && game.phase === "awaitingMove" && game.pendingRoll?.playerId === localId;
+export const shouldSendMove = (game: GameState, localId: string, presenting: boolean, visible = true) =>
+  visible && !presenting && game.phase === "awaitingMove" && game.pendingRoll?.playerId === localId;

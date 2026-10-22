@@ -104,6 +104,15 @@ function channel() {
   return { socket, callbacks, link, snapshot, state, advance: (ms: number) => { now += ms; } };
 }
 describe("automatic room recovery", () => {
+  it("ignores a rapid duplicate tap until the first action is acknowledged", () => {
+    const c = channel(); c.link.open(); c.snapshot();
+    expect(c.link.sendAction(action("END_TURN"))).toBe(true);
+    expect(c.link.sendAction(action("END_TURN"))).toBe(false);
+    expect(c.socket.send).toHaveBeenCalledTimes(1);
+    c.snapshot("client:1");
+    expect(c.link.sendAction(action("END_TURN"))).toBe(true);
+    expect(JSON.parse(c.socket.send.mock.lastCall![0]).id).toBe("client:2");
+  });
   it("waits for a canonical snapshot before enabling a returning seat", () => {
     const { link, callbacks, snapshot, socket } = channel(); link.open();
     expect(link.sendAction(action("END_TURN"))).toBe(false);
@@ -145,6 +154,11 @@ describe("automatic room recovery", () => {
     const c = channel(); c.link.open(); c.snapshot(); c.link.resume();
     expect(c.socket.send).toHaveBeenLastCalledWith('{"type":"sync"}'); c.advance(31_000); c.link.resume();
     expect(c.socket.reconnect).toHaveBeenCalledOnce();
+  });
+  it("reopens an offline connection immediately even if its stale socket still claims to be open", () => {
+    const c = channel(); c.link.open(); c.snapshot(); c.link.disconnected(true);
+    c.link.resume(); expect(c.socket.reconnect).toHaveBeenCalledOnce();
+    expect(c.callbacks.status).toHaveBeenLastCalledWith("reconnecting");
   });
   it("recovers an unacknowledged action after an hour-long phone sleep", () => {
     const c = channel(); c.link.open(); c.snapshot(); c.link.sendAction(action("END_TURN"));

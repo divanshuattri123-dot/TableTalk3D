@@ -1,4 +1,4 @@
-# Classic Monopoly rules audit - 20 October 2026
+# Classic Monopoly rules audit - updated 22 October 2026
 
 ## Verdict
 
@@ -76,7 +76,7 @@ The Vintage guide additionally confirms full hotel liquidation as a distinct sal
 | Finite building stock | Matches classic map | Initial 32 houses / 12 hotels; expansion stock differs intentionally. |
 | Building sale price | Matches | Half cost, integer cash; reverse-even selling. |
 | Building scarcity auctions | Missing | No building-auction state/action. Exhausted stock rejects a build. |
-| Hotel liquidation options | Partial | Only hotel-to-four-house downgrade; fails if four bank houses are unavailable. No complete hotel/group cash-out operation. |
+| Hotel liquidation options | Fixed 22 October | Hotel downgrade still needs four replacement houses; `BUILD sellGroup` can liquidate the complete district at half cost without replacement stock. |
 | Transactions outside one's turn | Missing | `canManageFinances` restricts to the active owner or queued debtor. |
 | Mortgage group clearance | Matches | Every improvement in the group must be sold first. |
 | Mortgage proceeds / rent suppression | Matches | Listed principal credited; mortgaged land earns zero rent. |
@@ -100,15 +100,15 @@ For transfers and elimination, compare C1009 page 1 and the older guides' bankru
 | Complete card decks | Missing | `board.ts` contains eight Chance and eight Community cards, not full decks. |
 | Shuffle / top-card / bottom-card order | Missing | Client selects reusable indexes; state has no ordered deck or draw cursor. |
 | Held release-card circulation | Missing | Drawing adds an unlimited counter; held cards are not removed from a deck or returned to their original deck. |
-| Complete card-effect coverage | Partial | Supports money, selected destinations, nearest rail, back three, Jail, release and collection. No repairs-by-building, nearest-utility or special card rent multiplier fields. |
+| Complete card-effect coverage | Partial | Supports money, selected destinations, nearest rail with double rent, back three, Jail, release and collection. Repairs-by-building and nearest-utility remain missing. |
 | Readable card reveal | Fixed in this update | Structured card text, front-facing animated HTML and explicit Continue; not dismissed by Unity completion or timeout. This is a UI check, not a tabletop rule. |
 | Raise money before continuing | Fixed in this update | `awaitingDebt` gates normal actions; sales, mortgages and rescue offers remain available. |
 | Debts outside the roller's turn | Matches checked flow | Ordered debt queue; original turn resumes after settlement. Tested with Community collection. |
 | Creditor receives paid cash | Matches checked flow | Existing cash and subsequent proceeds only, not invented unpaid rent. |
 | Insolvency test | Different | `netWorth` uses listed asset values, not full realizable liquidation capacity. Automatic negative-net-worth elimination was part of the original project spec. |
 | Surrender while rescue is possible | Custom | Negative-cash debtor may voluntarily declare bankruptcy even while holding potentially valuable assets. |
-| Creditor asset settlement | Partial | Deeds transfer, but surviving buildings are not liquidated first; release cards are discarded instead of transferred. |
-| Bank asset settlement | Partial | Mortgages/improvements clear and stock returns; mandatory immediate auctions of returned deeds are missing. |
+| Creditor asset settlement | Fixed checked flow, transfer interest still missing | Buildings liquidate at half cost before deeds transfer; bank stock and release-card count transfer correctly. |
+| Bank asset settlement | Fixed 22 October | Mortgages/improvements clear and stock returns; deeds enter ordered immediate auctions, preserving the interrupted turn. No auctions after the final survivor wins. |
 | Transfer-interest debt chains | Missing | No interest decision means no associated recipient debt/settlement phase. |
 | Eliminated turns / winner | Matches | Removed from future turns; final surviving player gets `winnerId` and `gameOver`. Browser bankruptcy flow verified this. |
 
@@ -123,7 +123,7 @@ exact wording/composition must be sourced for a chosen edition before claiming a
 - Reusable small decks, turn-gated property management, automatic rent and random starting player are current simplifications, not proof of official compliance.
 - Speed Die, short-game, timed-game and Free Parking jackpot variants are not enabled. They are not missing requirements for the selected ordinary classic baseline. The older optional percentage-tax rule is not this baseline's flat-tax rule.
 
-## Verification for this update
+## Verification for 20 October (historical)
 
 - Vitest: 93 passing tests across engine, debt, presentation, screen labels and orientation helpers.
 - Actual local Worker: 30 multiplayer actions with identical snapshots at two clients.
@@ -134,11 +134,21 @@ exact wording/composition must be sourced for a chosen edition before claiming a
 ## Recommended implementation order for strict classic compliance
 
 1. Real shuffled deck state and unique held-card IDs; pass shuffled orders in START to preserve reducer purity.
-2. Correct liquidation-based bankruptcy plus bank auction queue and creditor settlement.
+2. Replace the original negative-retail-net-worth insolvency rule with correct realizable-liquidation accounting. Bank auction queue and creditor settlement were added on 22 October.
 3. Mortgaged-deed transfer interest/redemption and any resulting debt chains.
 4. Release-card trading, complete card effects and a utility-rent dice phase.
-5. Building scarcity auctions, full hotel liquidation and coordinated off-turn property management.
+5. Building scarcity auctions and coordinated off-turn property management. Full district/hotel liquidation was added on 22 October.
 6. Separate selectable strict 40-space classic mode from the requested expanding India mode; highest-roll start and baseline opening bids.
 
 These gaps are documented, not silently described as implemented. They require
 new engine states and regression tests before additional presentation work.
+
+## 22 October verification
+
+The new engine regressions cover double railroad card rent, creditor building and
+release-card transfers, bank estate auctions including an off-turn debtor, final
+winner handling, and hotel district liquidation without replacement houses.
+Fifteen seeded matches (three for each player count from two through six) reach
+a winner using ordinary actions; every action checks determinism, immutability,
+cash, positions, development inventory and elimination invariants.
+See `QA_VERIFICATION.md` for the complete current test and browser evidence.

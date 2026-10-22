@@ -12,8 +12,9 @@ interface Release { loaderUrl: string; dataUrl: string; frameworkUrl: string; co
 declare global { interface Window { createUnityInstance?: (canvas: HTMLCanvasElement, options: object, progress: (value: number) => void) => Promise<UnityInstance> } }
 let loader: Promise<void> | undefined;
 
-export default function UnityBoard({ game, target, settings, frame, onSelect, onComplete, onReady, onFallback, onReadPrices }: {
+export default function UnityBoard({ game, target, settings, frame, syncVersion, onSelect, onComplete, onReady, onFallback, onReadPrices }: {
   game: GameState; target: GameState; frame?: PresentationFrame;
+  syncVersion: number;
   settings: ViewSettings;
   onSelect: (position: number) => void; onComplete: (id: string) => void;
   onReady: (ready: boolean) => void; onFallback: () => void;
@@ -27,6 +28,7 @@ export default function UnityBoard({ game, target, settings, frame, onSelect, on
   const [mobile, setMobile] = useState(() => window.matchMedia("(pointer: coarse), (max-width: 700px)").matches);
   const { byId } = useAssets();
   const registered = useRef(new Set<string>());
+  const syncedVersion = useRef(-1);
   const [assetError, setAssetError] = useState("");
   useEffect(() => {
     const media = window.matchMedia("(pointer: coarse), (max-width: 700px)");
@@ -82,14 +84,17 @@ export default function UnityBoard({ game, target, settings, frame, onSelect, on
     };
   }, []);
   useEffect(() => {
-    if (ready) instance.current?.SendMessage("GamePresentation", "SyncSnapshot", JSON.stringify(unitySnapshot(game)));
-  }, [game, ready]);
+    if (!ready) return;
+    const method = syncedVersion.current === syncVersion ? "SyncSnapshot" : "ResumeSnapshot";
+    syncedVersion.current = syncVersion;
+    instance.current?.SendMessage("GamePresentation", method, JSON.stringify(unitySnapshot(game)));
+  }, [game, ready, syncVersion]);
   useEffect(() => {
     if (ready && frame) instance.current?.SendMessage("GamePresentation", "PresentFrame", JSON.stringify({ ...frame, board: unitySnapshot(target) }));
   }, [frame, ready, target]);
   useEffect(() => {
     if (ready) instance.current?.SendMessage("GamePresentation", "SetVisualSettings", JSON.stringify({ quality: settings.quality, theme: settings.theme, camera: settings.camera, reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches, mobile, screenLabels: true }));
-  }, [ready, settings.quality, settings.theme, settings.camera, mobile]);
+  }, [ready, settings.quality, settings.theme, settings.camera, mobile, game.boardSize]);
   useEffect(() => {
     if (!ready) return;
     const ids = new Set(game.players.flatMap(p => [p.tokenId, p.diceId]).filter((id): id is string => Boolean(id)));

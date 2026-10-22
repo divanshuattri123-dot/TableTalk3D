@@ -170,6 +170,8 @@ export interface GameState {
   pendingRoll?: PendingRoll;
   pendingPurchase?: PendingPurchase;
   auction?: AuctionState;
+  bankAuctionQueue?: number[];
+  bankAuctionResumePhase?: DebtResumePhase;
   pendingTrade?: TradeOffer;
   debts?: Debt[];
   debtResumePhase?: DebtResumePhase;
@@ -195,7 +197,7 @@ export type GameAction =
       type: "BUILD";
       playerId: string;
       propertyId: number;
-      operation: "build" | "sell";
+      operation: "build" | "sell" | "sellGroup";
     }
   | { type: "MORTGAGE"; playerId: string; propertyId: number; mortgage: boolean }
   | { type: "PAY"; playerId: string; kind: PayKind }

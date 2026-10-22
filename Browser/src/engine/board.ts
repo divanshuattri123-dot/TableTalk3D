@@ -107,7 +107,7 @@ export const BOARD: readonly Tile[] = [
 export const CHANCE_CARDS: readonly GameCard[] = [
   { text: "Advance to GO. Collect ₹200.", effect: { kind: "moveTo", position: 0, awardGo: true } },
   { text: "Ride the express to Hussain Sagar.", effect: { kind: "moveTo", position: 24 } },
-  { text: "Advance to the nearest railroad.", effect: { kind: "nearestRailroad" } },
+  { text: "Advance to the nearest railroad. If owned, pay twice its usual rent.", effect: { kind: "nearestRailroad" } },
   { text: "Go back three spaces.", effect: { kind: "moveRelative", spaces: -3 } },
   { text: "The bank pays a festival dividend of ₹50.", effect: { kind: "money", amount: 50 } },
   { text: "Pay a local civic levy of ₹15.", effect: { kind: "money", amount: -15 } },

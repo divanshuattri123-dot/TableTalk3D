@@ -34,6 +34,7 @@ namespace TableTalk
         bool dragging;
         float cameraZoom = 1;
         float previousAspect;
+        string propertyStamp;
         public bool IsPresenting => presentation != null;
         public int PresentedEventId => shown == null ? -1 : shown.eventId;
 
@@ -88,6 +89,7 @@ namespace TableTalk
             if (propertyRoot != null) Destroy(propertyRoot.gameObject);
             foreach (var material in ownedMaterials) Destroy(material);
             ownedMaterials.Clear(); materialCache.Clear(); pieces.Clear(); pieceModels.Clear(); tiles.Clear(); tileLabels.Clear();
+            propertyStamp = null;
             boardRoot = new GameObject("Readable board").transform;
             tokenRoot = new GameObject("Player tokens").transform;
             propertyRoot = new GameObject("Ownership and buildings").transform;
@@ -177,6 +179,13 @@ namespace TableTalk
 
         void SyncProperties(BoardSnapshot state)
         {
+            var stamp = new System.Text.StringBuilder();
+            foreach (var tile in state.tiles) stamp.Append(tile.id).Append(':').Append(tile.ownerId).Append(':').Append(tile.houses).Append(':').Append(tile.mortgaged).Append(';');
+            foreach (var player in state.players) stamp.Append(player.id).Append(':').Append(player.color).Append(';');
+            var value = stamp.ToString();
+            // A dice roll or network echo changes no buildings; do not destroy and recreate the city furniture.
+            if (propertyStamp == value) return;
+            propertyStamp = value;
             foreach (Transform child in propertyRoot) Destroy(child.gameObject);
             foreach (var tile in state.tiles)
                 if (tiles.TryGetValue(tile.id, out var surface)) surface.GetComponent<Renderer>().sharedMaterial = Material(ColorOf(tile.mortgaged ? "#d75b62" : "#cee8cd"), .04f, .26f);

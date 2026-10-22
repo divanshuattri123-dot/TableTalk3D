@@ -15,13 +15,13 @@ namespace TableTalk
             DisposeLandscape();
             landscape = new GameObject("Riverside park · trees and promenade").transform;
             float half = BoardLayout.Span(size) * .5f;
-            var grass = Material(ColorOf("#729450"), 0, .12f);
+            var grass = Material(Color.white, 0, .12f);
             var grassMap = new Texture2D(128, 128, TextureFormat.RGB24, true) { name = "Fine grass grain", wrapMode = TextureWrapMode.Repeat };
             var grassPixels = new Color[128 * 128];
             for (int y = 0; y < 128; y++) for (int x = 0; x < 128; x++)
             {
                 float noise = Hash(x * 3.1f + y * 71.9f);
-                grassPixels[y * 128 + x] = Color.Lerp(ColorOf("#7b9951"), ColorOf("#b0bf7b"), noise * .65f);
+                grassPixels[y * 128 + x] = Color.Lerp(ColorOf("#617d44"), ColorOf("#91a166"), noise * .65f);
             }
             grassMap.SetPixels(grassPixels); grassMap.Apply(true, true); landscapeTextures.Add(grassMap);
             grass.SetTexture("_BaseMap", grassMap); grass.SetTextureScale("_BaseMap", Vector2.one * 18);
@@ -39,17 +39,28 @@ namespace TableTalk
             var bark = Material(ColorOf("#76634b"), 0, .08f);
             var branchMesh = new LandscapeMesh();
             var crowns = new[] { new LandscapeMesh(), new LandscapeMesh(), new LandscapeMesh(), new LandscapeMesh() };
-            var foliageColors = new[] { "#456f35", "#5a823b", "#729346", "#3c6940" };
+            var foliageColors = new[] { "#748d4f", "#859957", "#97aa68", "#647f50" };
             int treeCount = size > 48 ? 136 : 112;
-            for (int i = 0; i < treeCount; i++)
+            for (int i = 0; i < treeCount + 32; i++)
             {
                 int side = i % 4;
+                bool verge = i >= treeCount;
                 float along = (Hash(i * 7.1f + 2) * 2 - 1) * (half + 12);
                 float across = half + 2.7f + Hash(i * 5.3f + 8) * 9;
                 Vector3 root = side % 2 == 0 ? new Vector3(along, -.39f, across * (side == 0 ? 1 : -1)) : new Vector3(across * (side == 1 ? 1 : -1), -.39f, along);
-                if (root.x < -half - 4.5f || root.x > RiverBankX(half, root.z) - 1 || Mathf.Abs(root.x - HighwayX(half, root.z, false)) < 2.1f || Mathf.Abs(root.x - HighwayX(half, root.z, true)) < 2.1f) continue;
-                float height = 1.1f + Hash(i * 19.7f) * 1.7f;
-                float width = .45f + Hash(i * 13.2f) * .35f;
+                if (verge)
+                {
+                    along = ((i-treeCount)/4f/7.8f-.5f)*(half*2-.6f);
+                    if (side == 1 || side == 3)
+                    {
+                        if (side == 1 && Mathf.Abs(along+half*.65f)<1) continue;
+                        root = new Vector3(HighwayX(half,along,side==1)+(side==1?-1.35f:1.35f),-.39f,along);
+                    }
+                    else root = new Vector3(along,-.39f,(half+1.1f)*(side==0?1:-1));
+                }
+                else if (root.x < -half - 4.5f || root.x > RiverBankX(half, root.z) - 1 || Mathf.Abs(root.x - HighwayX(half, root.z, false)) < 2.1f || Mathf.Abs(root.x - HighwayX(half, root.z, true)) < 2.1f) continue;
+                float height = verge ? .95f + Hash(i*19.7f)*.55f : 1.1f + Hash(i * 19.7f) * 1.7f;
+                float width = verge ? .29f : .45f + Hash(i * 13.2f) * .35f;
                 var top = root + new Vector3((Hash(i + 3) - .5f) * .2f, height * .73f, (Hash(i + 8) - .5f) * .2f);
                 branchMesh.Branch(root, top, .07f + height * .016f, .025f);
                 for (int limb = 0; limb < 7; limb++)
@@ -95,7 +106,7 @@ namespace TableTalk
             {
                 float cx = Hash(i * 11.31f + seed) * size, cy = Hash(i * 7.13f + seed * 3) * size;
                 float rx = 2 + Hash(i * 4.7f) * 4, ry = 2 + Hash(i * 3.1f) * 2;
-                float light = .67f + Hash(i + seed * 44) * .33f;
+                float light = .84f + Hash(i + seed * 44) * .16f;
                 for (int y = -7; y <= 7; y++) for (int x = -7; x <= 7; x++)
                 {
                     if (x * x / (rx * rx) + y * y / (ry * ry) > 1) continue;
@@ -139,6 +150,7 @@ namespace TableTalk
             readonly List<Vector3> vertices = new List<Vector3>();
             readonly List<Vector2> uvs = new List<Vector2>();
             readonly List<int> triangles = new List<int>();
+            readonly Dictionary<int, Vector3> leafNormals = new Dictionary<int, Vector3>();
 
             public void Plane(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
             {
@@ -178,8 +190,10 @@ namespace TableTalk
                 for (int row = 0; row <= rings; row++) for (int side = 0; side <= sides; side++)
                 {
                     float v = row / (float)rings, u = side / (float)sides, latitude = v * Mathf.PI, angle = u * Mathf.PI * 2;
-                    float rough = .82f + Hash(seed * 19.1f + row * 7 + side % sides) * .32f;
+                    float rough = .94f + Hash(seed * 19.1f + row * 7 + side % sides) * .12f;
                     var p = new Vector3(Mathf.Sin(latitude) * Mathf.Cos(angle), Mathf.Cos(latitude), Mathf.Sin(latitude) * Mathf.Sin(angle));
+                    // A leaf cluster reads as a soft volume, not a crumpled polygon shell.
+                    leafNormals[vertices.Count] = new Vector3(p.x / scale.x, p.y / scale.y, p.z / scale.z).normalized;
                     vertices.Add(centre + Vector3.Scale(p * rough, scale)); uvs.Add(new Vector2(u, v));
                 }
                 for (int row = 0; row < rings; row++) for (int side = 0; side < sides; side++)
@@ -193,7 +207,9 @@ namespace TableTalk
             public Mesh Build(string name)
             {
                 var mesh = new Mesh { name = name, indexFormat = IndexFormat.UInt32 };
-                mesh.SetVertices(vertices); mesh.SetUVs(0, uvs); mesh.SetTriangles(triangles, 0); mesh.RecalculateNormals(); mesh.RecalculateBounds(); return mesh;
+                mesh.SetVertices(vertices); mesh.SetUVs(0, uvs); mesh.SetTriangles(triangles, 0); mesh.RecalculateNormals();
+                if (leafNormals.Count > 0) { var normals = mesh.normals; foreach (var pair in leafNormals) normals[pair.Key] = pair.Value; mesh.normals = normals; }
+                mesh.RecalculateBounds(); return mesh;
             }
         }
     }

@@ -294,9 +294,67 @@ body.in-game { overflow: hidden; overscroll-behavior: none; }
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 600px) and (max-width: 720px) {
   .immersive-game .side-rail, .immersive-game .live-seats { width: 170px; }
   .immersive-game .play-turn-banner { width: 145px; }
-  .immersive-game .unity-camera-tools, .immersive-game .scene-tools { flex-direction: column; bottom: 80px; gap: 4px; }
+  .immersive-game .unity-camera-tools, .immersive-game .scene-tools { display: grid; grid-template-columns: repeat(2,44px); bottom: 75px; gap: 4px; }
+  .immersive-game .unity-camera-tools button, .immersive-game .scene-tools button { width: 44px; min-width: 44px; min-height: 44px; }
+  .immersive-game:not([data-phase="lobby"]) .touch-guide { display: none; }
 }
 .connection-recovery { position: fixed; z-index: 120; left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translateX(-50%); width: min(390px, calc(100vw - 28px)); padding: 12px 16px; border: 1px solid #b6812e; border-radius: 12px; background: #fff5d9; color: #49330e; box-shadow: 0 6px 24px #17271d40; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
 .connection-recovery strong { font-size: 14px; }
 .connection-recovery span { grid-column: 1; font-size: 12px; line-height: 1.4; }
 .connection-recovery button { grid-column: 2; grid-row: 1 / 3; padding: 8px 12px; border: 1px solid #9b742d; border-radius: 8px; background: #fffdf4; color: #49330e; font-weight: 700; }
+.immersive-game .board-wrap { aspect-ratio: 1; overflow: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; }
+.immersive-game .board-wrap .board { width: calc(100% * var(--flat-zoom,1)); max-width: none; }
+.immersive-game .board-wrap.is-zoomed .tile-name { font-size: 10px; overflow-wrap: normal; word-break: normal; }
+.immersive-game .board-wrap.is-zoomed .tile-price { font-size: 10px; }
+.immersive-game .board-wrap.is-zoomed .tile-region { display: none; }
+.flat-camera-tools { position: absolute; left: 10px; top: 112px; z-index: 12; display: grid; gap: 5px; }
+.flat-camera-tools button { width: 44px; min-height: 44px; padding: 4px; border: 1px solid #f9ffed; border-radius: 12px; background: #fffaf0; color: #395537; font-size: 24px; box-shadow: 0 3px 12px #253c3b30; }
+@media (orientation: landscape) and (max-height: 600px) {
+  .immersive-game .board-wrap { width: min(calc(100dvh - 72px), calc(100vw - 230px)); left: calc((100vw - 190px) / 2); top: calc((100dvh + 54px) / 2); padding: 4px; }
+  .immersive-game .board-stage:has(.board-wrap) .landing-ribbon, .immersive-game .board-stage:has(.board-wrap) .play-turn-banner { display: none; }
+}
+@media (orientation: landscape) and (max-height: 600px) and (max-width: 1000px) {
+  .immersive-game .event-backdrop { padding: 8px; overflow: auto; align-items: start; }
+  .immersive-game .event-backdrop > section { margin-block: auto; }
+  .immersive-game .auction-stage { position: relative; width: min(760px,100%); max-height: calc(100dvh - 16px); min-height: 0; padding: 10px; overflow: hidden; border: 2px solid white; border-radius: 14px; background: #f6f8ed; box-shadow: 0 12px 40px #193c3b66; grid-template-columns: minmax(0,.9fr) minmax(0,1.1fr); grid-template-rows: auto minmax(0,1fr); gap: 6px 12px; }
+  .immersive-game .auction-heading { grid-column: 1 / -1; margin: 0; min-height: 40px; padding-right: 85px; text-align: left; }
+  .immersive-game .auction-heading h1 { margin: 0; font-size: 22px; }
+  .immersive-game .auction-heading p { margin: 2px 0 0; font-size: 10px; }
+  .immersive-game .auctioneer { position: absolute; grid-row: 1; grid-column: 1 / -1; top: 2px; right: 14px; width: 75px; height: 48px; min-height: 0; }
+  .immersive-game .auctioneer > .event-character:not(.auction-hammer) { position: absolute; right: 0; bottom: 0; width: 55px; height: 48px; }
+  .immersive-game .auctioneer .auction-hammer { width: 40px; height: 35px; top: 4px; right: -8px; }
+  .immersive-game .auction-speech { display: none; }
+  .immersive-game .auction-deed { grid-column: 1; grid-row: 2; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+  .immersive-game .auction-deed .title-deed { width: 100%; margin: 0; }
+  .immersive-game .auction-deed .title-deed dl > div { font-size: 11px; padding: 3px 2px; }
+  .immersive-game .auction-deed .deed-symbol { display: none; }
+  .immersive-game .auction-bidding { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; gap: 5px; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+  .immersive-game .highest-bid { padding: 3px; flex-shrink: 0; }
+  .immersive-game .highest-bid strong { font-size: 24px; line-height: 1.1; }
+  .immersive-game .highest-bid > span { font-size: 10px; }
+  .immersive-game .auction-participants { max-height: clamp(40px,14dvh,64px); overflow: auto; flex-shrink: 0; overscroll-behavior: contain; }
+  .immersive-game .auction-participants > div { min-height: 31px; }
+  .immersive-game .auction-participants > div > span { min-width: 0; }
+  .immersive-game .auction-participants b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .immersive-game .big-bid-controls { gap: 4px; flex-shrink: 0; }
+  .immersive-game .big-bid-controls > div > button, .immersive-game .big-bid-controls .event-primary, .immersive-game .big-bid-controls .event-secondary { min-height: 44px; font-size: 12px; padding: 5px; }
+  .immersive-game .big-bid-controls input { min-height: 36px; font-size: 16px; }
+  .immersive-game .purchase-stage, .immersive-game .trade-stage { max-width: 100%; max-height: calc(100dvh - 16px); overflow: auto; }
+  .immersive-game .purchase-stage { width: min(760px,100%); grid-template-columns: minmax(0,1.15fr) minmax(0,.85fr); grid-template-rows: auto minmax(0,1fr); align-items: stretch; gap: 8px 12px; padding: 12px; overflow: hidden; }
+  .immersive-game .purchase-stage > .title-deed { grid-column: 1; grid-row: 1 / 3; width: 100%; max-height: calc(100dvh - 50px); overflow: auto; overscroll-behavior: contain; }
+  .immersive-game .sale-intro { grid-column: 2; grid-row: 1; position: relative; min-width: 0; padding-right: 48px; text-align: left; }
+  .immersive-game .sale-intro .event-ribbon { margin: 0; padding: 6px; transform: none; font-size: 10px; }
+  .immersive-game .sale-intro > p:not(.event-ribbon) { margin: 4px 0 0; font-size: 10px; }
+  .immersive-game .sale-intro .event-character { position: absolute; top: 0; right: 0; width: 45px; height: 65px; object-fit: contain; }
+  .immersive-game .sale-actions { grid-column: 2; grid-row: 2; align-content: center; min-width: 0; gap: 8px; }
+  .immersive-game .sale-actions > p > strong { font-size: 30px; line-height: 1.2; }
+  .immersive-game .sale-actions .event-primary, .immersive-game .sale-actions .event-secondary, .immersive-game .trade-decision button { min-height: 44px; font-size: 12px; padding: 7px; }
+  .immersive-game .purchase-stage .title-deed dl > div { font-size: 11px; }
+}
+@media (orientation: landscape) and (max-height: 350px) and (max-width: 1000px) {
+  .immersive-game .highest-bid { display: grid; grid-template-columns: minmax(0,1fr) auto; text-align: left; align-items: center; gap: 0 6px; padding: 5px; }
+  .immersive-game .highest-bid small { grid-column: 1; grid-row: 1; font-size: 8px; }
+  .immersive-game .highest-bid strong { grid-column: 2; grid-row: 1 / 3; font-size: 24px; }
+  .immersive-game .highest-bid > span { grid-column: 1; grid-row: 2; font-size: 10px; line-height: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .immersive-game .auction-participants { max-height: 31px; }
+}

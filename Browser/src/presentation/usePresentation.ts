@@ -1,45 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GameState } from "../engine/types";
-import { canCompleteFrame, planPresentation } from "./plan";
-import type { PresentationFrame } from "./plan";
+import { presentationBusy, PresentationTimeline } from "./timeline";
 
-interface Batch { target: GameState; frames: PresentationFrame[] }
 export function usePresentation(game: GameState | undefined, externalMotion: boolean) {
-  const planned = useRef<GameState | undefined>(undefined), queue = useRef<Batch[]>([]), playing = useRef<Batch | undefined>(undefined);
-  const active = useRef<PresentationFrame | undefined>(undefined);
-  const [shown, setShown] = useState<GameState>();
-  const [frame, setFrame] = useState<PresentationFrame>();
-  const [target, setTarget] = useState<GameState>();
-  const advance = useCallback(() => {
-    while (true) {
-      if (!playing.current) playing.current = queue.current.shift();
-      const batch = playing.current;
-      if (!batch) { active.current = undefined; setFrame(undefined); return; }
-      const next = batch.frames.shift();
-      if (next) { active.current = next; setTarget(batch.target); setFrame(next); return; }
-      setShown(batch.target); playing.current = undefined;
-    }
-  }, []);
-  const complete = useCallback((id: string) => { if (canCompleteFrame(active.current, id, "animation")) advance(); }, [advance]);
-  const acknowledgeCard = useCallback((id: string) => { if (canCompleteFrame(active.current, id, "reader")) advance(); }, [advance]);
+  const timeline = useRef(new PresentationTimeline());
+  const [view, setView] = useState(() => timeline.current.snapshot());
+  const refresh = useCallback(() => setView(timeline.current.snapshot()), []);
+  const complete = useCallback((id: string) => { timeline.current.complete(id, "animation"); refresh(); }, [refresh]);
+  const acknowledgeCard = useCallback((id: string) => { timeline.current.complete(id, "reader"); refresh(); }, [refresh]);
   useEffect(() => {
-    if (!game) return;
-    const previous = planned.current;
-    if (previous && game.roomCode === previous.roomCode && game.nextEventId < previous.nextEventId) return;
-    planned.current = game;
-    if (!previous || previous.roomCode !== game.roomCode || previous.boardSize !== game.boardSize) {
-      queue.current = []; playing.current = undefined; active.current = undefined;
-      setShown(game); setTarget(game); setFrame(undefined); return;
-    }
-    const frames = planPresentation(previous, game);
-    queue.current.push({ target: game, frames });
-    if (!active.current) advance();
-  }, [game, advance]);
+    if (game) { timeline.current.receive(game); refresh(); }
+  }, [game, refresh]);
   useEffect(() => {
+    const visibility = () => { timeline.current.setVisible(document.visibilityState === "visible"); refresh(); };
+    document.addEventListener("visibilitychange", visibility); visibility();
+    return () => document.removeEventListener("visibilitychange", visibility);
+  }, [refresh]);
+  useEffect(() => {
+    const frame = view.frame;
     if (!frame || frame.kind === "card") return;
     // A lost WebGL callback must not strand a room. Normal progression uses Unity's actual completion.
     const timer = window.setTimeout(() => complete(frame.id), frame.duration + (externalMotion ? 8000 : 50));
     return () => window.clearTimeout(timer);
-  }, [frame, externalMotion, complete]);
-  return { shown: shown ?? game, target: target ?? game, frame, busy: Boolean(frame) || Boolean(game && shown && game.nextEventId !== shown.nextEventId), complete, acknowledgeCard };
+  }, [view.frame, externalMotion, complete]);
+  return { ...view, busy: presentationBusy(game, view), shown: view.shown ?? game, target: view.target ?? game, complete, acknowledgeCard };
 }

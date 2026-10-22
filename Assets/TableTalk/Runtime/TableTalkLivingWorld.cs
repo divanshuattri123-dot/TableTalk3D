@@ -138,19 +138,55 @@ namespace TableTalk
             AddLandscapeMesh("Blue winding river", water, riverSurface);
             AddLandscapeMesh("Sunlit river ripples", ripples, Material(ColorOf("#a1d0c8"),0,.5f));
             float bridgeZ = -half * .65f;
-            var c = new Vector3(half + 9, -.15f, bridgeZ);
+            var c = new Vector3(half + 9, .38f, bridgeZ);
             LandscapeBox("River bridge deck", c, new Vector3(12.5f,.18f,.85f),Material(ColorOf("#b9bba6"),0,.2f));
             LandscapeBox("Bridge carriageway", c+Vector3.up*.105f,new Vector3(12.5f,.035f,.65f),Material(ColorOf("#4b575a"),0,.2f));
             for (int edge = -1; edge <= 1; edge+=2) LandscapeBox("Bridge parapet",c+new Vector3(0,.25f,edge*.43f),new Vector3(12.5f,.15f,.055f),Material(ColorOf("#d9d6b8"),0,.2f));
+            var ramps = new LandscapeMesh();
+            for (int end = -1; end <= 1; end += 2)
+            {
+                var a = c + new Vector3(end * 6.25f, .105f, 0);
+                var b = c + new Vector3(end * 8.1f, -.71f, 0);
+                Ribbon(ramps, a, b, .65f);
+            }
+            AddLandscapeMesh("Graded bridge approach ramps", ramps, Material(ColorOf("#4b575a"),0,.2f));
+            for (int i=0;i<2;i++) LandscapeBox("Bridge pier",new Vector3(half+7+i*4,-.13f,bridgeZ),new Vector3(.2f,1,.55f),Material(ColorOf("#b9bba6"),0,.2f));
         }
 
         Transform WorldVehicle(string name, string paint, bool tractor)
         {
             var root = new GameObject(name).transform; root.SetParent(worldMotion, false);
+            TokenAsset car = null;
+            if (!tractor) foreach (var token in tokens) if (token.id == "m-a9fe918d9d51ea81") { car = token; break; }
+            if (car?.prefab != null)
+            {
+                var model = Instantiate(car.prefab, root); model.name = "Detailed supplied sports car"; model.SetActive(true);
+                var bounds = BoundsOf(model); float scale = .44f / Mathf.Max(bounds.size.x,bounds.size.y,bounds.size.z,.001f);
+                model.transform.localScale *= scale;
+                model.transform.localPosition = new Vector3(-bounds.center.x,-bounds.min.y,-bounds.center.z)*scale;
+                var coat = Material(ColorOf(paint),.38f,.65f); coat.enableInstancing=true;
+                foreach (var render in model.GetComponentsInChildren<MeshRenderer>()) render.sharedMaterial=coat;
+                foreach (var collider in model.GetComponentsInChildren<Collider>()) Destroy(collider);
+                WorldBox(root,"Tinted windscreen",new Vector3(0,.098f,-.015f),new Vector3(.12f,.018f,.1f),"#283e49");
+                return root;
+            }
             WorldBox(root,"Dark chassis and tyres",new Vector3(0,.045f,0),new Vector3(.21f,.07f,.3f),"#263335");
             WorldBox(root,"Painted body",new Vector3(0,.09f,0),new Vector3(.18f,.09f,tractor?.31f:.37f),paint);
             WorldBox(root,"Glazed cabin",new Vector3(0,.155f,-.025f),new Vector3(.145f,tractor?.15f:.07f,.17f),"#a3c5cf");
             WorldBox(root,"Front lamps",new Vector3(0,.092f,.19f),new Vector3(.14f,.025f,.018f),"#fff5ce");
+            if (tractor)
+            {
+                for (int axle=-1;axle<=1;axle+=2) for (int side=-1;side<=1;side+=2)
+                {
+                    var wheel=GameObject.CreatePrimitive(PrimitiveType.Cylinder); wheel.name="Farm tyre";
+                    wheel.transform.SetParent(root,false); wheel.transform.localPosition=new Vector3(side*.115f,.06f,axle*.11f);
+                    wheel.transform.localRotation=Quaternion.Euler(0,0,90);
+                    float diameter=axle<0?.18f:.12f; wheel.transform.localScale=new Vector3(diameter,.022f,diameter);
+                    wheel.GetComponent<Renderer>().sharedMaterial=Material(ColorOf("#25302c"),0,.12f);
+                    Destroy(wheel.GetComponent<Collider>());
+                }
+                WorldBox(root,"Exhaust stack",new Vector3(.055f,.23f,.09f),new Vector3(.025f,.22f,.025f),"#474e49");
+            }
             return root;
         }
 
@@ -178,16 +214,35 @@ namespace TableTalk
                 }
                 else if (actor.kind == 1)
                 {
-                    float t = Mathf.PingPong(worldClock*.1f+actor.phase*4,4)-2;
-                    actor.root.SetPositionAndRotation(new Vector3(-worldHalf-6.8f-actor.phase*10,-.29f,t), Quaternion.Euler(0,worldClock*.1f%8<4?0:180,0));
+                    // A closed harvesting lane has real round turns, not a reversed pose at PingPong's cusp.
+                    FarmRoute(worldClock*.11f + actor.phase*8, out var offset, out tangent);
+                    actor.root.SetPositionAndRotation(new Vector3(-worldHalf-6.8f-actor.phase*10.2f,-.29f,0)+offset,Quaternion.LookRotation(tangent));
                 }
                 else
                 {
                     z = Mathf.Lerp(-range,range,Mathf.Repeat(worldClock*.35f/(range*2)+actor.phase,1));
-                    actor.root.SetPositionAndRotation(new Vector3(RiverBankX(worldHalf,z)+1.1f,-.3f+Mathf.Sin(worldClock*1.3f)*.015f,z),Quaternion.Euler(0,5,0));
+                    tangent = new Vector3(RiverBankX(worldHalf,z+.1f)-RiverBankX(worldHalf,z-.1f),0,.2f);
+                    actor.root.SetPositionAndRotation(new Vector3(RiverBankX(worldHalf,z)+1.1f,-.3f+Mathf.Sin(worldClock*1.3f)*.015f,z),Quaternion.LookRotation(tangent));
                 }
             }
             for (int i=0;i<windRotors.Count;i++) windRotors[i].localRotation=Quaternion.Euler(0,0,worldClock*(24+i*4));
+        }
+
+        public static void FarmRoute(float distance, out Vector3 position, out Vector3 forward)
+        {
+            const float straight=3.1f, radius=.42f;
+            float turn=Mathf.PI*radius, s=Mathf.Repeat(distance,2*(straight+turn));
+            if(s<straight) { position=new Vector3(-radius,0,-straight*.5f+s); forward=Vector3.forward; return; }
+            if(s<straight+turn)
+            {
+                float angle=Mathf.PI-(s-straight)/radius;
+                position=new Vector3(radius*Mathf.Cos(angle),0,straight*.5f+radius*Mathf.Sin(angle));
+                forward=new Vector3(Mathf.Sin(angle),0,-Mathf.Cos(angle)); return;
+            }
+            if(s<straight*2+turn) { position=new Vector3(radius,0,straight*.5f-(s-straight-turn)); forward=Vector3.back; return; }
+            float a=-(s-straight*2-turn)/radius;
+            position=new Vector3(radius*Mathf.Cos(a),0,-straight*.5f+radius*Mathf.Sin(a));
+            forward=new Vector3(Mathf.Sin(a),0,-Mathf.Cos(a));
         }
 
         void DisposeLivingWorld()

@@ -61,13 +61,23 @@ namespace TableTalk
             var settings = JsonUtility.FromJson<VisualSettings>(json);
             if (settings == null) return;
             bool low = settings.quality == "low" || settings.quality == "auto" && settings.mobile;
-            Application.targetFrameRate = low ? 30 : 60;
+            Application.targetFrameRate = -1;
+            UnityEngine.Rendering.OnDemandRendering.renderFrameInterval = low ? 2 : 1;
             bool night = settings.theme == "night";
+            RenderSettings.reflectionIntensity = night ? .18f : .75f;
             angledView = settings.camera == "perspective";
             worldMotionReduced = settings.reducedMotion;
             ConfigureScreenLabels(settings.screenLabels);
-            QualitySettings.shadowDistance = low ? 18 : 38;
-            QualitySettings.shadowResolution = low ? ShadowResolution.Low : ShadowResolution.Medium;
+            bool battery = settings.quality == "low";
+            float shadowRange = BoardLayout.ShadowRange(shown?.boardSize ?? 40, angledView, battery);
+            QualitySettings.shadowDistance = shadowRange;
+            var pipeline = UnityEngine.Rendering.Universal.UniversalRenderPipeline.asset;
+            if (pipeline != null)
+            {
+                // URP ignores the legacy shadow controls; expanded maps must remain inside its real range.
+                pipeline.shadowDistance = shadowRange;
+                pipeline.mainLightShadowmapResolution = battery ? 512 : settings.mobile ? 1024 : 2048;
+            }
             if (RenderSettings.sun != null)
             {
                 RenderSettings.sun.intensity = night ? .8f : 2.1f;
@@ -94,6 +104,23 @@ namespace TableTalk
             if (shown == null || state.boardSize != shown.boardSize || state.roomCode != shown.roomCode) { ResetSnapshot(json); return; }
             shown = state; SyncInstant(state);
             if (state.phase == "awaitingRoll") WholeBoard();
+        }
+
+        [Preserve] public void ResumeSnapshot(string json)
+        {
+            if (webMotion != null) StopCoroutine(webMotion);
+            webMotion = null; lastFrameId = null;
+            if (diceRoot != null) diceRoot.gameObject.SetActive(false);
+            if (cameraMove != null) StopCoroutine(cameraMove);
+            cameraMove = null;
+            if (propertyRoot != null) propertyRoot.localScale = Vector3.one;
+            foreach (var pair in tiles)
+            {
+                var position = BoardLayout.Point(pair.Key, shown.boardSize); position.y = .07f;
+                pair.Value.SetPositionAndRotation(position,Quaternion.identity);
+            }
+            SyncSnapshot(json);
+            WholeBoard();
         }
 
         [Preserve] public void PresentFrame(string json)

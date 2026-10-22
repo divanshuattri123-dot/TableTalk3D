@@ -52,6 +52,8 @@ export class RoomConnection {
       this.callbacks.error("Reconnecting to your saved table. Please wait before taking a turn.");
       return false;
     }
+    // A fast second tap is not another game decision until the first has a saved acknowledgement.
+    if (this.pending.size) return false;
     this.pending.set(`${this.clientId}:${++this.sequence}`, { action, sentAt: 0 });
     this.flush();
     return true;
@@ -65,7 +67,7 @@ export class RoomConnection {
   }
   retry() { this.disconnected(); this.socket.reconnect(); }
   resume() {
-    if (this.socket.readyState !== 1 || this.now() - this.lastHeard > 30_000) this.retry();
+    if (!this.ready || this.socket.readyState !== 1 || this.now() - this.lastHeard > 30_000) this.retry();
     else this.socket.send(JSON.stringify({ type: "sync" }));
   }
   tick() {

@@ -38,6 +38,14 @@ browser restores that seat. No account, external database, or paid service is ad
 Clearing browser storage loses the local seat identity, not the server's match.
 Previously discarded memory-only matches cannot be reconstructed retroactively.
 
+Refinement update, 22 October 2026: the presentation timeline does not replay
+unseen movement after a phone sleeps. It restores the current canonical view,
+retains the latest unread card until Continue, and can restore the current card's
+explanation on reload without reapplying its effect. Controls and automatic
+MOVE_RESULT wait until the incoming snapshot has entered the timeline; a React
+render before that effect is not permission to skip dice animation. Only one
+unacknowledged local decision is sent at a time; receipt-based retries are unchanged.
+
 It is a pure, immutable reducer. It has no React, PartyKit, browser, timer,
 Date, I/O, or random-number dependency. Inputs that would normally be random
 are always action payloads:
@@ -302,6 +310,22 @@ The surcharge is computed with integer arithmetic so floating-point rounding
 cannot add an extra dollar.
 
 ## Auctions and trades
+
+Refinement: BUILD also supports `operation: "sellGroup"`: sell all buildings in
+a complete, unmortgaged district at half cost in one deterministic operation.
+A hotel can therefore be liquidated without four unavailable replacement houses.
+Actual houses and hotels return to their respective finite bank stocks.
+
+When bankruptcy is to the bank, repossessed deeds clear mortgages and improvements
+and enter `bankAuctionQueue`. Auctions finish in order before ordinary play resumes;
+`bankAuctionResumePhase` preserves the interrupted turn. There is no estate auction
+after the final survivor has won. A player's creditor receives the debtor's
+release-card count and half-price liquidation proceeds for buildings, as well as
+the deeds. Automatic negative-retail-net-worth elimination remains the original
+custom rule; this does not claim complete official-classic compliance.
+
+The nearest-railroad Chance card charges twice the otherwise applicable railroad
+rent, and a mortgage still suppresses that rent.
 
 Declining a property begins an open ascending auction among all solvent
 players. A bid must exceed the current bid and be payable in cash. A player who

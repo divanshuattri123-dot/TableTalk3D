@@ -24,6 +24,7 @@ namespace TableTalk
 
         public static int ForwardSteps(int from, int to, int size) => (to - from + size) % size;
         public static float Span(int size) => size / 4f + 2;
+        public static float ShadowRange(int size, bool angled, bool batterySaver) => batterySaver ? 18 : Span(size) * (angled ? 3.3f : 2.85f);
     }
 
     [System.Serializable] public class TileSnapshot

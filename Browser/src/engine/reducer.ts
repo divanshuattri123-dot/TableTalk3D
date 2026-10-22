@@ -203,6 +203,8 @@ const bankruptPlayer = (state: GameState, playerId: string, creditor: PaymentTar
   let bankHouses = state.bankHouses;
   let bankHotels = state.bankHotels;
   const properties = { ...state.properties };
+  const repossessed: number[] = [];
+  let buildingProceeds = 0;
 
   for (const tile of getBoard(state.boardSize)) {
     if (!isPurchasableTile(tile)) {
@@ -212,19 +214,18 @@ const bankruptPlayer = (state: GameState, playerId: string, creditor: PaymentTar
     if (property.ownerId !== playerId) {
       continue;
     }
-    if (transferToCreditor) {
-      properties[tile.position] = { ...property, ownerId: creditor };
-      continue;
-    }
-
     if (tile.kind === "property") {
+      buildingProceeds += Math.floor(property.houses * tile.houseCost / 2);
       if (property.houses === 5) {
         bankHotels += 1;
       } else {
         bankHouses += property.houses;
       }
     }
-    properties[tile.position] = { houses: 0, mortgaged: false };
+    properties[tile.position] = transferToCreditor
+      ? { ...property, houses: 0, ownerId: creditor }
+      : { houses: 0, mortgaged: false };
+    if (!transferToCreditor) repossessed.push(tile.position);
   }
 
   let next: GameState = {
@@ -232,10 +233,13 @@ const bankruptPlayer = (state: GameState, playerId: string, creditor: PaymentTar
     properties,
     bankHouses,
     bankHotels,
+    bankAuctionQueue: repossessed.length ? [...(state.bankAuctionQueue ?? []), ...repossessed] : state.bankAuctionQueue,
     players: state.players.map((candidate) =>
       candidate.id === playerId
         ? { ...candidate, bankrupt: true, inJail: false, getOutOfJailCards: 0 }
-        : candidate
+        : transferToCreditor && candidate.id === creditor
+          ? { ...candidate, cash: candidate.cash + buildingProceeds, getOutOfJailCards: candidate.getOutOfJailCards + player.getOutOfJailCards }
+          : candidate
     )
   };
   next = addEvent(
@@ -256,6 +260,8 @@ const bankruptPlayer = (state: GameState, playerId: string, creditor: PaymentTar
       pendingPurchase: undefined,
       auction: undefined,
       pendingTrade: undefined,
+      bankAuctionQueue: undefined,
+      bankAuctionResumePhase: undefined,
       winnerId: solvent[0]?.id
     };
   }
@@ -435,7 +441,8 @@ const resolveCard = (
         playerId,
         diceTotal,
         draws,
-        drawIndex + 1
+        drawIndex + 1,
+        2
       );
     case "moveRelative": {
       const current = playerById(next, playerId) as Player;
@@ -472,7 +479,8 @@ const resolveLanding = (
   playerId: string,
   diceTotal: number,
   draws: readonly CardDraw[],
-  drawIndex = 0
+  drawIndex = 0,
+  railroadMultiplier = 1
 ): GameState => {
   if (state.phase === "gameOver") {
     return state;
@@ -492,7 +500,7 @@ const resolveLanding = (
     if (property.ownerId === playerId || property.mortgaged) {
       return finishLanding(state);
     }
-    const rent = calculateRent(state, tile.position, diceTotal);
+    const rent = calculateRent(state, tile.position, diceTotal) * (tile.kind === "railroad" ? railroadMultiplier : 1);
     return finishLanding(
       makePayment(state, playerId, property.ownerId, rent, `rent for ${tile.name}`)
     );
@@ -681,7 +689,7 @@ const handleBuy = (state: GameState, action: Extract<GameAction, { type: "BUY" }
   }));
   next = changeCash(next, action.playerId, -tile.price);
   next = { ...next, phase: "awaitingEndTurn", pendingPurchase: undefined };
-  return addEvent(next, `${player.name} bought ${tile.name} for ${formatRupees(tile.price)}.`, "money");
+  return addEvent(next, `${player.name} bought ${tile.name} for ${formatRupees(tile.price)}.`, "money", { playerId: player.id, position: tile.position, amount: tile.price });
 };
 
 const handleDeclineBuy = (
@@ -722,20 +730,21 @@ const auctionIsFinished = (auction: AuctionState): boolean => {
 
 const finishAuction = (state: GameState, auction: AuctionState): GameState => {
   const tile = getPurchasableTile(auction.propertyId, state.boardSize) as PurchasableTile;
+  const phase = state.bankAuctionResumePhase ?? "awaitingEndTurn";
+  const finished = { ...state, phase, auction: undefined, bankAuctionResumePhase: undefined };
   if (!auction.highestBidderId) {
     return addEvent(
-      { ...state, phase: "awaitingEndTurn", auction: undefined },
+      finished,
       `Nobody bought ${tile.name}; it stays with the bank.`
     );
   }
   const winner = playerById(state, auction.highestBidderId) as Player;
-  let next = withProperty(state, auction.propertyId, (property) => ({
+  let next = withProperty(finished, auction.propertyId, (property) => ({
     ...property,
     ownerId: winner.id
   }));
   next = changeCash(next, winner.id, -auction.currentBid);
-  next = { ...next, phase: "awaitingEndTurn", auction: undefined };
-  return addEvent(next, `${winner.name} won ${tile.name} for ${formatRupees(auction.currentBid)}.`, "money");
+  return addEvent(next, `${winner.name} won ${tile.name} for ${formatRupees(auction.currentBid)}.`, "money", { playerId: winner.id, position: tile.position, amount: auction.currentBid });
 };
 
 const handleAuctionBid = (
@@ -793,6 +802,19 @@ const handleBuild = (state: GameState, action: Extract<GameAction, { type: "BUIL
   const groupStates = groupTiles.map((groupTile) => state.properties[groupTile.position] as PropertyState);
   if (!playerOwnsFullGroup(state, player.id, tile.group) || !groupIsUnmortgaged(state, tile.group)) {
     return reject(state, "You need an unmortgaged full color set to build.");
+  }
+  if (action.operation === "sellGroup") {
+    if (!groupStates.some(property => property.houses > 0)) return reject(state, "There are no buildings in this district to sell.");
+    let next = state, proceeds = 0, houses = 0, hotels = 0;
+    // A complete district can be liquidated without borrowing nonexistent bank houses.
+    for (const member of groupTiles) {
+      const level = state.properties[member.position]!.houses;
+      proceeds += Math.floor(level * member.houseCost / 2);
+      if (level === 5) hotels++; else houses += level;
+      next = withProperty(next, member.position, property => ({ ...property, houses: 0 }));
+    }
+    next = changeCash({ ...next, bankHouses: next.bankHouses + houses, bankHotels: next.bankHotels + hotels }, player.id, proceeds);
+    return addEvent(next, `${player.name} sold all district buildings near ${tile.name} for ${formatRupees(proceeds)}.`, "money", { playerId: player.id, position: tile.position, amount: proceeds });
   }
   const levels = groupStates.map((groupState) => groupState.houses);
   const minimum = Math.min(...levels);
@@ -1191,7 +1213,7 @@ export const reduceGame = (state: GameState, action: GameAction): GameState => {
   if (debt) {
     const reply = before.phase === "awaitingTradeResponse" && before.pendingTrade?.toPlayerId === ("playerId" in action ? action.playerId : "") && (action.type === "TRADE_ACCEPT" || action.type === "TRADE_DECLINE");
     const managing = before.phase === "awaitingDebt" && "playerId" in action && action.playerId === debt.playerId &&
-      (action.type === "BANKRUPT" || action.type === "TRADE_OFFER" || action.type === "BUILD" && action.operation === "sell" || action.type === "MORTGAGE" && action.mortgage);
+      (action.type === "BANKRUPT" || action.type === "TRADE_OFFER" || action.type === "BUILD" && action.operation !== "build" || action.type === "MORTGAGE" && action.mortgage);
     if (!reply && !managing && action.type !== "JOIN" && action.type !== "SET_APPEARANCE") return reject(before, "Settle the outstanding debt before normal play can continue.");
   }
   let next = applyAction(before, action);
@@ -1203,5 +1225,14 @@ export const reduceGame = (state: GameState, action: GameAction): GameState => {
     const paid = Math.min(-oldPlayer.cash, Math.max(0, player.cash - oldPlayer.cash));
     if (paid > 0) next = changeCash(next, creditor.id, paid);
   }
-  return synchronizeDebt(next);
+  next = synchronizeDebt(next);
+  if (next.phase !== "gameOver" && !next.debts?.length && !next.auction && next.bankAuctionQueue?.length) {
+    const [propertyId, ...bankAuctionQueue] = next.bankAuctionQueue;
+    return addEvent({ ...next, phase: "awaitingAuction", bankAuctionQueue: bankAuctionQueue.length ? bankAuctionQueue : undefined,
+      bankAuctionResumePhase: next.phase as DebtResumePhase,
+      auction: { propertyId: propertyId!, landingPlayerId: next.activePlayerId!, currentBid: 0,
+        eligiblePlayerIds: next.players.filter(p => !p.bankrupt).map(p => p.id), passedPlayerIds: [] }
+    }, `${getTile(propertyId!, next.boardSize).name} is up for a bank repossession auction.`);
+  }
+  return next;
 };

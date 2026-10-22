@@ -65,7 +65,7 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
   const me = game.players.find(p => p.id === localId), actor = game.players.find(p => p.id === frame?.playerId);
   const current = game.players.find(p => p.id === game.activePlayerId);
   const acting = current?.id === localId && !busy && !me?.bankrupt;
-  const auction = game.auction ?? (frame?.kind === "sold" ? previousAuction.current : undefined);
+  const auction = frame?.kind === "sold" ? frame.auction ?? previousAuction.current : game.auction;
   const eventColor = actor?.color ?? current?.color ?? "#e93244";
   if (frame?.kind === "card") return <ReadableCard key={frame.id} frame={frame} player={actor} onContinue={onCardRead} />;
   if (auction && (game.auction || frame?.kind === "sold")) {
@@ -105,7 +105,7 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
     <div className="motion-banner">{actor && <PlayerPortrait player={actor} />}<div><small>{frame.kind === "dice" ? frame.text.includes("DOUBLES") ? "DOUBLES · ROLL AGAIN AFTER LANDING" : "ROLLING THE DICE" : frame.kind === "move" ? "ON THE MOVE" : frame.kind === "jail" ? "GO DIRECTLY TO JAIL" : frame.kind === "release" ? "FREE TO GO" : frame.kind === "winner" ? "THE CITY HAS A WINNER" : frame.kind === "purchase" ? "IT’S YOURS!" : frame.kind.toUpperCase()}</small><strong>{frame.text}</strong></div></div>
     {frame.kind === "dice" && <div className="settled-dice">{frame.dice?.map((value, i) => <span key={i}>{value}</span>)}</div>}
     {cinematic && <Character pose={frame.kind === "jail" ? "jail" : frame.kind === "bankrupt" ? "bankrupt" : frame.kind === "winner" ? "winner" : frame.kind === "sold" ? "sold" : "presenting"} />}
-    {rent && <div className="rent-preview"><TitleDeed game={game} position={frame.tileId!} rent={calculateRent(game, frame.tileId!, game.lastRoll?.total ?? 0)} /></div>}
+    {rent && <div className="rent-preview"><TitleDeed game={game} position={frame.tileId!} rent={frame.amount ?? calculateRent(game, frame.tileId!, game.lastRoll?.total ?? 0)} /></div>}
     {frame.kind === "money" && <div className="money-burst"><strong>{money(frame.amount ?? 0)}</strong>{Array.from({ length: 12 }, (_, i) => <i key={i} style={{ "--coin": i } as CSSProperties}>₹</i>)}</div>}
     {frame.kind === "winner" && <div className="winner-sparkles">{Array.from({ length: 30 }, (_, i) => <i key={i} style={{ "--coin": i } as CSSProperties} />)}</div>}
   </div>;
