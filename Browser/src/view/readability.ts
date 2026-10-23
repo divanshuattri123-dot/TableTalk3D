@@ -1,4 +1,5 @@
-export interface LabelAnchor { id: number; x: number; y: number; w: number; h: number; visible: boolean }
+export interface LabelPoint { x: number; y: number }
+export interface LabelAnchor { id: number; x: number; y: number; w: number; h: number; visible: boolean; localWidth?: number; localHeight?: number; corners?: LabelPoint[] }
 export interface LabelPacket { size: number; labels: LabelAnchor[] }
 
 export function boardRenderSize(width: number, height: number, dpr: number, quality: "auto" | "low" | "high") {

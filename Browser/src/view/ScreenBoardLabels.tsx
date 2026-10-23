@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import { getBoard, isPurchasableTile } from "../engine/board";
 import type { BoardSize } from "../engine/types";
-import { fitBoardName, screenLabelLayout } from "./readability";
+import { fitBoardName } from "./readability";
+import { pinnedLabelLayout } from "./labelProjection";
 import type { LabelPacket } from "./readability";
 import { boardSymbol, printedBoardLabel } from "./boardSigns";
 
@@ -18,9 +19,9 @@ export default function ScreenBoardLabels({ size }: { size: BoardSize }) {
       for (const anchor of packet.labels) {
         const node = nodes.current.get(anchor.id); if (!node) continue;
         const tile = board[anchor.id]!;
-        const layout = screenLabelLayout(anchor, width, height, size, isPurchasableTile(tile), Boolean(boardSymbol(tile)));
+        const layout = pinnedLabelLayout(anchor, width, height, size, isPurchasableTile(tile), Boolean(boardSymbol(tile)));
         node.hidden = !layout.visible;
-        node.style.transform = `translate(${layout.x}px, ${layout.y}px) translate(-50%, -50%)`;
+        node.style.transform = layout.transform;
         node.style.width = `${layout.width}px`; node.style.height = `${layout.height}px`;
         node.style.setProperty("--name-size", `${layout.nameSize}px`);
         node.style.setProperty("--name-height", `${layout.nameHeight}px`);

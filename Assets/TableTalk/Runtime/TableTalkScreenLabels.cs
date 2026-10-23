@@ -7,6 +7,8 @@ namespace TableTalk
     {
         public int id;
         public float x, y, w, h;
+        public float localWidth, localHeight;
+        public Vector2[] corners = new Vector2[4];
         public bool visible;
     }
     [Serializable] public class ScreenLabelPacket
@@ -45,9 +47,13 @@ namespace TableTalk
                 label.rectTransform.GetWorldCorners(labelCorners);
                 var min = Vector2.one * float.MaxValue; var max = Vector2.one * float.MinValue;
                 bool inFront = true;
-                foreach (var corner in labelCorners)
+                anchor.localWidth = label.rectTransform.rect.width;
+                anchor.localHeight = label.rectTransform.rect.height;
+                for (int corner = 0; corner < 4; corner++)
                 {
-                    var point = boardCamera.WorldToViewportPoint(corner); inFront &= point.z > 0;
+                    // CSS and SVG start at top-left; Unity's rect corners start at bottom-left.
+                    var point = boardCamera.WorldToViewportPoint(labelCorners[(corner + 1) % 4]); inFront &= point.z > 0;
+                    anchor.corners[corner] = new Vector2(point.x, 1 - point.y);
                     min = Vector2.Min(min, point); max = Vector2.Max(max, point);
                 }
                 anchor.x = (min.x + max.x) * .5f; anchor.y = 1 - (min.y + max.y) * .5f;
