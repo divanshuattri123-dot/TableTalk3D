@@ -65,7 +65,8 @@ namespace TableTalk
 
         void PublishScreenLabels()
         {
-            if (!webMode || !screenLabels || shown == null) return;
+            // A skipped 3D frame must not leave its HTML labels one camera pose ahead.
+            if (!webMode || !screenLabels || shown == null || !UnityEngine.Rendering.OnDemandRendering.willCurrentFrameRender) return;
             var matrix = boardCamera.projectionMatrix * boardCamera.worldToCameraMatrix;
             if (!labelPositionsDirty && lastLabelBoardSize == shown.boardSize && matrix == lastLabelMatrix) return;
             labelPositionsDirty = false; lastLabelBoardSize = shown.boardSize; lastLabelMatrix = matrix;
