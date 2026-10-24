@@ -27,7 +27,7 @@
   .immersive-game .play-turn-banner b { font-size: 11px; }
   .immersive-game .play-turn-banner div > span { font-size: 10px; }
   .immersive-game .live-seats { top: max(64px,calc(env(safe-area-inset-top) + 56px)); max-height: calc(100dvh - 235px); }
-  .immersive-game .controls-panel:not(:has(button)) { display: none; }
+  .immersive-game .side-rail > .controls-panel:not(:has(button)) { display: none; }
   .immersive-game .controls-panel .roll-button, .immersive-game .controls-panel .utility-actions button { min-height: 44px; }
   .immersive-game .hud-drawer-backdrop { padding: max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); }
   .immersive-game .game-menu-drawer { width: min(480px,100%); padding: 16px; }
