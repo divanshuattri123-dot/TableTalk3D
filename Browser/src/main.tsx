@@ -8,6 +8,7 @@ import "./cinematic.css";
 import "./india.css";
 import "./immersive.css";
 import "./classic.css";
+import "./mobileHud.css";
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <AssetProvider><App /></AssetProvider>

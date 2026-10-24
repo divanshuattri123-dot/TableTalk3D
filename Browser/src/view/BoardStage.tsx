@@ -10,25 +10,28 @@ import type { AssetUse } from "./AssetStudio";
 import { GROUP_COLORS } from "./palette";
 import { useGameAudio } from "./useGameAudio";
 import type { PresentationFrame } from "../presentation/plan";
+import type { TablePanel } from "./GameMenu";
 
 const ThreeBoard = lazy(() => import("./ThreeBoard"));
 const UnityBoard = lazy(() => import("./UnityBoard"));
 const AssetStudio = lazy(() => import("./AssetStudio"));
 const money = formatRupees;
 
-export default function BoardStage({ game, shown, target, frame, syncVersion, onComplete, onReady, onPlayable, localId, sendAction, render2D }: {
+export default function BoardStage({ game, shown, target, frame, syncVersion, onComplete, onReady, onPlayable, localId, sendAction, render2D, panel, onPanelChange }: {
   game: GameState; localId: string; sendAction: (action: GameAction) => void;
   shown: GameState; target: GameState; frame?: PresentationFrame; syncVersion: number; onComplete: (id: string) => void; onReady: (ready: boolean) => void;
   onPlayable: (ready: boolean) => void;
   render2D: (onSelect: (position: number) => void) => ReactNode;
+  panel?: TablePanel; onPanelChange: (panel: TablePanel | undefined) => void;
 }) {
   const { settings, update } = useViewSettings();
   const { catalog, byId, error, reload } = useAssets();
   const [studio, setStudio] = useState<string>();
-  const [preferences, setPreferences] = useState(false);
-  const [help, setHelp] = useState(false);
+  const preferences = panel === "settings", help = panel === "help", prices = panel === "prices";
+  const setPreferences = (open: boolean) => onPanelChange(open ? "settings" : undefined);
+  const setHelp = (open: boolean) => onPanelChange(open ? "help" : undefined);
+  const setPrices = (open: boolean) => onPanelChange(open ? "prices" : undefined);
   const [tile, setTile] = useState<number>();
-  const [prices, setPrices] = useState(false);
   const local = game.players.find((player) => player.id === localId);
   const current = game.players.find((player) => player.id === decisionPlayerId(game));
   const location = getTile(game.pendingPurchase?.propertyId ?? current?.position ?? 0, game.boardSize);
@@ -38,10 +41,10 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
   const unityReady = useCallback((ready: boolean) => { onReady(ready); onPlayable(ready); }, [onReady, onPlayable]);
   useEffect(() => { const unity = settings.view === "3d" && settings.renderer === "unity"; if (!unity) onReady(false); onPlayable(!unity); }, [settings.view, settings.renderer, onReady, onPlayable]);
   useEffect(() => {
-    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { setTile(undefined); setHelp(false); setPreferences(false); setStudio(undefined); setPrices(false); } };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { setTile(undefined); onPanelChange(undefined); setStudio(undefined); } };
     window.addEventListener("keydown", escape);
     return () => window.removeEventListener("keydown", escape);
-  }, []);
+  }, [onPanelChange]);
   const choose = (asset: GameAsset, use: AssetUse) => {
     if (use === "token" || use === "dice") {
       if (local) sendAction({ type: "SET_APPEARANCE", playerId: local.id, [use === "token" ? "tokenId" : "diceId"]: asset.id });
@@ -54,11 +57,11 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
     <div className="play-turn-banner" style={{ "--turn-color": current?.color ?? "#77c5a1" } as CSSProperties}><span className="play-turn-dot" /><div><b>{game.winnerId ? `${game.players.find(player => player.id === game.winnerId)?.name ?? "The last player"} wins!` : current ? `${current.name}${current.id === localId ? " (you)" : ""}${game.debts?.length ? " · debt settlement" : "’s turn"}` : `Room ${game.roomCode}`}</b><span>{instruction}</span></div><strong>{game.boardSize}<small>SPACES</small></strong></div>
     <div className="table-toolbar" aria-label="Table tools">
       <button type="button" className="collection-button" onClick={() => setStudio("token")} aria-label="Open token collection">◇ <span>Pieces</span></button>
-      <button type="button" aria-expanded={preferences} onClick={() => setPreferences((open) => !open)} aria-label="Game settings">⚙ <span>Settings</span></button>
+      <button type="button" aria-expanded={preferences} onClick={() => setPreferences(!preferences)} aria-label="Game settings">⚙ <span>Settings</span></button>
       <button type="button" className="help-button" onClick={() => setHelp(true)} aria-label="How to play">?</button>
       {settings.view === "2d" && <button type="button" onClick={() => setPrices(true)} aria-label="Read property names and prices">₹</button>}
     </div>
-    {preferences && <div className="table-preferences">
+    {preferences && <div className="preferences-surface" onClick={() => setPreferences(false)}><section className="table-preferences" role="dialog" aria-label="Game settings" onClick={event => event.stopPropagation()}>
       <div className="preferences-title"><b>Your table</b><button type="button" autoFocus onClick={() => setPreferences(false)} aria-label="Close settings">×</button></div>
       <label>Board view<select value={settings.view} onChange={(event) => update({ view: event.target.value as "3d" | "2d" })}><option value="3d">3D city</option><option value="2d">2D board</option></select></label>
       <label>Scenery<select value={settings.renderer} onChange={(event) => update({ renderer: event.target.value as "unity" | "collection" })}><option value="unity">Cinematic city & park</option><option value="collection">Custom collection scenery</option></select></label>
@@ -67,11 +70,13 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
       <label>Camera<select value={settings.camera} onChange={(event) => update({ camera: event.target.value as typeof settings.camera })}><option value="top">Play camera · readable</option><option value="perspective">Cinematic angle</option></select></label>
       <label className="check-setting"><input type="checkbox" checked={settings.sound} onChange={(event) => update({ sound: event.target.checked })} />Game sounds</label>
       <label>Volume<input type="range" min="0" max="1" step="0.05" value={settings.volume} onChange={(event) => update({ volume: Number(event.target.value) })} /></label>
-      <button type="button" onClick={() => setStudio("music")}>Choose music</button>
+      <button type="button" onClick={() => { setPreferences(false); setStudio("music"); }}>Choose music</button>
+      <button className="mobile-preference-option" type="button" onClick={() => { setPreferences(false); setStudio("token"); }}>Change token</button>
+      <button className="mobile-preference-option" type="button" onClick={() => { setPreferences(false); setStudio("dice"); }}>Change dice</button>
       {settings.musicId && <button type="button" onClick={() => update({ musicId: undefined })}>Stop music</button>}
       <button type="button" onClick={() => { update({ cityId: undefined, tableArtId: undefined, renderer: "unity", camera: "top" }); }}>Restore city scenery</button>
       <p>View, scenery and audio are personal. Your token and dice are shared with the whole room.</p>
-    </div>}
+    </section></div>}
     {error && <p className="asset-notice">{error} <button type="button" onClick={reload}>Retry collection</button></p>}
     {settings.view === "3d" ? <Suspense fallback={<div className="scene-loading"><span className="pulse-token" /><b>Building your 3D table…</b><small>The rules and room are ready.</small></div>}>
       {settings.renderer === "unity" ? <UnityBoard game={shown} target={target} settings={settings} frame={frame} syncVersion={syncVersion} onSelect={setTile} onComplete={onComplete} onReady={unityReady} onFallback={() => update({ view: "2d" })} onReadPrices={() => setPrices(true)} /> : <ThreeBoard game={shown} settings={settings} onSelect={setTile} onFallback={() => update({ view: "2d" })} onCamera={() => update({ camera: settings.camera === "top" ? "perspective" : "top" })} />}
@@ -91,7 +96,7 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
         <button className="icon-button" type="button" onClick={() => setHelp(false)} aria-label="Close rules">×</button>
         <p className="eyebrow">A quick guide</p><h2 id="rules-title">Own the neighbourhood.</h2>
         <ol>
-          <li>Pinch or use + / − to zoom. Drag the view, tap a place for its deed, or use ₹ for a readable property list. The home button fits the whole board.</li>
+          <li><span className="desktop-play-help">Drag the view or use the camera buttons. </span>Tap a place for its deed. <span className="mobile-play-help">Open Menu → Property guide for a readable list. Settings and history are in Menu.</span><span className="desktop-play-help">Use ₹ for a readable property list. The home button fits the whole board.</span></li>
           <li>Everyone starts with ₹1,500. Roll two dice, move and collect ₹200 each time you pass GO.</li>
           <li>Buy an unowned deed, or send it to an auction. Everyone can bid or pass — the last bidder wins.</li>
           <li>Own a full colour set to double its base rent. Build evenly across the set: four houses, then a hotel.</li>

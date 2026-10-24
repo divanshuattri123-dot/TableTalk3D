@@ -36,6 +36,8 @@ import { useAssets, useViewSettings } from "./assets";
 import type { GameAsset } from "./assets";
 import type { AssetUse } from "./view/AssetStudio";
 import BoardStage from "./view/BoardStage";
+import GameMenu from "./view/GameMenu";
+import type { TablePanel } from "./view/GameMenu";
 import { enterGameFullscreen, exitGameFullscreen, fullscreenActive, releaseGameOrientation } from "./view/fullscreen";
 import LandscapeGate from "./view/LandscapeGate";
 import { useGameRoom } from "./network/useGameRoom";
@@ -269,7 +271,8 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
   const { game, connection, error, sendAction, reconnect } = useGameRoom(session);
   const [copied, setCopied] = useState(false);
   const [unityReady, setUnityReady] = useState(false);
-  const [drawer, setDrawer] = useState<"players" | "log">();
+  const [drawer, setDrawer] = useState<"menu" | "players" | "log">();
+  const [tablePanel, setTablePanel] = useState<TablePanel>();
   const [fullscreen, setFullscreen] = useState(fullscreenActive);
   const [screenNotice, setScreenNotice] = useState("");
   const [sceneUsable, setSceneUsable] = useState(false);
@@ -348,11 +351,12 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
           <button type="button" onClick={copyRoomLink}>{shareText}</button>
         </div>
         <div className={`connection-pill ${connection}`}><span />{connection}</div>
-        <nav className="hud-navigation" aria-label="Game menu">
+        <nav className="hud-navigation desktop-hud-navigation" aria-label="Game menu">
           <button type="button" onClick={() => setDrawer("players")} aria-label="Players and deeds" aria-haspopup="dialog">♙ <span>Players</span></button>
           <button type="button" onClick={() => setDrawer("log")} aria-label="Event log" aria-haspopup="dialog">≡ <span>Log</span></button>
           <button type="button" onClick={toggleFullscreen} aria-label={fullscreen ? "Exit full screen" : "Enter full screen"} title={fullscreen ? "Exit full screen" : "Enter full screen"}>⛶</button>
         </nav>
+        <button className="mobile-menu-trigger" type="button" aria-label="Open game menu" aria-haspopup="dialog" aria-expanded={drawer === "menu"} onClick={() => { setTablePanel(undefined); setDrawer("menu"); }}><span aria-hidden="true">☰</span> Menu</button>
       </header>
 
       {error && <p className="global-error">{error}</p>}
@@ -361,7 +365,7 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
       {screenNotice && <p className="fullscreen-notice" role="status">{screenNotice}</p>}
 
       <section className="game-layout">
-        <BoardStage game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />
+        <BoardStage panel={tablePanel} onPanelChange={setTablePanel} game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />
         {game.phase !== "lobby" && <div className="live-seats" aria-label="Live player balances">{game.players.map(player => <button type="button" key={player.id} className={`${player.id === decisionPlayerId(game) ? "seat-active" : ""} ${player.bankrupt ? "seat-out" : ""}`} style={{ "--player-color": player.color } as CSSProperties} onClick={() => setDrawer("players")}><PlayerPortrait player={player} /><span><b>{player.name}{player.id === session.player.id ? " · you" : ""}</b><strong>{player.bankrupt ? "Out" : formatMoney(player.cash)}</strong>{player.inJail && <small>In jail</small>}</span></button>)}</div>}
         <aside className="side-rail" aria-label="Game controls and status">
           {game.phase === "lobby" ? (
@@ -378,7 +382,7 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
         </aside>
       </section>
 
-      {drawer && <div className="hud-drawer-backdrop" onClick={() => setDrawer(undefined)}><section className="hud-drawer" role="dialog" aria-modal="true" aria-labelledby="hud-drawer-title" onClick={event => event.stopPropagation()}><header><h2 id="hud-drawer-title">{drawer === "players" ? "At the table" : "Table chatter"}</h2><button type="button" autoFocus onClick={() => setDrawer(undefined)} aria-label="Close panel">×</button></header>{drawer === "players" ? <PlayerRoster game={game} localId={session.player.id} /> : <EventLog game={game} />}</section></div>}
+      {drawer && <div className="hud-drawer-backdrop" onClick={() => setDrawer(undefined)}><section className={`hud-drawer${drawer === "menu" ? " game-menu-drawer" : ""}`} role="dialog" aria-modal="true" aria-labelledby="hud-drawer-title" onClick={event => event.stopPropagation()}><header><h2 id="hud-drawer-title">{drawer === "menu" ? "Game menu" : drawer === "players" ? "At the table" : "Table chatter"}</h2><button type="button" autoFocus onClick={() => setDrawer(undefined)} aria-label="Close panel">×</button></header>{drawer === "menu" ? <GameMenu roomCode={session.roomCode} copied={copied} fullscreen={fullscreen} onPanel={panel => { setDrawer(undefined); setTablePanel(panel); }} onPlayers={() => setDrawer("players")} onHistory={() => setDrawer("log")} onCopy={copyRoomLink} onFullscreen={toggleFullscreen} onLeave={onLeave} /> : drawer === "players" ? <PlayerRoster game={game} localId={session.player.id} /> : <EventLog game={game} />}</section></div>}
 
       <EventStage game={game} frame={motion.frame} busy={connection !== "connected" || presentationInteractionBusy(game, motion) || !sceneUsable} localId={session.player.id} sendAction={sendAction} onCardRead={motion.acknowledgeCard} financeTools={me && <ClassicFinanceMenu game={game} local={me} available={connection === "connected" && !motion.busy && sceneUsable} sendAction={sendAction} />} />
       <LandscapeGate onLeave={onLeave} />
