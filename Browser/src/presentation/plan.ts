@@ -1,4 +1,4 @@
-import { cardAt, classicPosition, getBoard, railroadPositions } from "../engine/board";
+import { cardAt, classicPosition, getBoard, railroadPositions, utilityPositions } from "../engine/board";
 import type { AuctionState, GameState } from "../engine/types";
 
 export type MotionKind = "turn" | "dice" | "move" | "card" | "jail" | "release" | "money" | "purchase" | "bid" | "sold" | "build" | "mortgage" | "trade" | "bankrupt" | "winner";
@@ -38,6 +38,10 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
     add("dice", `${active?.name ?? "Player"} rolled ${next.lastRoll.dice.join(" + ")}${next.lastRoll.doubles ? " · DOUBLES!" : ""}`, 1450,
       { playerId: next.lastRoll.playerId, dice: [...next.lastRoll.dice], diceId: active?.diceId });
   }
+  if (previous.phase === "awaitingUtilityRoll" && next.lastUtilityRoll && next.lastUtilityRoll.eventId !== previous.lastUtilityRoll?.eventId && !next.notice) {
+    add("dice", `${active?.name ?? "Player"} rolled ${next.lastUtilityRoll.dice.join(" + ")} for utility rent`, 1450,
+      { playerId: next.lastUtilityRoll.playerId, dice: [...next.lastUtilityRoll.dice], diceId: active?.diceId });
+  }
   for (const event of events) {
     if (event.kind === "error") continue;
     const player = next.players.find(p => event.playerId ? p.id === event.playerId : event.text.startsWith(`${p.name} `));
@@ -52,13 +56,14 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
     }
     if (event.kind === "card") {
       const text = event.text.slice(event.text.indexOf(" drew: ") + 7);
-      const entry = event.deck && event.cardIndex !== undefined ? { deck: event.deck, card: cardAt(event.deck, event.cardIndex) } : (["chance", "community"] as const).flatMap(deck => Array.from({ length: 8 }, (_, index) => ({ deck, card: cardAt(deck, index) }))).find(c => c.card?.text === text);
+      const entry = event.deck && event.cardIndex !== undefined ? { deck: event.deck, card: cardAt(event.deck, event.cardIndex, next.mode) } : (["chance", "community"] as const).flatMap(deck => Array.from({ length: next.mode === "classic" ? 16 : 8 }, (_, index) => ({ deck, card: cardAt(deck, index, next.mode) }))).find(c => c.card?.text === text);
       backwards = entry?.card?.effect.kind === "moveRelative" && entry.card.effect.spaces < 0;
       const effect = entry?.card?.effect, position = positions.get(playerId ?? "") ?? 0;
       if (playerId && effect) {
         if (effect.kind === "moveTo") destinations.set(playerId, classicPosition(effect.position, next.boardSize));
         if (effect.kind === "moveRelative") destinations.set(playerId, (position + effect.spaces + next.boardSize) % next.boardSize);
         if (effect.kind === "nearestRailroad") destinations.set(playerId, railroadPositions(next.boardSize).find(p => p > position) ?? railroadPositions(next.boardSize)[0]!);
+        if (effect.kind === "nearestUtility") destinations.set(playerId, utilityPositions(next.boardSize).find(p => p > position) ?? utilityPositions(next.boardSize)[0]!);
       }
       add("card", entry?.card?.text ?? text, 2900, { playerId, deck: entry?.deck }); continue;
     }
@@ -73,7 +78,7 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
       add("bid", event.text, 500, { playerId, tileId: next.auction?.propertyId ?? previous.auction?.propertyId }); continue;
     }
     if (event.text.includes(" bought ") || (previous.auction && event.text.includes(" won "))) {
-      const tileId = previous.pendingPurchase?.propertyId ?? previous.auction?.propertyId;
+      const tileId = event.position ?? previous.pendingPurchase?.propertyId ?? previous.auction?.propertyId;
       add(previous.auction ? "sold" : "purchase", event.text, 1800, { playerId, tileId, auction: previous.auction }); continue;
     }
     if (event.text.includes("improved ") || event.text.includes("sold one improvement") || event.text.includes("sold all district buildings")) {
@@ -82,7 +87,7 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
     if (event.text.includes("mortgaged ")) {
       add("mortgage", event.text, 1400, { playerId, tileId: board.find(t => previous.properties[t.position]?.mortgaged !== next.properties[t.position]?.mortgaged)?.position }); continue;
     }
-    if (event.text.includes("accepted the trade") || event.text.includes("declined the trade")) { add("trade", event.text, 1500, { playerId }); continue; }
+    if (event.text.includes("accepted the trade") || event.text.includes("declined the trade") || event.text.includes("withdrew the trade")) { add("trade", event.text, 1500, { playerId }); continue; }
     if (event.text.includes("bankrupt")) { add("bankrupt", event.text, 2200, { playerId }); continue; }
     if (event.kind === "money") {
       const amount = event.amount ?? Number(event.text.match(/[₹$](\d+)/)?.[1] ?? 0);

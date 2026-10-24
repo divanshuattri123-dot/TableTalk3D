@@ -1,0 +1,32 @@
+.classic-finance-menu { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.classic-finance-menu > button { flex: 1; min-height: 44px; padding: 7px 10px; font-size: 12px; }
+.finance-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); background: #172d39b8; }
+.finance-sheet, .mortgage-stage, .utility-stage { width: min(640px,100%); max-height: calc(100dvh - 24px); overflow: auto; overscroll-behavior: contain; padding: 22px; color: #2c4639; background: #faf9ef; border: 3px solid white; border-radius: 18px; box-shadow: 0 18px 60px #12283766; }
+.finance-sheet > header { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 16px; }
+.finance-sheet h2 { margin: 0; }
+.finance-sheet > header button { width: 44px; height: 44px; border-radius: 50%; border: 1px solid #adc2ac; color: #34513c; background: white; font-size: 24px; }
+.finance-sheet .deed-row, .finance-sheet .deed-actions { flex-wrap: wrap; gap: 8px; }
+.finance-sheet .deed-actions { justify-content: flex-end; margin-left: auto; }
+.finance-sheet .deed-actions button { min-height: 44px; }
+.finance-sheet .property-tools, .finance-sheet .trade-composer { padding: 12px; background: #eef1e2; border: 1px solid #afc1a5; border-radius: 8px; }
+.finance-sheet .deed-row b, .finance-sheet .field-label, .finance-sheet .cash-inputs label, .finance-sheet .property-checks, .mortgage-stage .property-checks { color: #2c4938; }
+.finance-sheet .deed-row small, .finance-sheet .property-checks small { color: #536b49; }
+.finance-sheet .deed-actions button { color: #2f503e; background: #fffdf7; border: 1px solid #9eb69f; }
+.finance-sheet .text-input { color: #2c4938; background: #fffdf7; border-color: #9eb69f; }
+.finance-sheet .property-checks legend, .mortgage-stage .property-checks legend { color: #3f654a; }
+.finance-sheet .eyebrow, .mortgage-stage .eyebrow, .utility-stage .eyebrow { color: #9e2b3c; }
+.finance-sheet .waiting-note, .mortgage-stage .waiting-note { color: #536e5b; }
+.mortgage-stage > p, .utility-stage > p { line-height: 1.6; }
+.mortgage-stage > small { display: block; margin-top: 14px; line-height: 1.5; }
+.mortgage-stage .property-checks label { display: flex; align-items: center; gap: 12px; padding-block: 10px; min-height: 44px; }
+.mortgage-stage .property-checks small { display: block; margin-top: 4px; }
+.mortgage-stage .mortgage-total strong { color: #b32d41; font-size: 24px; }
+.big-bid-controls select { width: 100%; min-height: 44px; font: inherit; color: #2c4639; background: white; border: 1px solid #adc2ac; border-radius: 7px; padding: 6px; }
+.lobby-panel > .field-label { display: block; margin: 12px 0; color: #425e49; }
+@media (orientation: landscape) and (max-height: 600px) {
+  .finance-sheet, .mortgage-stage, .utility-stage { padding: 14px 18px; border-radius: 12px; }
+  .finance-sheet > header { margin-bottom: 8px; }
+  .mortgage-stage h1, .utility-stage h1 { font-size: 25px; }
+  .mortgage-stage > p, .utility-stage > p { font-size: 13px; margin-block: 8px; }
+  .classic-finance-menu { margin-top: 6px; }
+}

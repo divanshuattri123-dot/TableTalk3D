@@ -12,6 +12,18 @@ const start = () => [
 const at = (state: GameState, position: number) => ({ ...state, players: state.players.map(p => p.id === "a" ? { ...p, position } : p) });
 
 describe("pure presentation planning", () => {
+  it("uses Classic card IDs and shows the chained back-three / Community sequence",()=>{
+    const state={...at(start(),29),mode:"classic" as const,decks:{chance:[9,...Array.from({length:16},(_,i)=>i).filter(i=>i!==9)],community:Array.from({length:16},(_,i)=>i)}};
+    const rolled=reduceGame(state,{type:"ROLL",playerId:"a",dice:[3,4]}),landed=reduceGame(rolled,{type:"MOVE_RESULT",playerId:"a"});
+    const frames=planPresentation(rolled,landed);expect(frames.filter(f=>f.kind==="card").map(f=>f.text)).toEqual(["Go back three spaces.","Advance to GO. Collect ₹200."]);
+    expect(frames.find(f=>f.backwards)?.route).toEqual([35,34,33]);
+  });
+  it("animates utility dice without inventing movement, doubles or another rent charge",()=>{
+    const state={...start(),mode:"classic" as const,decks:{chance:Array.from({length:16},(_,i)=>i),community:Array.from({length:16},(_,i)=>i)}};
+    state.properties[12]!.ownerId="b";
+    const rolled=reduceGame(state,{type:"ROLL",playerId:"a",dice:[6,6]}),landed=reduceGame(rolled,{type:"MOVE_RESULT",playerId:"a"}),paid=reduceGame(landed,{type:"ROLL",playerId:"a",dice:[5,5]});
+    const frames=planPresentation(landed,paid);expect(frames.map(f=>f.kind)).toEqual(["dice","money"]);expect(frames[0]?.text).toContain("for utility rent");expect(frames[0]?.text).not.toContain("DOUBLES");expect(paid.lastRoll?.dice).toEqual([6,6]);
+  });
   it.each(COMMUNITY_CARDS.map((card, index) => ({ ...card, index })))("preserves the full Community Chest effect for card $index", ({ index, text }) => {
     const rolled = reduceGame(start(), { type: "ROLL", playerId: "a", dice: [1, 1] });
     const next = reduceGame(rolled, { type: "MOVE_RESULT", playerId: "a", cardDraws: [{ deck: "community", index }] });

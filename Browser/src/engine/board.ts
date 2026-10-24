@@ -1,3 +1,4 @@
+import { CLASSIC_CARDS } from "./classicCards";
 import type {
   CardDeck,
   BoardSize,
@@ -17,6 +18,9 @@ export type CardEffect =
   | { kind: "money"; amount: number }
   | { kind: "moveTo"; position: number; awardGo?: boolean }
   | { kind: "nearestRailroad" }
+  | { kind: "nearestUtility" }
+  | { kind: "repairs"; house: number; hotel: number }
+  | { kind: "payEach"; amount: number }
   | { kind: "moveRelative"; spaces: number }
   | { kind: "goToJail" }
   | { kind: "jailCard" }
@@ -192,5 +196,5 @@ export const getPurchasableTile = (position: number, size: BoardSize = 40): Purc
 export const colorGroupTiles = (group: ColorGroup, size: BoardSize = 40): StreetTile[] =>
   getBoard(size).filter((tile): tile is StreetTile => isStreetTile(tile) && tile.group === group);
 
-export const cardAt = (deck: CardDeck, index: number): GameCard | undefined =>
-  (deck === "chance" ? CHANCE_CARDS : COMMUNITY_CARDS)[index];
+export const cardAt = (deck: CardDeck, index: number, mode?: "classic" | "expanding"): GameCard | undefined =>
+  (mode === "classic" ? CLASSIC_CARDS[deck] : deck === "chance" ? CHANCE_CARDS : COMMUNITY_CARDS)[index];

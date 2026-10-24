@@ -1,4 +1,70 @@
-# TableTalk3D refinement verification — 22 October 2026
+# TableTalk3D verification
+
+## Current release verification - 24 October 2026 (0.5.5)
+
+This section supersedes the historical test counts and Classic-gap list below.
+The public deployment is checked separately after publishing; local success alone
+is not treated as proof that the public website changed.
+
+- Shared engine and presentation: **269 tests across 21 files passed**. TypeScript
+  checks and production Vite builds passed in the public Browser project.
+- **30 complete seeded games:** 15 Classic plus 15 Expanding; 2-6 players with
+  three fixed seeds per player count. Every transition checks deterministic output,
+  immutable inputs, inventory, debt and ownership; Classic also checks unique
+  release-card circulation and retained building purchase costs.
+- **66 synchronized Classic Worker actions** at three real WebSocket clients:
+  highest-roll setup, ordered decks, normal/Chance utility dice, movement doubles,
+  mortgage transfers and redemption, release-card trading/use, off-turn trades
+  interrupting an auction, withdrawal, and exact reconnect snapshots.
+- **Four real local Worker restarts passed** with exact saved snapshots for
+  purchase/cash/ownership, unfinished dice, rent and an active auction. Retried
+  receipts did not apply payment or movement again; idle sockets continued.
+- A separate two-client accelerated reliability run covered 600 acknowledged
+  actions, 175 turns, 11 trades and six exact reconnects, with a reconnect
+  injected before action 17's acknowledgement. This is not an hour-long soak.
+- Actual browser at **844x390 CSS pixels, DPR 2**: accepted a mortgaged-property
+  trade, selected redemption, paid 143, and resumed the other player's purchase.
+  Off-turn property desk, card selection, cash offer, send and withdrawal were
+  exercised. No dice presentation appeared on the trade.
+- Portrait **390x844** displayed the rotate-to-landscape gate. Accessible zoom,
+  jail-card release, and the whole-board view were exercised. The visible
+  dice-to-landing gate measured **1568 ms**, with MOVE_RESULT sent by the actual
+  browser after presentation, not manually by the harness.
+- Found and fixed the new finance desk's inherited dark-background/low-contrast
+  labels. The rechecked desk uses the existing cream/green deed palette, readable
+  place names, scrollable phone layout and 44-pixel controls.
+
+### Native rendering and measured scope
+
+Native player 0.5.5: content directory `e92c04784bc2`, 14,342,820 compressed bytes.
+Detailed city geometry, trees, textures, models, roads, traffic and normal motion
+remain; this is not a replacement art pack or a photorealism claim.
+
+- Native compile: zero game compile errors/warnings. Actual Play-mode checks
+  verified shared property instances/materials, motion reset, shadow coverage,
+  1,200 tractor samples and 15 living-world actors.
+- Projected labels: 96 camera states / 19,968 exact corners verified; emit only
+  on rendered frames so battery-saving mode cannot advance text ahead of geometry.
+- In render-interval-2 testing, 659 game updates produced 330 world-pose updates.
+  Reduced motion produced zero repeated pose writes across 400 updates.
+- Label painter regression: 9 initial DOM writes become one transform write for
+  motion-only changes; identical geometry produces no DOM writes. This is a
+  work-count reduction, not a claimed percentage FPS improvement.
+- Desktop Chromium trace at 1600x900 DPR 1: 584 DrawFrame events over 18.07 seconds,
+  approximately 32 presented frames/second; median gap 31.11 ms and p95 34.82 ms.
+  A single trace is not a before/after benchmark or a sustained-device guarantee.
+- A touch-pinch injection was unavailable in this in-app browser. No physical
+  phone, iOS Safari, thermal or hour-long GPU performance claim is made.
+
+Reproduction: `npm test`, `npm run build`, `node scripts/verify-recovery.mjs`,
+`node scripts/verify-classic-room.mjs`, and the existing QA/reconnect scripts.
+The scripts require disposable QA-named players; never reset real rooms.
+
+Classic is a separate, localized digital preset, not complete official-edition
+certification. See `RULES_AUDIT.md` for automatic rent, edition/card wording,
+stable-decision management and last-piece scarcity-auction boundaries.
+
+## Historical verification - 22 October 2026
 
 This is a tested refinement pass, not a claim of zero bugs, exact replication,
 photorealism, or complete official Monopoly rule compliance. No live player match

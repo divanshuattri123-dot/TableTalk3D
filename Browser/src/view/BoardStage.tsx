@@ -33,7 +33,7 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
   const current = game.players.find((player) => player.id === decisionPlayerId(game));
   const location = getTile(game.pendingPurchase?.propertyId ?? current?.position ?? 0, game.boardSize);
   const locationOwner = game.players.find((player) => player.id === game.properties[location.position]?.ownerId);
-  const instruction = game.phase === "awaitingDebt" ? "Settle the negative balance before play continues" : game.phase === "lobby" ? "Invite your friends, then start" : game.phase === "awaitingRoll" ? "Roll the dice" : game.phase === "awaitingBuy" ? "Buy this property or auction it" : game.phase === "awaitingAuction" ? "Open auction · bid or pass" : game.phase === "awaitingTradeResponse" ? "A trade is waiting for an answer" : game.phase === "awaitingMove" ? "Dice rolling…" : game.phase === "gameOver" ? "Game complete" : "Manage your deeds, then end your turn";
+  const instruction = game.phase === "awaitingDebt" ? "Settle the negative balance before play continues" : game.phase === "awaitingUtilityRoll" ? "Roll fresh dice for utility rent · no movement" : game.phase === "awaitingMortgageDecision" ? "Choose interest or redemption for received mortgages" : game.phase === "lobby" ? "Invite your friends, then start" : game.phase === "awaitingRoll" ? "Roll the dice" : game.phase === "awaitingBuy" ? "Buy this property or auction it" : game.phase === "awaitingAuction" ? "Open auction · bid or pass" : game.phase === "awaitingTradeResponse" ? "A trade is waiting for an answer" : game.phase === "awaitingMove" ? "Dice rolling…" : game.phase === "gameOver" ? "Game complete" : "Manage your deeds, then end your turn";
   useGameAudio(game, settings);
   const unityReady = useCallback((ready: boolean) => { onReady(ready); onPlayable(ready); }, [onReady, onPlayable]);
   useEffect(() => { const unity = settings.view === "3d" && settings.renderer === "unity"; if (!unity) onReady(false); onPlayable(!unity); }, [settings.view, settings.renderer, onReady, onPlayable]);
@@ -95,11 +95,11 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
           <li>Everyone starts with ₹1,500. Roll two dice, move and collect ₹200 each time you pass GO.</li>
           <li>Buy an unowned deed, or send it to an auction. Everyone can bid or pass — the last bidder wins.</li>
           <li>Own a full colour set to double its base rent. Build evenly across the set: four houses, then a hotel.</li>
-          <li>On your turn, trade cash and unimproved deeds, mortgage for cash, or sell buildings at half cost.</li>
+          <li>{game.mode === "classic" ? "Manage property even off-turn at a stable decision. Trade cash, unimproved deeds and real release cards. Leading bids are reserved. Received mortgages require immediate interest or redemption." : "On your turn, trade cash and unimproved deeds, mortgage for cash, or sell buildings at half cost."}</li>
           <li>Doubles earn another roll; three consecutive doubles send you to Jail. Pay ₹50, use a card or try for doubles.</li>
-          <li>Rent, tax and cards resolve automatically. Negative cash pauses normal play until you sell buildings, mortgage, trade, or declare bankruptcy. Negative net worth eliminates you automatically. Last player standing wins.</li>
+          <li>Rent, tax and cards resolve automatically. Negative cash pauses normal play until you sell buildings, mortgage, trade, or declare bankruptcy. {game.mode === "classic" ? "Classic requires you to raise available liquidation funds before surrender. Cards draw from shuffled 16-card decks, with held release cards removed until used." : "Negative net worth eliminates you automatically."} Last player standing wins.</li>
         </ol>
-        <p>2–3 players: 40 spaces · 4: 48 · 5: 56 · 6: 64. The map locks when the game starts. Confirmed moves are saved automatically. If the connection drops, keep the table open — it reconnects to your seat. You can also reopen this room link in the same browser.</p>
+        <p>{game.mode === "classic" ? "Classic: 40 spaces for 2–6 players, highest-roll starting contest, ₹10 opening auctions, 32 houses / 12 hotels, scarcity bidding and fresh utility-rent dice. Indian names and rupees; automatic rent is a digital adaptation." : "Expanding India: 2–3 players: 40 spaces · 4: 48 · 5: 56 · 6: 64. The map locks at start."} Confirmed moves are saved automatically. If the connection drops, keep the table open — it reconnects to your seat. You can also reopen this room link in the same browser.</p>
         <button className="primary-button" type="button" onClick={() => setHelp(false)}>Got it. Let’s play.</button>
       </section>
     </div>}

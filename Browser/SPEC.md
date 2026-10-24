@@ -1,5 +1,9 @@
 # Multiplayer Property Game — Engine Specification
 
+The original sections describe Expanding India and existing saves. The separate
+Classic contract at the end supersedes those rules only when `mode === "classic"`.
+Selecting a mode is a lobby-only choice, never a saved-match migration.
+
 ## Scope and architecture
 
 This is a browser-based, real-time Monopoly-style game for a small private room.
@@ -360,3 +364,68 @@ Before creating PartyKit or React files, Vitest must demonstrate:
 7. creditor and bank bankruptcy plus last-player victory;
 8. offer, accept, decline, and stale-trade rejection;
 9. wrong phase, ownership, and turn attempts preserving substantive state.
+# Classic mode implementation contract
+
+## Separate Classic mode (23 October 2026, user approved)
+
+Existing saves without a mode remain Expanding. SET_MODE is a host-only lobby
+choice; changing it never migrates a running match. Classic keeps 40 Indian-named
+spaces and 32 houses / 12 hotels for two through six players. Expanding retains
+its existing small decks, enlarged maps and turn-gated management.
+
+Classic uses the ordinary non-Speed-Die rules, with automatic digital rent.
+Edition-dependent card text is localized/paraphrased, not copied artwork.
+The core remains a pure reducer; supplied starting dice and shuffled deck orders
+are part of START. No clock, I/O or RNG is introduced into the engine.
+
+New state:
+- mode?: "expanding" | "classic"; absent means the existing rules.
+- decks?: { chance: number[]; community: number[] }, containing drawable IDs.
+- Player.jailCardDecks?: CardDeck[]; a held release card is absent from its deck.
+- pendingUtility?: { playerId; propertyId; multiplier: 4 | 10 }.
+- mortgageTransfers?: { playerId; propertyIds: number[] }[] and a saved resume phase.
+- AuctionState.kind?: "property" | "house" | "hotel" plus legal build targets.
+- Debt.amount?: number. Classic records each unpaid creditor separately; old
+  single-creditor saves remain readable without this field.
+
+New/extended actions:
+- SET_MODE { playerId, mode }, only in a lobby by its creator.
+- START includes setupRolls (rounds of playerId/dice) and both deck permutations.
+  All players roll first; tied highest players reroll until there is one winner.
+- ROLL in awaitingUtilityRoll supplies a fresh utility roll, charges rent and
+  does not move the token, change the movement doubles, or grant another roll.
+- PAY jailCard may select a held card's deck; it returns that card to the bottom.
+- TRADE_OFFER additionally offers/requests held jail-card deck IDs.
+- RESOLVE_MORTGAGES { playerId, redeemPropertyIds } chooses immediate redemption
+  or 10% retention interest for every newly received mortgaged deed.
+- AUCTION_BID may select a legal building target; last-building competition
+  uses the existing ascending-bid protocol, not a timer.
+
+Classic edge cases:
+- Draw the top card, apply it once, then put it at the bottom, except held
+  release cards. Previewing chained movement must simulate that same deck order.
+- Include both complete 16-effect decks: repairs distinguish hotels from houses;
+  nearest railroad doubles rent; nearest utility uses fresh dice at 10x;
+  payments to/from every other player have individually tracked creditors.
+- Paid cash and later liquidation proceeds are never credited twice. Debt stops
+  normal play; a Classic debtor cannot surrender while listed mortgages and
+  building sales can cover the shortfall. Trades remain a possible rescue.
+- A bankrupt estate returns buildings; bank estates auction deeds; player estates
+  transfer cards and deeds and queue mortgage-interest decisions for the recipient.
+- Property finances and offers may originate off-turn at stable decision points.
+  They pause and restore the interrupted buy, auction, jail or utility decision.
+- The leading auction bid is reserved cash. It cannot be spent in another deal.
+  Trading an outstanding winning building target's color set is blocked until
+  its auction resolves.
+- Classic property bidding opens at 10; a new high bid reopens participation.
+  Exhausted building stock cannot create pieces. Competing eligible owners
+  auction the last available house/hotel; legal target and stock are rechecked.
+- The third failed jail roll requires the fine and then uses the stored dice.
+  Release cards are used before attempting that roll, not in place of its fine.
+- A new phase/queue cannot overwrite an active match or leave a bankrupt player
+  controlling the table. Only the final surviving player wins.
+
+Verification gate: add deterministic/immutable reducer regression tests first;
+then expose the lobby selector and phase-specific controls. Old-mode tests and
+recovery tests must remain green. This section is a design contract, not a claim
+that implementation or end-to-end verification has already finished.

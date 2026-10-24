@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { createInitialState, reduceGame } from "../engine/reducer";
-import { presentationBusy, PresentationTimeline } from "./timeline";
+import { presentationBusy, presentationInteractionBusy, PresentationTimeline } from "./timeline";
+import type { PresentationFrame } from "./plan";
 const start = () => {
   let s = createInitialState("TIME");
   s = reduceGame(s, { type: "JOIN", player: { id: "a", name: "A", color: "red" } });
@@ -85,4 +86,61 @@ it("does not present a previous player's completed card when rejoining their fri
   const landed = reduceGame(rolled, { type: "MOVE_RESULT", playerId: "a", cardDraws: [{ deck: "community", index: 1 }] });
   const t = new PresentationTimeline(); t.receive({ ...landed, activePlayerId: "b", phase: "awaitingRoll" });
   expect(t.snapshot().frame).toBeUndefined();
+});
+it("does not revive a completed card when reloading a pre-roll trade after doubles", () => {
+  let game = reduceGame(start(), { type: "ROLL", playerId: "a", dice: [1, 1] });
+  game = reduceGame(game, { type: "MOVE_RESULT", playerId: "a", cardDraws: [{ deck: "community", index: 1 }] });
+  expect(game.card).toBeDefined();
+  game = reduceGame(game, { type: "END_TURN", playerId: "a" });
+  expect(game.card).toBeUndefined();
+  game = reduceGame(game, { type: "TRADE_OFFER", playerId: "a", offerId: "extra-roll", toPlayerId: "b", offeredCash: 10, offeredPropertyIds: [], requestedCash: 0, requestedPropertyIds: [] });
+  const timeline = new PresentationTimeline(); timeline.receive(game);
+  expect(timeline.snapshot()).toMatchObject({ shown: game, frame: undefined, busy: false });
+});
+
+const auction = () => {
+  let game = reduceGame(start(), { type: "ROLL", playerId: "a", dice: [1, 2] });
+  game = reduceGame(game, { type: "MOVE_RESULT", playerId: "a" });
+  return reduceGame(game, { type: "DECLINE_BUY", playerId: "a" });
+};
+it("keeps rapid live bids current instead of queuing seconds of old hammer motion", () => {
+  const timeline = new PresentationTimeline(); let game = auction(); timeline.receive(game);
+  let oldId = "";
+  for (let i = 0; i < 30; i++) {
+    game = reduceGame(game, { type: "AUCTION_BID", playerId: i % 2 ? "b" : "a", amount: (i + 1) * 10 });
+    expect(game.notice).toBeUndefined(); timeline.receive(game);
+    const view = timeline.snapshot();
+    expect(view.frame).toMatchObject({ kind: "bid", tileId: 3 });
+    expect(view.target).toBe(game);
+    expect(presentationInteractionBusy(game, view)).toBe(false);
+    if (oldId) { timeline.complete(oldId, "animation"); expect(timeline.snapshot().frame?.id).toBe(view.frame!.id); }
+    oldId = view.frame!.id;
+  }
+  timeline.complete(oldId, "animation");
+  expect(timeline.snapshot()).toMatchObject({ shown: game, busy: false, frame: undefined });
+});
+it("never replaces the final sold result with a decorative bid", () => {
+  const timeline = new PresentationTimeline(); let game = auction(); timeline.receive(game);
+  game = reduceGame(game, { type: "AUCTION_BID", playerId: "a", amount: 10 }); timeline.receive(game);
+  game = reduceGame(game, { type: "AUCTION_BID", playerId: "b", amount: 20 }); timeline.receive(game);
+  const sold = reduceGame(game, { type: "AUCTION_BID", playerId: "a", pass: true }); timeline.receive(sold);
+  expect(presentationInteractionBusy(sold, timeline.snapshot())).toBe(true);
+  const kinds: string[] = [];
+  for (let i = 0; i < 5 && timeline.snapshot().frame; i++) {
+    const frame = timeline.snapshot().frame!; kinds.push(frame.kind); timeline.complete(frame.id, "animation");
+  }
+  expect(kinds).toEqual(["bid", "bid", "sold"]);
+  expect(timeline.snapshot()).toMatchObject({ shown: sold, busy: false, frame: undefined });
+  expect(sold.properties[3]?.ownerId).toBe("b");
+});
+it("still blocks interactions during cards, movement, sales and stale-view synchronization", () => {
+  const game = auction(), timeline = new PresentationTimeline(); timeline.receive(game);
+  const view = { ...timeline.snapshot(), busy: true, frame: { id: "bid", kind: "bid" as const, tileId: 3, text: "A bid", duration: 500 } };
+  expect(presentationInteractionBusy(game, view)).toBe(false);
+  for (const kind of ["card", "move", "sold", "purchase", "jail", "dice"] as const) {
+    expect(presentationInteractionBusy(game, { ...view, frame: { ...view.frame, kind } as PresentationFrame })).toBe(true);
+  }
+  expect(presentationInteractionBusy(game, { ...view, plannedEventId: game.nextEventId - 1 })).toBe(true);
+  expect(presentationInteractionBusy(game, { ...view, plannedRoom: "OLD" })).toBe(true);
+  expect(presentationInteractionBusy(game, { ...view, frame: { ...view.frame, tileId: 1 } })).toBe(true);
 });

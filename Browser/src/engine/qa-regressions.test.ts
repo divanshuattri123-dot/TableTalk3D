@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createInitialState, reduceGame } from "./reducer";
 import type { GameState } from "./types";
 import { classicPosition, railroadPositions } from "./board";
+import { planPresentation } from "../presentation/plan";
 
 const start = (count = 3) => {
   let s = createInitialState("QAQA");
@@ -93,5 +94,32 @@ describe("tester-found settlement regressions", () => {
     s.properties[1]!.houses = 1;
     const wrongPlayer = reduceGame(s, { type: "BUILD", playerId: "p2", propertyId: 1, operation: "sellGroup" });
     expect(wrongPlayer.properties).toEqual(s.properties); expect(cash(wrongPlayer, "p2")).toBe(1500);
+  });
+  it("lets the proposer withdraw a pending trade without moving money, deeds or dice", () => {
+    const s = start();
+    const offered = reduceGame(s, { type: "TRADE_OFFER", playerId: "p1", offerId: "cancel", toPlayerId: "p2", offeredCash: 40, offeredPropertyIds: [], requestedCash: 0, requestedPropertyIds: [] });
+    const before = JSON.stringify(offered);
+    const cancelled = reduceGame(offered, { type: "TRADE_DECLINE", playerId: "p1", offerId: "cancel" });
+    expect(cancelled.phase).toBe("awaitingRoll"); expect(cancelled.pendingTrade).toBeUndefined();
+    expect(cancelled.players).toEqual(s.players); expect(cancelled.properties).toEqual(s.properties);
+    expect(planPresentation(offered, cancelled).map(frame => frame.kind)).toEqual(["trade"]);
+    expect(JSON.stringify(offered)).toBe(before);
+    const staleAccept = reduceGame(cancelled, { type: "TRADE_ACCEPT", playerId: "p2", offerId: "cancel" });
+    expect(staleAccept.players).toEqual(s.players); expect(staleAccept.pendingTrade).toBeUndefined();
+  });
+  it("does not let a third player or a stale offer ID withdraw someone else's deal", () => {
+    const offered = reduceGame(start(), { type: "TRADE_OFFER", playerId: "p1", offerId: "current", toPlayerId: "p2", offeredCash: 40, offeredPropertyIds: [], requestedCash: 0, requestedPropertyIds: [] });
+    for (const [playerId, offerId] of [["p3", "current"], ["p1", "old"]]) {
+      const next = reduceGame(offered, { type: "TRADE_DECLINE", playerId: playerId!, offerId: offerId! });
+      expect(next.pendingTrade).toEqual(offered.pendingTrade); expect(next.players).toEqual(offered.players);
+    }
+  });
+  it("returns a withdrawn rescue trade to mandatory debt settlement", () => {
+    const s = debtor(); s.players[0]!.cash = -100; s.properties[37]!.ownerId = "p1";
+    const offered = reduceGame(s, { type: "TRADE_OFFER", playerId: "p1", offerId: "rescue", toPlayerId: "p3", offeredCash: 0, offeredPropertyIds: [37], requestedCash: 150, requestedPropertyIds: [] });
+    expect(offered.phase).toBe("awaitingTradeResponse");
+    const next = reduceGame(offered, { type: "TRADE_DECLINE", playerId: "p1", offerId: "rescue" });
+    expect(next.phase).toBe("awaitingDebt"); expect(next.debts).toEqual(s.debts);
+    expect(cash(next, "p1")).toBe(-100); expect(next.properties[37]?.ownerId).toBe("p1");
   });
 });

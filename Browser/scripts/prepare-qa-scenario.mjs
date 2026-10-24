@@ -10,7 +10,7 @@ const send=async action=>{const id=randomUUID();socket.send(JSON.stringify({type
 try {
   await wait(()=>true); assert(state.players.length&&state.players.every(p=>p.name.startsWith("QA ")),"Never stage a real player room.");
   const host=state.players.find(p=>p.name.includes("Host"))??state.players[0];
-  if(mode==="join") {
+  if(mode==="join" || mode==="seats") {
     assert.equal(state.phase,"lobby");
     const colors=["#ed6266","#4e9fef","#37b995","#efb447","#ac81e4","#ed79bc"];
     assert(Number(count)>=2&&Number(count)<=6);
@@ -18,14 +18,15 @@ try {
       const color=colors.find(color=>!state.players.some(player=>player.color===color));
       await send({type:"JOIN",player:{id:`qa-friend-${randomUUID()}`,name:`QA Friend ${state.players.length+1}`,color}});
     }
-    await send({type:"START",playerId:host.id,firstPlayerId:host.id});
+    if(mode==="join")await send({type:"START",playerId:host.id,firstPlayerId:host.id,...(state.mode==="classic"?{setupRolls:[state.players.map(p=>({playerId:p.id,dice:p.id===host.id?[6,6]:[1,2]}))],deckOrder:{chance:Array.from({length:16},(_,i)=>i),community:Array.from({length:16},(_,i)=>i)}}:{})});
   }
   if(mode==="auction") {
     assert.equal(state.phase,"awaitingRoll");const id=state.activePlayerId;assert.equal(state.players.find(p=>p.id===id).position,0);
     await send({type:"ROLL",playerId:id,dice:[1,2]});await send({type:"MOVE_RESULT",playerId:id});await send({type:"DECLINE_BUY",playerId:id});
   }
-  if(mode==="finish-auction") {
-    assert.equal(state.phase,"awaitingAuction");
+  if(mode==="finish-auction" || mode==="advance") {
+    if(mode==="advance" && state.phase==="awaitingBuy")await send({type:"DECLINE_BUY",playerId:state.activePlayerId});
+    assert(["awaitingAuction","awaitingEndTurn"].includes(state.phase));
     while(state.auction){const a=state.auction,id=a.eligiblePlayerIds.find(id=>id!==a.highestBidderId&&!a.passedPlayerIds.includes(id));await send({type:"AUCTION_BID",playerId:id,pass:true});}
     await send({type:"END_TURN",playerId:state.activePlayerId});
   }

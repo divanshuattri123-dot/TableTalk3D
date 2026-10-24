@@ -14,6 +14,8 @@ export type ColorGroup =
   | "indigo" | "amber" | "lavender" | "turquoise";
 
 export type BoardSize = 40 | 48 | 56 | 64;
+export type GameMode = "expanding" | "classic";
+export interface SetupRoll { playerId: string; dice: Dice }
 
 export type ImprovementLevel = 0 | 1 | 2 | 3 | 4 | 5;
 export type CardDeck = "chance" | "community";
@@ -23,6 +25,8 @@ export type Phase =
   | "awaitingMove"
   | "awaitingBuy"
   | "awaitingJailPayment"
+  | "awaitingUtilityRoll"
+  | "awaitingMortgageDecision"
   | "awaitingDebt"
   | "awaitingAuction"
   | "awaitingTradeResponse"
@@ -88,10 +92,12 @@ export interface Player extends PlayerInput {
   inJail: boolean;
   jailTurns: number;
   getOutOfJailCards: number;
+  jailCardDecks?: CardDeck[];
   bankrupt: boolean;
 }
 
 export interface PropertyState {
+  buildingCosts?: number[];
   ownerId?: string;
   houses: ImprovementLevel;
   mortgaged: boolean;
@@ -111,6 +117,9 @@ export interface PendingPurchase {
 }
 
 export interface AuctionState {
+  kind?: "property" | "house" | "hotel";
+  buildTargets?: Record<string, number[]>;
+  winningTarget?: number;
   propertyId: number;
   landingPlayerId: string;
   currentBid: number;
@@ -127,10 +136,12 @@ export interface TradeOffer {
   offeredPropertyIds: number[];
   requestedCash: number;
   requestedPropertyIds: number[];
-  resumePhase: "awaitingRoll" | "awaitingEndTurn" | "awaitingDebt" | "awaitingJailPayment";
+  offeredJailCards?: CardDeck[];
+  requestedJailCards?: CardDeck[];
+  resumePhase: Exclude<Phase, "lobby" | "gameOver" | "awaitingTradeResponse">;
 }
 
-export interface Debt { playerId: string; creditorId: string | "bank"; reason: string }
+export interface Debt { playerId: string; creditorId: string | "bank"; reason: string; amount?: number }
 export type DebtResumePhase = Exclude<Phase, "lobby" | "gameOver" | "awaitingDebt" | "awaitingTradeResponse">;
 
 export interface CardDraw {
@@ -158,6 +169,15 @@ export interface GameEvent {
 }
 
 export interface GameState {
+  mode?: GameMode;
+  decks?: Record<CardDeck, number[]>;
+  setupRolls?: SetupRoll[][];
+  pendingUtility?: { playerId: string; propertyId: number; multiplier: number };
+  lastUtilityRoll?: { playerId: string; dice: Dice; eventId: number };
+  mortgageTransfers?: { playerId: string; propertyIds: number[] }[];
+  mortgageResumePhase?: DebtResumePhase;
+  auctionResumePhase?: DebtResumePhase;
+  suspendedAuction?: AuctionState;
   roomCode: string;
   boardSize: BoardSize;
   phase: Phase;
@@ -187,8 +207,9 @@ export type PayKind = "jailFine" | "jailCard";
 
 export type GameAction =
   | { type: "JOIN"; player: PlayerInput }
+  | { type: "SET_MODE"; playerId: string; mode: GameMode }
   | { type: "SET_APPEARANCE"; playerId: string; tokenId?: string; diceId?: string; color?: string }
-  | { type: "START"; playerId: string; firstPlayerId: string }
+  | { type: "START"; playerId: string; firstPlayerId: string; setupRolls?: SetupRoll[][]; deckOrder?: Record<CardDeck, number[]> }
   | { type: "ROLL"; playerId: string; dice: Dice }
   | { type: "MOVE_RESULT"; playerId: string; cardDraws?: CardDraw[] }
   | { type: "BUY"; playerId: string; propertyId: number }
@@ -200,10 +221,11 @@ export type GameAction =
       operation: "build" | "sell" | "sellGroup";
     }
   | { type: "MORTGAGE"; playerId: string; propertyId: number; mortgage: boolean }
-  | { type: "PAY"; playerId: string; kind: PayKind }
+  | { type: "PAY"; playerId: string; kind: PayKind; deck?: CardDeck }
+  | { type: "RESOLVE_MORTGAGES"; playerId: string; redeemPropertyIds: number[] }
   | { type: "END_TURN"; playerId: string }
   | { type: "BANKRUPT"; playerId: string }
-  | { type: "AUCTION_BID"; playerId: string; amount?: number; pass?: boolean }
+  | { type: "AUCTION_BID"; playerId: string; amount?: number; pass?: boolean; propertyId?: number }
   | {
       type: "TRADE_OFFER";
       playerId: string;
@@ -213,6 +235,8 @@ export type GameAction =
       offeredPropertyIds: number[];
       requestedCash: number;
       requestedPropertyIds: number[];
+      offeredJailCards?: CardDeck[];
+      requestedJailCards?: CardDeck[];
     }
   | { type: "TRADE_ACCEPT"; playerId: string; offerId: string }
   | { type: "TRADE_DECLINE"; playerId: string; offerId: string };

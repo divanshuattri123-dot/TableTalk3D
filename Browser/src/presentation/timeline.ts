@@ -5,7 +5,7 @@ import type { PresentationFrame } from "./plan";
 interface Batch { target: GameState; frames: PresentationFrame[] }
 const restoredCard = (game: GameState): PresentationFrame | undefined => {
   const card = game.card;
-  if (!card || card.playerId !== game.activePlayerId || !["awaitingBuy", "awaitingEndTurn", "awaitingDebt", "awaitingTradeResponse", "awaitingAuction"].includes(game.phase)) return;
+  if (!card || card.playerId !== game.activePlayerId || !["awaitingBuy", "awaitingEndTurn", "awaitingDebt", "awaitingTradeResponse", "awaitingAuction", "awaitingUtilityRoll", "awaitingMortgageDecision"].includes(game.phase)) return;
   const event = game.eventLog.find(entry => entry.kind === "card" && entry.deck === card.deck && entry.cardIndex === card.index && entry.playerId === card.playerId);
   // A reload restores the explanation only; the reducer has already applied its effect exactly once.
   return { id: `${game.roomCode}:restored-card:${event?.id ?? game.nextEventId}`, kind: "card", duration: 0, text: card.text, deck: card.deck, playerId: card.playerId };
@@ -35,6 +35,14 @@ export class PresentationTimeline {
     this.planned = game;
     if (!previous || previous.roomCode !== game.roomCode || previous.boardSize !== game.boardSize) { this.reset(game, restoredCard(game)); return; }
     const frames = planPresentation(previous, game);
+    const sameLiveBid = (frame: PresentationFrame) => frame.kind === "bid" && frame.tileId === game.auction?.propertyId;
+    if (game.phase === "awaitingAuction" && this.frame && sameLiveBid(this.frame) && this.playing &&
+      frames.length && frames.every(sameLiveBid) && this.playing.frames.every(sameLiveBid) &&
+      this.queue.every(batch => batch.frames.every(sameLiveBid))) {
+      // The journal preserves every bid; decorative hammer motion must not trail the live price.
+      this.queue = []; this.playing = { target: game, frames: [] };
+      this.frame = frames.at(-1); this.target = game; return;
+    }
     const buffered = this.queue.reduce((n, batch) => n + batch.frames.length, this.playing?.frames.length ?? 0);
     // Unseen history is not a new live move; resume the saved table, not minutes of old animations.
     if (!this.visible || game.nextEventId - previous.nextEventId > 60 || buffered > 48) {
@@ -66,3 +74,9 @@ export class PresentationTimeline {
 
 export const presentationBusy = (game: GameState | undefined, view: { busy: boolean; plannedEventId?: number; plannedRoom?: string }) =>
   view.busy || Boolean(game && (view.plannedEventId !== game.nextEventId || view.plannedRoom !== game.roomCode));
+
+export const presentationInteractionBusy = (game: GameState, view: {
+  busy: boolean; plannedEventId?: number; plannedRoom?: string; frame?: PresentationFrame;
+}) => presentationBusy(game, view) && !(game.phase === "awaitingAuction" &&
+  view.plannedEventId === game.nextEventId && view.plannedRoom === game.roomCode &&
+  view.frame?.kind === "bid" && view.frame.tileId === game.auction?.propertyId);

@@ -5,7 +5,9 @@ import { decisionPlayerId } from "../engine/reducer";
 
 export const unitySnapshot = (game: GameState) => ({
   roomCode: game.roomCode, boardSize: game.boardSize, eventId: game.nextEventId,
-  phase: game.phase, activePlayerId: decisionPlayerId(game) ?? "", players: game.players, currencySymbol: "₹",
+  phase: game.phase, activePlayerId: decisionPlayerId(game) ?? "", currencySymbol: "₹",
+  // Balances and held cards are HTML controls, not native geometry. Keep the bridge minimal.
+  players: game.players.map(({ id, name, color, tokenId, position, inJail, bankrupt }) => ({ id, name, color, tokenId, position, inJail, bankrupt })),
   dice: game.lastRoll?.dice ?? [],
   tiles: getBoard(game.boardSize).map(tile => ({
     id: tile.position, name: tile.name, boardLabel: tile.boardLabel ?? tile.name,

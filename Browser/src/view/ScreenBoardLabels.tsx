@@ -1,33 +1,31 @@
-import { useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { getBoard, isPurchasableTile } from "../engine/board";
 import type { BoardSize } from "../engine/types";
 import { fitBoardName } from "./readability";
 import { pinnedLabelLayout } from "./labelProjection";
+import { paintProjectedLabel } from "./labelPaint";
+import type { ProjectedLabelLayout } from "./labelPaint";
 import type { LabelPacket } from "./readability";
 import { boardSymbol, printedBoardLabel } from "./boardSigns";
 
-export default function ScreenBoardLabels({ size }: { size: BoardSize }) {
+export default memo(function ScreenBoardLabels({ size }: { size: BoardSize }) {
   const root = useRef<HTMLDivElement>(null), nodes = useRef(new Map<number, HTMLDivElement>());
   const board = useMemo(() => getBoard(size), [size]);
   useEffect(() => {
+    const element = root.current; if (!element) return;
     let packet: LabelPacket | undefined, disposed = false;
+    let { width, height } = element.getBoundingClientRect();
+    const painted = new Map<number, ProjectedLabelLayout>();
     const measure = document.createElement("canvas").getContext("2d"), fitted = new Map<number, string>();
     const textWidths = new Map<string, number>();
     const paint = () => {
-      if (!packet || !root.current) return;
-      const { width, height } = root.current.getBoundingClientRect();
+      if (!packet || !width || !height) return;
       for (const anchor of packet.labels) {
         const node = nodes.current.get(anchor.id); if (!node) continue;
         const tile = board[anchor.id]!;
         const layout = pinnedLabelLayout(anchor, width, height, size, isPurchasableTile(tile), Boolean(boardSymbol(tile)));
-        node.hidden = !layout.visible;
-        node.style.transform = layout.transform;
-        node.style.width = `${layout.width}px`; node.style.height = `${layout.height}px`;
-        node.style.setProperty("--name-size", `${layout.nameSize}px`);
-        node.style.setProperty("--name-height", `${layout.nameHeight}px`);
-        node.style.setProperty("--price-size", `${layout.priceSize}px`);
-        node.dataset.side = String(layout.side);
-        node.dataset.currency = String(layout.showCurrency);
+        paintProjectedLabel(node, layout, painted.get(anchor.id));
+        painted.set(anchor.id, layout);
         const key = `${Math.round(layout.nameWidth)}:${Math.round(layout.nameHeight)}:${layout.nameSize}`;
         if (!layout.visible || fitted.get(anchor.id) === key) continue;
         fitted.set(anchor.id, key);
@@ -58,7 +56,13 @@ export default function ScreenBoardLabels({ size }: { size: BoardSize }) {
       packet = next; paint();
     };
     window.addEventListener("tabletalk-unity", receive);
-    const observer = new ResizeObserver(paint); if (root.current) observer.observe(root.current);
+    // ResizeObserver supplies the viewport without forcing a layout read inside Unity's frame.
+    const observer = new ResizeObserver(entries => {
+      const rect = entries[0]?.contentRect;
+      if (!rect || rect.width === width && rect.height === height) return;
+      width = rect.width; height = rect.height; paint();
+    });
+    observer.observe(element);
     void document.fonts.load("600 12px BarlowBoard").then(() => { if (!disposed) { textWidths.clear(); fitted.clear(); paint(); } }, () => {});
     return () => { disposed = true; window.removeEventListener("tabletalk-unity", receive); observer.disconnect(); };
   }, [size, board]);
@@ -68,4 +72,4 @@ export default function ScreenBoardLabels({ size }: { size: BoardSize }) {
       {isPurchasableTile(tile) && <strong className="screen-tile-price"><i>₹</i>{tile.price}</strong>}
     </div>)}
   </div>;
-}
+});

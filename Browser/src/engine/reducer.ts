@@ -13,6 +13,7 @@ import {
 } from "./board";
 import { formatRupees } from "./currency";
 import { isPlayerColorTaken, playerColorKey } from "./playerColors";
+import { canClassicTradeProperty, reduceClassic, startClassic } from "./classic";
 import type {
   AuctionState,
   BoardSize,
@@ -112,7 +113,8 @@ const isActive = (state: GameState, playerId: string): boolean =>
 const isNormalTurnPhase = (state: GameState): boolean =>
   state.phase === "awaitingRoll" || state.phase === "awaitingEndTurn";
 
-export const decisionPlayerId = (state: GameState): string | undefined => state.debts?.[0]?.playerId ?? state.activePlayerId;
+export const decisionPlayerId = (state: GameState): string | undefined => state.debts?.[0]?.playerId ??
+  (state.phase === "awaitingMortgageDecision" ? state.mortgageTransfers?.[0]?.playerId : state.activePlayerId);
 const canManageFinances = (state: GameState, playerId: string): boolean =>
   (isNormalTurnPhase(state) || state.phase === "awaitingDebt" || state.phase === "awaitingJailPayment") && decisionPlayerId(state) === playerId;
 
@@ -130,7 +132,8 @@ export const netWorth = (state: GameState, playerId: string): number => {
     if (property.ownerId !== playerId) {
       return total;
     }
-    const improvements = isStreetTile(tile) ? property.houses * tile.houseCost : 0;
+    const improvements = isStreetTile(tile) ? state.mode === "classic" && property.buildingCosts
+      ? property.buildingCosts.reduce((n, cost) => n + cost, 0) : property.houses * tile.houseCost : 0;
     return total + tile.price + improvements - (property.mortgaged ? tile.mortgageValue : 0);
   }, player.cash);
 };
@@ -153,6 +156,7 @@ const groupIsUnmortgaged = (
   );
 
 export const canTradeProperty = (state: GameState, propertyId: number, playerId: string): boolean => {
+  if (state.mode === "classic") return canClassicTradeProperty(state, propertyId, playerId);
   const tile = getPurchasableTile(propertyId, state.boardSize);
   const property = state.properties[propertyId];
   return Boolean(tile && property?.ownerId === playerId && property.houses === 0 &&
@@ -471,6 +475,7 @@ const resolveCard = (
       }
       return finishLanding(next);
     }
+    default: return reject(state, "That card effect is unavailable in Expanding mode.");
   }
 };
 
@@ -547,7 +552,7 @@ const handleJoin = (state: GameState, action: Extract<GameAction, { type: "JOIN"
     bankrupt: false
   };
   const players = [...state.players, player];
-  const boardSize = boardSizeForPlayers(players.length);
+  const boardSize = state.mode === "classic" ? 40 : boardSizeForPlayers(players.length);
   const board = boardSize === state.boardSize ? state : {
     ...state, boardSize, properties: createInitialState(state.roomCode, boardSize).properties,
     bankHouses: 32 + (boardSize - 40) * 2, bankHotels: 12 + (boardSize - 40) / 2
@@ -571,6 +576,7 @@ const handleStart = (state: GameState, action: Extract<GameAction, { type: "STAR
   if (!playerById(state, action.firstPlayerId)) {
     return reject(state, "Choose a player in this room to go first.");
   }
+  if (state.mode === "classic") return startClassic(state, action);
   return addEvent(
     { ...state, phase: "awaitingRoll", activePlayerId: action.firstPlayerId },
     `${playerName(state, action.firstPlayerId)} goes first.`,
@@ -978,7 +984,8 @@ const handleEndTurn = (
         ...state,
         phase: "awaitingRoll",
         pendingRoll: undefined,
-        pendingPurchase: undefined
+        pendingPurchase: undefined,
+        card: undefined
       },
       `${player.name} rolled doubles and goes again.`,
       "turn"
@@ -1004,7 +1011,8 @@ const handleEndTurn = (
       activePlayerId: nextPlayer.id,
       consecutiveDoubles: 0,
       pendingRoll: undefined,
-      pendingPurchase: undefined
+      pendingPurchase: undefined,
+      card: undefined
     },
     `${nextPlayer.name}'s turn.`,
     "turn"
@@ -1125,19 +1133,28 @@ const handleTradeDecline = (
   if (
     state.phase !== "awaitingTradeResponse" ||
     !offer ||
-    offer.toPlayerId !== action.playerId ||
+    (offer.toPlayerId !== action.playerId && offer.fromPlayerId !== action.playerId) ||
     offer.id !== action.offerId
   ) {
     return reject(state, "There is no matching trade to decline.");
   }
   return addEvent(
     { ...state, phase: offer.resumePhase, pendingTrade: undefined },
-    `${playerName(state, action.playerId)} declined the trade.`
+    `${playerName(state, action.playerId)} ${action.playerId === offer.fromPlayerId ? "withdrew" : "declined"} the trade.`,
+    "info", { playerId: action.playerId }
   );
 };
 
 const applyAction = (state: GameState, action: GameAction): GameState => {
   switch (action.type) {
+    case "SET_MODE": {
+      if (state.phase !== "lobby" || state.players[0]?.id !== action.playerId) return reject(state, "Only the room creator can choose a mode before starting.");
+      if (action.mode !== "classic" && action.mode !== "expanding") return reject(state, "Choose Classic or Expanding.");
+      const initial = createInitialState(state.roomCode, action.mode === "classic" ? 40 : boardSizeForPlayers(state.players.length));
+      return addEvent({ ...state, mode: action.mode, boardSize: initial.boardSize, properties: initial.properties,
+        bankHouses: initial.bankHouses, bankHotels: initial.bankHotels }, `The room selected ${action.mode === "classic" ? "Classic · 40 spaces" : "Expanding Indian board"}.`);
+    }
+    case "RESOLVE_MORTGAGES": return reject(state, "Mortgage-transfer decisions belong to Classic mode.");
     case "JOIN":
       return handleJoin(state, action);
     case "SET_APPEARANCE": {
@@ -1209,9 +1226,14 @@ const synchronizeDebt = (state: GameState): GameState => {
 };
 
 export const reduceGame = (state: GameState, action: GameAction): GameState => {
+  if (state.mode === "classic" && state.phase !== "lobby") return reduceClassic(state, action);
   const before = synchronizeDebt(state), debt = before.debts?.[0];
   if (debt) {
-    const reply = before.phase === "awaitingTradeResponse" && before.pendingTrade?.toPlayerId === ("playerId" in action ? action.playerId : "") && (action.type === "TRADE_ACCEPT" || action.type === "TRADE_DECLINE");
+    const actor = "playerId" in action ? action.playerId : "";
+    const reply = before.phase === "awaitingTradeResponse" && (
+      before.pendingTrade?.toPlayerId === actor && (action.type === "TRADE_ACCEPT" || action.type === "TRADE_DECLINE") ||
+      before.pendingTrade?.fromPlayerId === actor && action.type === "TRADE_DECLINE"
+    );
     const managing = before.phase === "awaitingDebt" && "playerId" in action && action.playerId === debt.playerId &&
       (action.type === "BANKRUPT" || action.type === "TRADE_OFFER" || action.type === "BUILD" && action.operation !== "build" || action.type === "MORTGAGE" && action.mortgage);
     if (!reply && !managing && action.type !== "JOIN" && action.type !== "SET_APPEARANCE") return reject(before, "Settle the outstanding debt before normal play can continue.");

@@ -28,6 +28,19 @@ async function buyFirst(room: SavedRoom) {
 }
 
 describe("durable room checkpoints", () => {
+  it("restores Classic deck order, held cards and an interrupted mortgage-transfer decision",async()=>{
+    const storage=memoryStorage(),room=new SavedRoom(storage,"CLSC");await room.load();
+    await room.apply({type:"JOIN",player},"a");await room.apply({type:"JOIN",player:other},"b");await room.apply({type:"SET_MODE",playerId:"p1",mode:"classic"},"mode");
+    const cards=Array.from({length:16},(_,i)=>i);
+    await room.apply({type:"START",playerId:"p1",firstPlayerId:"p1",setupRolls:[[{playerId:"p1",dice:[6,6]},{playerId:"p2",dice:[1,2]}]],deckOrder:{chance:cards,community:cards}},"start");
+    await buyFirst(room);await room.apply({type:"MORTGAGE",playerId:"p1",propertyId:3,mortgage:true},"mortgage");
+    await room.apply({type:"TRADE_OFFER",playerId:"p1",offerId:"gift",toPlayerId:"p2",offeredCash:0,requestedCash:0,offeredPropertyIds:[3],requestedPropertyIds:[]},"offer");await room.apply({type:"TRADE_ACCEPT",playerId:"p2",offerId:"gift"},"accept");
+    const saved=structuredClone(room.state);expect(saved.phase).toBe("awaitingMortgageDecision");
+    const restarted=new SavedRoom(storage,"CLSC");await restarted.load();expect(restarted.state).toEqual(saved);
+    await restarted.apply({type:"RESOLVE_MORTGAGES",playerId:"p2",redeemPropertyIds:[]},"interest");const settled=structuredClone(restarted.state);
+    expect(settled.players[1]!.cash).toBe(1497);expect(settled.phase).toBe("awaitingEndTurn");
+    const again=new SavedRoom(storage,"CLSC");await again.load();await again.apply({type:"RESOLVE_MORTGAGES",playerId:"p2",redeemPropertyIds:[]},"interest");expect(again.state).toEqual(settled);
+  });
   it("restores cash, deeds, turn, board and journal after losing every in-memory object", async () => {
     const { storage, room } = await startedRoom(); await buyFirst(room);
     const saved = structuredClone(room.state), restarted = new SavedRoom(storage, "TEST");

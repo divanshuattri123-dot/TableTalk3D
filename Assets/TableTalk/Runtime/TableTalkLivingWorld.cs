@@ -17,8 +17,9 @@ namespace TableTalk
         readonly List<Transform> windRotors = new List<Transform>();
         Material riverSurface;
         float worldHalf, worldClock;
-        bool worldMotionReduced;
+        bool worldMotionReduced, worldPoseReady;
         public int LivingWorldActorCount => worldActors.Count;
+        public int LivingWorldPoseUpdates { get; private set; }
         public float LivingWorldClock => worldClock;
         public Vector3 TrafficSamplePosition => worldActors.Count == 0 ? Vector3.zero : worldActors[0].root.position;
 
@@ -29,7 +30,7 @@ namespace TableTalk
 
         void BuildLivingLandscape(float half)
         {
-            worldHalf = half; worldClock = 0;
+            worldHalf = half; worldClock = 0; worldPoseReady = false; LivingWorldPoseUpdates = 0;
             // Moving objects stay outside the static batch, so cars never drag an entire road mesh.
             worldMotion = new GameObject("Living world · traffic, tractors, river boat").transform;
             worldMotion.SetParent(transform, false);
@@ -200,7 +201,10 @@ namespace TableTalk
         void TickLivingWorld()
         {
             if (worldMotion == null) return;
+            if (worldMotionReduced && worldPoseReady) return;
             if (!worldMotionReduced) worldClock += Time.unscaledDeltaTime;
+            // Keep elapsed time accurate, but do no transform work for an image nobody will see.
+            if (webMode && !UnityEngine.Rendering.OnDemandRendering.willCurrentFrameRender) return;
             float range = worldHalf + 19;
             foreach (var actor in worldActors)
             {
@@ -226,6 +230,7 @@ namespace TableTalk
                 }
             }
             for (int i=0;i<windRotors.Count;i++) windRotors[i].localRotation=Quaternion.Euler(0,0,worldClock*(24+i*4));
+            worldPoseReady = true; LivingWorldPoseUpdates++;
         }
 
         public static void FarmRoute(float distance, out Vector3 position, out Vector3 forward)
@@ -248,7 +253,7 @@ namespace TableTalk
         void DisposeLivingWorld()
         {
             if (worldMotion != null) Destroy(worldMotion.gameObject);
-            worldActors.Clear(); windRotors.Clear(); worldMotion = null;
+            worldActors.Clear(); windRotors.Clear(); worldMotion = null; worldPoseReady = false;
         }
     }
 }

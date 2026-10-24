@@ -324,7 +324,7 @@ namespace TableTalk
             if (pointer == null) return;
             Vector2 point = pointer.position.ReadValue();
             if (pointer.press.wasPressedThisFrame) lastDrag = point;
-            if (pointer.press.isPressed && dragging)
+            if (pointer.press.isPressed && dragging && point != lastDrag)
             {
                 if (cameraMove != null) { StopCoroutine(cameraMove); cameraMove = null; }
                 var plane = new Plane(Vector3.up, Vector3.zero);

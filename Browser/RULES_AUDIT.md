@@ -1,4 +1,53 @@
-# Classic Monopoly rules audit - updated 22 October 2026
+# Rules audit - separate Classic mode, 24 October 2026
+
+## Current release audit
+
+The host can choose **Classic** or **Expanding India** before starting. Existing
+saves without a mode continue with Expanding rules; no running room is migrated.
+The historical audit below describes the earlier Expanding engine, not the new
+Classic implementation in `src/engine/classic.ts` and `classicCards.ts`.
+
+| Checked behavior | Classic | Expanding / old saves |
+| --- | --- | --- |
+| Board and bank stock | 40 spaces for 2-6; 32 houses / 12 hotels | Existing player-count expansion preserved |
+| First player | Highest supplied dice; tied leaders reroll | Existing random selection |
+| Cards | Two ordered 16-card traditional-effect presets; shuffle supplied in START | Existing eight-card index presets |
+| Release cards | Removed while held; original deck return; tradable | Existing counter-based behavior |
+| Movement, doubles, Jail, GO | Explicit deterministic state transitions; third failed roll retains its dice | Existing tested flows preserved |
+| Utility rent | Fresh supplied dice, 4x/10x; no movement or extra roll | Movement dice retained |
+| Nearest utility / railway | Fresh 10x utility roll / double railway rent | Existing railway rule retained |
+| Repairs and per-player payments | House/hotel distinction; individual unpaid creditor amounts | Existing smaller deck retained |
+| Off-turn finances | Stable buy/roll/end/auction/utility/jail decisions; original decision resumes | Active owner / debtor only |
+| Auctions | Opens at 10; new high bid reopens passed bidders; leading cash reserved | Original bidding semantics |
+| Building scarcity | Last house/hotel bidding, eligible targets, finite stock | Exhausted stock rejects build |
+| Building investment | Actual auction purchase cost retained; half-cost sales include paise | Original listed-cost integer sales |
+| Mortgaged transfers | Immediate keep-interest / redemption decision for each receiver | Original transfer behavior |
+| Debt | Mandatory pause; real payments only; liquidation-value surrender gate | Existing custom insolvency rule |
+| Bankruptcy | Building stock, cards, estates, mortgage-interest debt chains, bank auctions | Existing regression-tested settlement |
+| Persistence | Same durable checkpoint and idempotent action receipts | Unchanged |
+
+Verification: 15 seeded complete Classic matches reach one survivor, in addition
+to the 15 existing Expanding simulations. Regression tests check deterministic
+results, immutable inputs, cash/debt conservation, card circulation, legal ownership
+and finite buildings. A real three-client Worker run verifies 66 actions including
+utility dice, off-turn trades, mortgage choices, release cards and exact reconnects.
+
+## Honest boundaries
+
+This is not certification of every official edition or every possible sequence.
+Names, rupees, card wording and automatic rent are digital/localized adaptations.
+The 32 traditional-effect cards are not a verified facsimile of a specific box's
+complete printed card faces. The primary rule references remain listed below.
+Property management is serialized at stable decisions, not during token movement.
+Shortage auctions handle the last available piece; there is no separate simultaneous
+bulk-building request negotiation. Cash-only loans/gifts and rent-immunity contracts
+are not Classic trade options. Expanding intentionally retains its custom rules.
+
+Physical-device thermal/FPS, Safari/iOS gesture/orientation behavior and exhaustive
+all-sequence testing are not certified. See `QA_VERIFICATION.md` for what was
+actually measured instead of treating a passing build as a gameplay guarantee.
+
+## Historical audit - 22 October 2026 (Expanding engine)
 
 ## Verdict
 

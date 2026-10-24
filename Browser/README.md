@@ -21,7 +21,22 @@ Cloudflare host values from `.github/workflows/deploy-pages.yml`. These are
 public service addresses, not credentials. GitHub Pages only hosts static
 files; it cannot run the room server.
 
-## Saved matches and reconnecting
+## Choosing rules for a new table
+
+The host's lobby **Rules mode** selector offers:
+
+- **Classic:** fixed 40-space Indian board for 2-6, starting dice contest, two
+  ordered 16-card traditional-effect decks, tradable unique release cards, fresh
+  utility dice, off-turn finances, received-mortgage interest/redemption, reserved
+  auction bids, last-building auctions and liquidation-based bankruptcy decisions.
+- **Expanding India:** the existing 40/48/56/64-space custom game. Saved rooms
+  without a mode keep these rules. Starting or deploying never changes their mode.
+
+Both share the same pure reducer, durable saved rooms and native 3D renderer.
+Classic is a digital/localized rule preset, not a claim of official-edition
+certification. Read `RULES_AUDIT.md` for exact boundaries.
+
+### Saved matches and reconnecting
 
 Every confirmed action is checkpointed in the existing room's Durable Object
 storage before broadcasting. Server restarts, hibernation and new deployments
