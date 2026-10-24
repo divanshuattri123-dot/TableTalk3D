@@ -29,4 +29,5 @@
   .mortgage-stage h1, .utility-stage h1 { font-size: 25px; }
   .mortgage-stage > p, .utility-stage > p { font-size: 13px; margin-block: 8px; }
   .classic-finance-menu { margin-top: 6px; }
+  .immersive-game .sale-actions { align-content: start; overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
 }
