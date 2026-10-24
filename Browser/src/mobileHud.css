@@ -6,7 +6,44 @@
 .game-menu-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
 .game-menu-actions button { min-height: 46px; padding: 9px; border: 1px solid #b8c9ac; border-radius: 10px; background: #edf1e2; color: #2e503b; font: 700 13px/1.3 "Trebuchet MS",sans-serif; }
 .game-menu-actions button:last-child { color: #963449; background: #fff0e8; }
+.welcome-menu-backdrop { position: fixed; z-index: 70; inset: 0; display: grid; place-items: center; padding: 12px; background: #173b35bd; }
+.welcome-menu { width: min(480px,100%); max-height: calc(100dvh - 24px); overflow: auto; padding: 18px; border: 1px solid #c3cfae; border-radius: 16px; background: #fffaf0; color: #2e503b; }
+.welcome-menu > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.welcome-menu h2 { margin: 0; font: 800 24px "Trebuchet MS",sans-serif; }
+.welcome-menu button { min-height: 44px; border: 1px solid #b8c9ac; border-radius: 10px; background: #edf1e2; color: #2e503b; font: 700 14px "Segoe UI",sans-serif; }
+.welcome-menu > header button { min-width: 44px; font-size: 24px; }
+.welcome-menu-settings { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; padding: 0; margin: 0 0 18px; border: 0; }
+.welcome-menu-settings legend { margin-bottom: 12px; font-weight: 700; }
+.welcome-menu-settings label { display: grid; gap: 7px; font-size: 13px; }
+.welcome-menu-settings select { width: 100%; min-height: 44px; padding: 7px; color: #2e503b; background: #f3f3e7; border: 1px solid #b8c9ac; border-radius: 7px; font-size: 16px; }
+.welcome-menu-settings .welcome-sound-setting { display: flex; align-items: center; }
+.welcome-menu-settings input { min-height: 30px; accent-color: #39754e; }
+.welcome-menu-appearance { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.welcome-menu > p { margin-bottom: 0; color: #53694c; font-size: 12px; line-height: 1.5; }
 @media (pointer: coarse), (max-width: 700px) {
+  .welcome-shell { min-height: 100dvh; justify-content: flex-start; padding: max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); background: #173f36; }
+  .welcome-shell .welcome-nav { width: min(720px,100%); min-height: 44px; padding: 0; border: 0; }
+  .welcome-shell .welcome-status, .welcome-shell .welcome-card > .eyebrow, .welcome-shell .welcome-copy, .welcome-shell .welcome-note { display: none; }
+  .welcome-shell .mobile-menu-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 82px; min-height: 44px; padding: 8px 12px; border: 1px solid #b8c9ac; border-radius: 12px; color: #2e503b; background: #fffaf0; font: 800 13px "Trebuchet MS",sans-serif; }
+  .welcome-shell .wordmark { color: #fffaf0; }
+  .welcome-shell .wordmark i { color: #ff7d88; }
+  .welcome-shell .wordmark sup { display: none; }
+  .welcome-shell .welcome-layout { display: block; width: min(720px,100%); padding: 12px 0 0; }
+  .welcome-shell .welcome-card { max-width: none; padding: 16px; background: #fffaf0; color: #2e503b; border: 0; border-top: 5px solid #d73549; border-radius: 14px; box-shadow: none; }
+  .welcome-shell .welcome-card h1 { margin: 0 0 14px; color: #2e503b; font: 800 28px/1.1 "Trebuchet MS",sans-serif; letter-spacing: -.03em; }
+  .welcome-shell .field-label, .welcome-shell .color-picker legend { color: #53694c; }
+  .welcome-shell .text-input { min-height: 44px; color: #2e503b; background: #f3f3e7; border-color: #b8c9ac; font-size: 16px; }
+  .welcome-shell .text-input::placeholder { color: #71806c; }
+  .welcome-shell .color-picker { margin: 16px 0; }
+  .welcome-shell .color-picker div { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 4px; max-width: 310px; }
+  .welcome-shell .color-choice { width: 100%; max-width: 48px; height: 44px; border: 8px solid #fffaf0; }
+  .welcome-shell .color-choice.chosen { box-shadow: 0 0 0 2px #2e503b; }
+  .welcome-shell .colour-room-status { color: #53694c; margin-block: 8px; }
+  .welcome-shell .welcome-actions { gap: 16px; }
+  .welcome-shell .welcome-actions > .primary-button { min-height: 48px; background: #39754e; color: #fffaf0; box-shadow: none; }
+  .welcome-shell .join-box { padding-top: 14px; border-color: #b8c9ac; }
+  .welcome-shell .join-row > button { min-height: 44px; background: #edf1e2; color: #2e503b; box-shadow: none; }
+  .welcome-shell .inline-error { color: #ac3546; }
   /* The phone HUD is for decisions. Secondary tools belong behind its one menu. */
   .immersive-game .desktop-hud-navigation, .immersive-game .game-header .wordmark,
   .immersive-game .connection-pill, .immersive-game .table-toolbar,
@@ -39,6 +76,15 @@
   .immersive-game .table-preferences .preferences-title button { min-height: 44px; min-width: 44px; }
   .immersive-game .mobile-preference-option { display: block; }
   .immersive-game .mobile-play-help { display: inline; }
+}
+@media (pointer: coarse) and (orientation: landscape) and (min-width: 560px), (max-width: 700px) and (orientation: landscape) and (min-width: 560px) {
+  .welcome-shell .welcome-card { display: grid; grid-template-columns: minmax(284px,1.1fr) minmax(175px,.9fr); column-gap: 18px; row-gap: 7px; }
+  .welcome-shell .welcome-card h1 { grid-column: 1 / -1; grid-row: 1; margin-bottom: 4px; }
+  .welcome-shell .welcome-card > .field-label { grid-column: 1; grid-row: 2; margin: 0; }
+  .welcome-shell #player-name { grid-column: 1; grid-row: 3; }
+  .welcome-shell .welcome-card > .color-picker { grid-column: 1; grid-row: 4; margin: 4px 0 0; }
+  .welcome-shell .welcome-card > .welcome-actions { grid-column: 2; grid-row: 2 / 5; align-self: center; }
+  .welcome-shell .colour-room-status, .welcome-shell .inline-error { grid-column: 1 / -1; }
 }
 @media (pointer: coarse) and (orientation: landscape) and (max-width: 600px) {
   .immersive-game .side-rail, .immersive-game .live-seats, .immersive-game .play-turn-banner { width: 145px; }

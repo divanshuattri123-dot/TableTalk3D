@@ -38,6 +38,8 @@ import type { AssetUse } from "./view/AssetStudio";
 import BoardStage from "./view/BoardStage";
 import GameMenu from "./view/GameMenu";
 import type { TablePanel } from "./view/GameMenu";
+import WelcomeMenu from "./view/WelcomeMenu";
+import useMobileInterface from "./view/useMobileInterface";
 import { enterGameFullscreen, exitGameFullscreen, fullscreenActive, releaseGameOrientation } from "./view/fullscreen";
 import LandscapeGate from "./view/LandscapeGate";
 import { useGameRoom } from "./network/useGameRoom";
@@ -164,6 +166,8 @@ function App() {
   const joinReady = preview.game && !taken && (returning || preview.game.phase === "lobby" && preview.game.players.length < 6);
   const { catalog, byId, error, reload } = useAssets();
   const { update } = useViewSettings();
+  const mobile = useMobileInterface();
+  const [welcomeMenu, setWelcomeMenu] = useState(false);
   const [tokenId, setTokenId] = useState<string>();
   const [diceId, setDiceId] = useState<string>();
   const [studio, setStudio] = useState<string>();
@@ -182,6 +186,7 @@ function App() {
   const begin = (roomCode: string) => {
     const normalized = roomCode.trim().toUpperCase();
     if (!name.trim() || !/^[A-Z]{4}$/.test(normalized)) return;
+    setWelcomeMenu(false);
     void enterGameFullscreen();
     const nextSession: Session = {
       roomCode: normalized,
@@ -206,16 +211,16 @@ function App() {
 
   return (
     <main className="welcome-shell">
-      <header className="welcome-nav"><span className="wordmark">TABLE <i>TALK</i><sup>3D</sup></span><span><i className="live-dot" /> Free to play · No accounts</span></header>
+      <header className="welcome-nav"><span className="wordmark">TABLE <i>TALK</i><sup>3D</sup></span><span className="welcome-status"><i className="live-dot" /> Free to play · No accounts</span>{mobile && <button className="mobile-menu-trigger" type="button" aria-label="Open game menu" aria-haspopup="dialog" aria-expanded={welcomeMenu} onClick={() => setWelcomeMenu(true)}><span aria-hidden="true">☰</span> Menu</button>}</header>
       <div className="welcome-layout">
-      <section className="welcome-showcase" aria-label="Your 3D game piece">
+      {!mobile && <section className="welcome-showcase" aria-label="Your 3D game piece">
         <p className="eyebrow">Big deals. Your people. One table.</p>
         <h2>The city is<br />up for <em>grabs.</em></h2>
         <p>Pick your piece. Call your friends.<br />Build a little empire together.</p>
         <Suspense fallback={<div className="showcase-loading">Opening the 3D collection…</div>}><ModelPreview asset={token} color={color} className="hero-model" /></Suspense>
         <div className="showcase-footer"><span>YOUR 3D PIECE</span><button type="button" onClick={() => setStudio("token")}>Explore {catalog?.counts.model.toLocaleString() ?? "1,044"} models ↗</button></div>
         <div className="board-scale"><span>More friends.<br /><b>Bigger neighbourhood.</b></span><div>{[["2–3",40],["4",48],["5",56],["6",64]].map(([count, size]) => <span key={count}><b>{size}</b><small>{count} players</small></span>)}</div></div>
-      </section>
+      </section>}
       <section className="welcome-card" aria-labelledby="welcome-title">
         <p className="eyebrow">Your next game night starts here</p>
         <h1 id="welcome-title">Take a seat.</h1>
@@ -234,7 +239,7 @@ function App() {
         />
         <TokenColorPicker color={color} players={preview.game?.players} localId={returningId} onChoose={setColor} />
         {previewCode && <p className="colour-room-status" role="status">{!preview.game ? preview.error || (preview.connection === "offline" ? "Could not check this table. Reload to try again." : "Checking available colours…") : !returning && preview.game.phase !== "lobby" ? "This game has already started." : !returning && preview.game.players.length >= 6 ? "This table is full." : taken ? "That colour is taken. Choose an available colour to join." : `${preview.game.players.length} / 6 seats · A different colour for every player.`}</p>}
-        <div className="appearance-picker"><button type="button" onClick={() => setStudio("token")}><span>YOUR PIECE</span><b>{token?.label ?? "Sports car"}</b><i>Change ↗</i></button><button type="button" onClick={() => setStudio("dice")}><span>YOUR DICE</span><b>{die?.label ?? "Paris dice"}</b><i>Change ↗</i></button></div>
+        {!mobile && <div className="appearance-picker"><button type="button" onClick={() => setStudio("token")}><span>YOUR PIECE</span><b>{token?.label ?? "Sports car"}</b><i>Change ↗</i></button><button type="button" onClick={() => setStudio("dice")}><span>YOUR DICE</span><b>{die?.label ?? "Paris dice"}</b><i>Change ↗</i></button></div>}
         <div className="welcome-actions">
           <button className="primary-button" disabled={!name.trim()} onClick={() => begin(randomCode())} type="button">
             Create a table <span>↗</span>
@@ -261,7 +266,8 @@ function App() {
         <p className="welcome-note">No install. No sign-up. Just a link.<br />Saved rooms · Automatic reconnect · Touch-friendly 3D</p>
       </section>
       </div>
-      <footer className="welcome-bottom"><span>A property trading game for your own crew.</span><button type="button" onClick={() => setStudio("all")}>Browse all {catalog ? catalog.assets.length.toLocaleString() : "6,430"} assets ↗</button></footer>
+      {!mobile && <footer className="welcome-bottom"><span>A property trading game for your own crew.</span><button type="button" onClick={() => setStudio("all")}>Browse all {catalog ? catalog.assets.length.toLocaleString() : "6,430"} assets ↗</button></footer>}
+      {mobile && welcomeMenu && <WelcomeMenu onCustomize={category => { setWelcomeMenu(false); setStudio(category); }} onClose={() => setWelcomeMenu(false)} />}
       {studio && <Suspense fallback={<p className="asset-notice">Opening collection…</p>}><AssetStudio initialCategory={studio} selectedId={studio === "dice" ? die?.id : token?.id} color={color} onClose={() => setStudio(undefined)} onChoose={chooseAsset} /></Suspense>}
     </main>
   );
