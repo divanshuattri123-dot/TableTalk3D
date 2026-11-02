@@ -124,7 +124,8 @@ namespace TableTalk
                 text.rectTransform.sizeDelta = tile.kind != "property" ? new Vector2(dimensions.x - .16f, dimensions.z - .16f)
                     : quarter % 2 == 0 ? new Vector2(dimensions.x - .12f, dimensions.z - .4f) : new Vector2(dimensions.x - .4f, dimensions.z - .12f);
             }
-            if (city != null) { city.gameObject.SetActive(true); city.localScale = Vector3.one * (state.boardSize / 4f - 1.45f); }
+            if (city != null) { city.localScale = Vector3.one * (state.boardSize / 4f - 1.45f); }
+            SetBoardWorld(state.world,state.boardSize);
             BuildLandscape(state.boardSize);
             labelPositionsDirty = true;
             SyncLabels(state);
@@ -145,6 +146,7 @@ namespace TableTalk
 
         void SyncInstant(BoardSnapshot state)
         {
+            SetBoardWorld(state.world,state.boardSize);
             SyncLabels(state);
             foreach (var player in state.players)
             {
@@ -345,6 +347,9 @@ namespace TableTalk
         static Color ColorOf(string hex) => ColorUtility.TryParseHtmlString(hex, out var color) ? color : Color.white;
         void OnDestroy()
         {
+            DisposeBoardWorld();
+            if (artProfile != null) Destroy(artProfile);
+            if (detailedCity != null) Destroy(detailedCity);
             DisposeLandscape();
             foreach (var material in ownedMaterials) if (material != null) Destroy(material);
             foreach (var model in streamedModels) if (model != null) Destroy(model);

@@ -1,0 +1,8 @@
+{
+  "appId": "com.tabletalk.game",
+  "appName": "TableTalk3D",
+  "webDir": "web",
+  "backgroundColor": "#173f36",
+  "android": { "backgroundColor": "#173f36", "allowMixedContent": false },
+  "ios": { "backgroundColor": "#173f36", "contentInset": "never", "preferredContentMode": "mobile" }
+}

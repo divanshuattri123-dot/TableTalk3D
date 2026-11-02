@@ -89,3 +89,5 @@
 @media (pointer: coarse) and (orientation: landscape) and (max-width: 600px) {
   .immersive-game .side-rail, .immersive-game .live-seats, .immersive-game .play-turn-banner { width: 145px; }
 }
+.deed-row .deed-rule-note { display:block; max-width:30rem; margin-top:5px; white-space:normal; font-size:.78rem; line-height:1.35; color:#516c61; }
+.unity-loading button { min-width:150px; min-height:44px; padding:10px 18px; border:1px solid #739d89; border-radius:14px; background:#1c5442; color:#fffdf1; font-family:inherit; font-weight:700; font-size:16px; line-height:1.2; cursor:pointer; }

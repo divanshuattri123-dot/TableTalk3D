@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef } from "react";
 import { getBoard, isPurchasableTile } from "../engine/board";
 import type { BoardSize } from "../engine/types";
+import type { CityId } from '../engine/cities';
 import { fitBoardName } from "./readability";
 import { pinnedLabelLayout } from "./labelProjection";
 import { paintProjectedLabel } from "./labelPaint";
@@ -8,9 +9,9 @@ import type { ProjectedLabelLayout } from "./labelPaint";
 import type { LabelPacket } from "./readability";
 import { boardSymbol, printedBoardLabel } from "./boardSigns";
 
-export default memo(function ScreenBoardLabels({ size }: { size: BoardSize }) {
+export default memo(function ScreenBoardLabels({ size,city }: { size: BoardSize; city?:CityId }) {
   const root = useRef<HTMLDivElement>(null), nodes = useRef(new Map<number, HTMLDivElement>());
-  const board = useMemo(() => getBoard(size), [size]);
+  const board = useMemo(() => getBoard(size,city), [size,city]);
   useEffect(() => {
     const element = root.current; if (!element) return;
     let packet: LabelPacket | undefined, disposed = false;

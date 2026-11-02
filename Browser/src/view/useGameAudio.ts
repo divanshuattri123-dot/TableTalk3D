@@ -2,35 +2,26 @@ import { useCallback, useEffect, useRef } from "react";
 import { assetUrl, useAssets } from "../assets";
 import type { ViewSettings } from "../assets";
 import type { GameState } from "../engine/types";
+import {GameAudio} from './gameAudio';
 
 export function useGameAudio(game: GameState | undefined, settings: ViewSettings) {
   const { catalog, byId } = useAssets();
-  const music = useRef<HTMLAudioElement | null>(null);
-  const sounds = useRef<HTMLAudioElement[]>([]);
+  const controller=useRef<GameAudio | null>(null);
+  if(!controller.current)controller.current=new GameAudio(src=>new Audio(src),!document.hidden);
+  const audio=controller.current;
   const lastEvent = useRef(0);
-  const unlocked = useRef(false);
   useEffect(() => {
-    const unlock = () => { unlocked.current = true; if (music.current) void music.current.play().catch(() => {}); };
-    window.addEventListener("pointerdown", unlock, { once: true });
-    return () => window.removeEventListener("pointerdown", unlock);
-  }, []);
+    const unlock=()=>audio.unlock(),visibility=()=>audio.setVisible(!document.hidden);
+    window.addEventListener("pointerdown",unlock);document.addEventListener("visibilitychange",visibility);
+    visibility();
+    return()=>{window.removeEventListener("pointerdown",unlock);document.removeEventListener("visibilitychange",visibility);audio.dispose();};
+  }, [audio]);
+  const music=byId.get(settings.musicId??'');
+  useEffect(()=>audio.configure({enabled:settings.sound,volume:settings.volume,music:music?assetUrl(music.src):undefined}),[audio,settings.sound,settings.volume,music?.src]);
   const play = useCallback((key: string) => {
     const asset = byId.get(catalog?.featured.sounds[key] ?? "");
-    if (!asset || !settings.sound || !unlocked.current || document.hidden) return;
-    const audio = new Audio(assetUrl(asset.src)); audio.volume = settings.volume;
-    sounds.current = sounds.current.filter((sound) => !sound.paused);
-    if (sounds.current.length >= 3) sounds.current.shift()?.pause();
-    sounds.current.push(audio); void audio.play().catch(() => {});
-  }, [catalog, byId, settings.sound, settings.volume]);
-  useEffect(() => {
-    const asset = byId.get(settings.musicId ?? "");
-    if (!asset) return;
-    const audio = new Audio(assetUrl(asset.src)); audio.loop = true; audio.volume = settings.volume * .4;
-    music.current = audio;
-    if (unlocked.current) void audio.play().catch(() => {});
-    return () => { audio.pause(); music.current = null; };
-  }, [settings.musicId, byId]);
-  useEffect(() => { if (music.current) music.current.volume = settings.volume * .4; }, [settings.volume]);
+    if(asset)audio.play(assetUrl(asset.src));
+  }, [audio,catalog,byId]);
   useEffect(() => {
     const event = game?.eventLog[0];
     if (!event || event.id === lastEvent.current) return;
@@ -46,6 +37,5 @@ export function useGameAudio(game: GameState | undefined, settings: ViewSettings
     else if (text.includes("went to jail")) play("jail");
     else if (text.includes("collected") || text.includes("received")) play("income");
   }, [game?.eventLog, play]);
-  useEffect(() => () => { music.current?.pause(); sounds.current.forEach((audio) => audio.pause()); }, []);
   return play;
 }

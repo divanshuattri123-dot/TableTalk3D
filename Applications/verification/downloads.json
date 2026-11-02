@@ -1,0 +1,32 @@
+[
+  {
+    "file": "TableTalk3D-0.7.0-test.apk",
+    "bytes": 21866984,
+    "sha256": "94a774cf47c9a8bb20be01b1af13033bae77f7824d1e77051aab9e8654104642"
+  },
+  {
+    "file": "TableTalk3D-0.7.0-Windows.zip",
+    "bytes": 173909138,
+    "sha256": "87ed44a69b87002ee1df677485045828c0149d89e0e88f6ebe3878aa8fd2f2d0"
+  },
+  {
+    "file": "TableTalk3D-0.7.0-iOS-project.zip",
+    "bytes": 16497973,
+    "sha256": "eebaa3c82a23936be8547ea9a86b58d53a646653a83c82b38784c8376d1482fa"
+  },
+  {
+    "file": "TableTalk3D-0.7.1-test.apk",
+    "bytes": 26444658,
+    "sha256": "19809f14b40998f048fda9fa850cef17cb88c41b2a6ebca23d336c2a7f9cf29a"
+  },
+  {
+    "file": "TableTalk3D-0.7.2-test.apk",
+    "bytes": 26445953,
+    "sha256": "cc07d4befd81b7d6ccbbf434a13b92f3e7b3ff8dd183c343bbde79f941aed543"
+  },
+  {
+    "file": "TableTalk3D-0.8.0-test.apk",
+    "bytes": 47868569,
+    "sha256": "f0f33b7fa3ba9f65741502102eda759f3d2979e45552b77657ab14a08f8eba86"
+  }
+]

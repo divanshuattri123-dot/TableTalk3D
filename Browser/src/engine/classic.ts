@@ -78,6 +78,11 @@ class Table {
   manage(id: string) { requireRule(canClassicManage(this.s, id), "Finish the outstanding decision before managing property."); return this.player(id); }
   spend(id: string, amount: number) { requireRule(classicSpendableCash(this.s, id) >= amount, "Not enough unreserved cash."); this.player(id).cash = cents(this.player(id).cash-amount); }
   endLanding() { this.s.phase = "awaitingEndTurn"; this.s.pendingRoll = undefined; }
+  chargeRent(payerId: string, ownerId: string, propertyId: number, amount: number) {
+    if (this.s.rulesEdition !== 'hasbro-2025') { this.pay(payerId, ownerId, amount, `rent for ${BOARD[propertyId]!.name}`); return; }
+    this.s.rentClaim = { id: this.s.nextEventId, payerId, ownerId, propertyId, amount };
+    this.event(`${this.player(ownerId).name} may claim ${money(amount)} rent before the next movement roll.`, 'info', { playerId: ownerId, position: propertyId });
+  }
   move(id: string, to: number, collect: boolean) {
     const p = this.player(id); p.position = to;
     this.event(`${p.name} moved to ${BOARD[to]!.name}.`, "turn", { playerId: id, position: to });
@@ -106,7 +111,7 @@ class Table {
         this.s.pendingUtility = { playerId: id, propertyId: p.position, multiplier: multiplier ?? (utilityPositions(40).every(i => this.s.properties[i]!.ownerId === deed.ownerId) ? 10 : 4) };
         this.s.phase = "awaitingUtilityRoll"; return;
       }
-      this.pay(id, deed.ownerId, this.rent(p.position, this.s.lastRoll!.total) * (multiplier ?? 1), `rent for ${tile.name}`);
+      this.chargeRent(id, deed.ownerId, p.position, this.rent(p.position, this.s.lastRoll!.total) * (multiplier ?? 1));
       this.endLanding(); return;
     }
     if (tile.kind === "goToJail") { this.jail(id); return; }
@@ -146,7 +151,7 @@ class Table {
       this.active(id,"awaitingUtilityRoll"); const rent = this.s.pendingUtility!;
       this.s.lastUtilityRoll = { playerId: id, dice: [...dice] as Dice, eventId: this.s.nextEventId };
       this.event(`${this.player(id).name} rolled ${dice.join(" + ")} for utility rent.`, "turn", { playerId: id });
-      this.pay(id,this.s.properties[rent.propertyId]!.ownerId!,(dice[0]+dice[1])*rent.multiplier,`rent for ${BOARD[rent.propertyId]!.name}`);
+      this.chargeRent(id,this.s.properties[rent.propertyId]!.ownerId!,rent.propertyId,(dice[0]+dice[1])*rent.multiplier);
       this.s.pendingUtility = undefined; this.endLanding(); return;
     }
     const p = this.active(id,"awaitingRoll"), doubles = dice[0] === dice[1];
@@ -302,9 +307,16 @@ class Table {
       const p=this.player(id);
       requireRule(cashAmount(cash) && cash<=Math.max(0,classicSpendableCash(this.s,id)) && new Set(ids).size===ids.length && ids.every(i=>canClassicTradeProperty(this.s,i,id)),"Trade cash or deeds are no longer available.");
       requireRule(new Set(cards).size===cards.length && cards.every(deck=>held(p).includes(deck)),"That release card is not available.");
-      const fees=received.reduce((n,i)=>n+(this.s.properties[i]?.mortgaged?Math.ceil(getPurchasableTile(i,40)!.mortgageValue/10):0),0);
+      const fees=this.s.rulesEdition === 'hasbro-2025' ? 0 : received.reduce((n,i)=>n+(this.s.properties[i]?.mortgaged?Math.ceil(getPurchasableTile(i,40)!.mortgageValue/10):0),0);
       requireRule(!fees || classicSpendableCash(this.s,id)-cash+incoming>=fees,"Include enough unreserved cash for the receiver's mortgage interest.");
     }
+  }
+  counter(action: Extract<GameAction,{type:"TRADE_COUNTER"}>) {
+    const previous = this.s.pendingTrade;
+    requireRule(this.s.phase === "awaitingTradeResponse" && previous && previous.id === action.previousOfferId && previous.toPlayerId === action.playerId && action.offerId && action.offerId !== previous.id, "Only the recipient may counter the current offer with a new ID.");
+    const offer: TradeOffer = { ...action, id: action.offerId, counterOfId: previous!.id, fromPlayerId: action.playerId, toPlayerId: previous!.fromPlayerId, resumePhase: previous!.resumePhase };
+    this.checkTrade(offer); this.s.pendingTrade = offer;
+    this.event(`${this.player(action.playerId).name} counter-offered to ${this.player(offer.toPlayerId).name}.`, "info", { playerId: action.playerId });
   }
   accept(action: Extract<GameAction,{type:"TRADE_ACCEPT"}>) {
     const t=this.s.pendingTrade!;
@@ -325,7 +337,7 @@ class Table {
     requireRule(this.s.phase==="awaitingMortgageDecision" && t?.playerId===action.playerId,"No mortgage decision is waiting for you.");
     requireRule(new Set(action.redeemPropertyIds).size===action.redeemPropertyIds.length && action.redeemPropertyIds.every(i=>t.propertyIds.includes(i)),"Choose only the received mortgaged deeds.");
     let cost=0;
-    for (const id of t.propertyIds) { const tile=getPurchasableTile(id,40)!; cost+=Math.ceil(tile.mortgageValue/10)+(action.redeemPropertyIds.includes(id)?tile.mortgageValue:0); }
+    for (const id of t.propertyIds) { const tile=getPurchasableTile(id,40)!; const redeem=action.redeemPropertyIds.includes(id); cost+=(this.s.rulesEdition !== 'hasbro-2025' || redeem ? Math.ceil(tile.mortgageValue/10) : 0)+(redeem?tile.mortgageValue:0); }
     if (action.redeemPropertyIds.length) requireRule(classicSpendableCash(this.s,action.playerId)>=cost,"Choose retention interest if immediate redemption is unaffordable.");
     for (const id of action.redeemPropertyIds) this.s.properties[id]!.mortgaged=false;
     this.s.mortgageTransfers!.shift(); this.pay(action.playerId,"bank",cost,"for received mortgage interest and redemption");
@@ -359,12 +371,13 @@ class Table {
       p.tokenId=action.tokenId??p.tokenId; p.diceId=action.diceId??p.diceId; return;
     }
     requireRule(this.s.phase!=="gameOver","This match is complete.");
-    if (this.s.phase==="awaitingTradeResponse") requireRule(["TRADE_ACCEPT","TRADE_DECLINE"].includes(action.type),"Reply to or withdraw the trade first.");
+    if (this.s.phase==="awaitingTradeResponse") requireRule(["TRADE_ACCEPT","TRADE_DECLINE","TRADE_COUNTER"].includes(action.type),"Reply to or withdraw the trade first.");
     if (this.s.phase==="awaitingMortgageDecision") requireRule(action.type==="RESOLVE_MORTGAGES","Resolve the received mortgages first.");
     if (this.s.phase==="awaitingDebt") requireRule("playerId" in action && this.s.debts?.[0]?.playerId===action.playerId &&
       (action.type==="BANKRUPT" || action.type==="TRADE_OFFER" || action.type==="BUILD" && action.operation!=="build" || action.type==="MORTGAGE" && action.mortgage),"Settle the outstanding debt first.");
     switch (action.type) {
-      case "ROLL": this.roll(action.playerId,action.dice); break;
+      case "ROLL": { if(this.s.phase === 'awaitingRoll') this.s.rentClaim=undefined; this.roll(action.playerId,action.dice); break; }
+      case "CLAIM_RENT": { const claim=this.s.rentClaim; requireRule(this.s.rulesEdition === 'hasbro-2025' && claim && claim.id === action.claimId && claim.ownerId === action.playerId, 'No current rent claim belongs to you.'); this.player(action.playerId); this.s.rentClaim=undefined; this.pay(claim!.payerId,claim!.ownerId,claim!.amount,`rent for ${BOARD[claim!.propertyId]!.name}`); break; }
       case "MOVE_RESULT": { const p=this.active(action.playerId,"awaitingMove"), roll=this.s.pendingRoll!; this.move(p.id,(p.position+roll.total)%40,p.position+roll.total>=40); this.s.pendingRoll=undefined; this.land(p.id); break; }
       case "BUY": { const p=this.active(action.playerId,"awaitingBuy"), pending=this.s.pendingPurchase; requireRule(pending?.propertyId===action.propertyId && !this.s.properties[action.propertyId]!.ownerId,"No matching property purchase."); const tile=getPurchasableTile(action.propertyId,40)!; this.spend(p.id,tile.price); this.s.properties[action.propertyId]!.ownerId=p.id; this.s.pendingPurchase=undefined; this.endLanding(); this.event(`${p.name} bought ${tile.name} for ${money(tile.price)}.`,"money",{playerId:p.id,position:tile.position,amount:tile.price}); break; }
       case "DECLINE_BUY": { this.active(action.playerId,"awaitingBuy"); const id=this.s.pendingPurchase!.propertyId; this.s.pendingPurchase=undefined; this.auction(id); break; }
@@ -372,6 +385,7 @@ class Table {
       case "BUILD": this.build(action); break;
       case "MORTGAGE": this.mortgage(action); break;
       case "TRADE_OFFER": this.trade(action); break;
+      case "TRADE_COUNTER": this.counter(action); break;
       case "TRADE_ACCEPT": this.accept(action); break;
       case "TRADE_DECLINE": { const t=this.s.pendingTrade; requireRule(this.s.phase==="awaitingTradeResponse" && t?.id===action.offerId && [t.fromPlayerId,t.toPlayerId].includes(action.playerId),"No matching trade to decline."); this.s.phase=t.resumePhase; this.s.pendingTrade=undefined; this.event(`${this.player(action.playerId).name} ${action.playerId===t.fromPlayerId?"withdrew":"declined"} the trade.`,"info",{playerId:action.playerId}); break; }
       case "RESOLVE_MORTGAGES": this.resolveMortgages(action); break;

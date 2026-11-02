@@ -1,13 +1,14 @@
-import { cardAt, classicPosition, getBoard, railroadPositions, utilityPositions } from "../engine/board";
+import { cardAt, cityText, classicPosition, getBoard, railroadPositions, utilityPositions } from "../engine/board";
 import type { AuctionState, GameState } from "../engine/types";
 
-export type MotionKind = "turn" | "dice" | "move" | "card" | "jail" | "release" | "money" | "purchase" | "bid" | "sold" | "build" | "mortgage" | "trade" | "bankrupt" | "winner";
+export type MotionKind = "turn" | "dice" | "move" | "card" | "jail" | "release" | "money" | "purchase" | "bid" | "sold" | "build" | "mortgage" | "trade" | "set" | "bankrupt" | "winner";
 export interface PresentationFrame {
   id: string; kind: MotionKind; duration: number; text: string;
   playerId?: string; tileId?: number; route?: number[]; dice?: number[];
   deck?: string; amount?: number; recipientId?: string; backwards?: boolean;
   diceId?: string;
   auction?: AuctionState;
+  tileIds?: number[];
 }
 
 export const canCompleteFrame = (frame: PresentationFrame | undefined, id: string, source: "animation" | "reader") =>
@@ -25,7 +26,7 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
   const frames: PresentationFrame[] = [];
   const add = (kind: MotionKind, text: string, duration: number, data: Partial<PresentationFrame> = {}) =>
     frames.push({ id: `${next.roomCode}:${next.nextEventId}:${frames.length}`, kind, text, duration, ...data });
-  const board = getBoard(next.boardSize), active = next.players.find(p => p.id === previous.activePlayerId);
+  const board = getBoard(next.boardSize, next.city), active = next.players.find(p => p.id === previous.activePlayerId);
   const positions = new Map(previous.players.map(p => [p.id, p.position]));
   const destinations = new Map<string, number>();
   if (previous.phase === "awaitingMove" && previous.pendingRoll) {
@@ -65,7 +66,7 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
         if (effect.kind === "nearestRailroad") destinations.set(playerId, railroadPositions(next.boardSize).find(p => p > position) ?? railroadPositions(next.boardSize)[0]!);
         if (effect.kind === "nearestUtility") destinations.set(playerId, utilityPositions(next.boardSize).find(p => p > position) ?? utilityPositions(next.boardSize)[0]!);
       }
-      add("card", entry?.card?.text ?? text, 2900, { playerId, deck: entry?.deck }); continue;
+      add("card", cityText(entry?.card?.text ?? text,next.city,next.boardSize), 2900, { playerId, deck: entry?.deck }); continue;
     }
     if (event.text.includes(" went to Jail (") && player) {
       add("jail", event.text, 1900, { playerId, tileId: next.boardSize / 4, route: [next.boardSize / 4] });
@@ -93,6 +94,16 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
       const amount = event.amount ?? Number(event.text.match(/[₹$](\d+)/)?.[1] ?? 0);
       const recipient = next.players.find(p => event.text.includes(` to ${p.name} `) || event.text.endsWith(` to ${p.name}.`));
       add("money", event.text, 1500, { playerId, amount, recipientId: event.recipientId ?? recipient?.id, tileId: player ? positions.get(player.id) : undefined });
+    }
+  }
+  if (frames.some(f => f.kind === "purchase" || f.kind === "sold" || f.kind === "trade")) {
+    for (const player of next.players.filter(p => !p.bankrupt)) {
+      const groups = [...new Set(board.filter(t => t.kind === "property").map(t => t.group))];
+      const completed = groups.flatMap(group => {
+        const deeds = board.filter(t => t.kind === "property" && t.group === group);
+        return deeds.every(t => next.properties[t.position]?.ownerId === player.id) && !deeds.every(t => previous.properties[t.position]?.ownerId === player.id) ? deeds.map(t => t.position) : [];
+      });
+      if (completed.length) add("set", `${player.name} completed a colour set!`, 1850, { playerId: player.id, tileIds: completed });
     }
   }
   if (next.winnerId && next.winnerId !== previous.winnerId) add("winner", `${next.players.find(p => p.id === next.winnerId)?.name ?? "Player"} wins the city!`, 2800, { playerId: next.winnerId });

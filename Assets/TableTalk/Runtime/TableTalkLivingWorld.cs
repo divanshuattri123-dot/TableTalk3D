@@ -15,6 +15,8 @@ namespace TableTalk
         Transform worldMotion;
         readonly List<WorldActor> worldActors = new List<WorldActor>();
         readonly List<Transform> windRotors = new List<Transform>();
+        readonly Dictionary<Mesh,Mesh> trafficSurfaces = new Dictionary<Mesh,Mesh>();
+        public Mesh trafficCarMesh;
         Material riverSurface;
         float worldHalf, worldClock;
         bool worldMotionReduced, worldPoseReady;
@@ -166,9 +168,25 @@ namespace TableTalk
                 model.transform.localScale *= scale;
                 model.transform.localPosition = new Vector3(-bounds.center.x,-bounds.min.y,-bounds.center.z)*scale;
                 var coat = Material(ColorOf(paint),.38f,.65f); coat.enableInstancing=true;
-                foreach (var render in model.GetComponentsInChildren<MeshRenderer>()) render.sharedMaterial=coat;
+                foreach (var render in model.GetComponentsInChildren<MeshRenderer>())
+                {
+                    var filter=render.GetComponent<MeshFilter>();
+                    if(filter!=null&&trafficCarMesh!=null)filter.sharedMesh=trafficCarMesh;
+                    if(filter!=null&&filter.sharedMesh!=null&&filter.sharedMesh.isReadable)
+                    {
+                        filter.sharedMesh=TrafficSurface(filter,root);
+                        var surfaces=new[]{coat,Material(ColorOf("#172c35"),.35f,.85f),Material(ColorOf("#222728"),0,.12f),Material(ColorOf("#d7dedb"),.7f,.7f)};
+                        foreach(var surface in surfaces)surface.enableInstancing=true;
+                        render.sharedMaterials=surfaces;
+                    }
+                    else render.sharedMaterial=coat;
+                }
                 foreach (var collider in model.GetComponentsInChildren<Collider>()) Destroy(collider);
-                WorldBox(root,"Tinted windscreen",new Vector3(0,.098f,-.015f),new Vector3(.12f,.018f,.1f),"#283e49");
+                for(int side=-1;side<=1;side+=2)
+                {
+                    WorldBox(root,"Headlight",new Vector3(side*.073f,.061f,.204f),new Vector3(.044f,.018f,.009f),"#fff1ce");
+                    WorldBox(root,"Tail lamp",new Vector3(side*.071f,.071f,-.201f),new Vector3(.042f,.014f,.009f),"#a92725");
+                }
                 return root;
             }
             WorldBox(root,"Dark chassis and tyres",new Vector3(0,.045f,0),new Vector3(.21f,.07f,.3f),"#263335");
@@ -189,6 +207,29 @@ namespace TableTalk
                 WorldBox(root,"Exhaust stack",new Vector3(.055f,.23f,.09f),new Vector3(.025f,.22f,.025f),"#474e49");
             }
             return root;
+        }
+
+        Mesh TrafficSurface(MeshFilter filter,Transform root)
+        {
+            var source=filter.sharedMesh;
+            if(trafficSurfaces.TryGetValue(source,out var cached))return cached;
+            var points=source.vertices;var tris=source.triangles;
+            var groups=new[]{new List<int>(),new List<int>(),new List<int>(),new List<int>()};
+            for(int i=0;i<tris.Length;i+=3)
+            {
+                Vector3 a=root.InverseTransformPoint(filter.transform.TransformPoint(points[tris[i]]));
+                Vector3 b=root.InverseTransformPoint(filter.transform.TransformPoint(points[tris[i+1]]));
+                Vector3 c=root.InverseTransformPoint(filter.transform.TransformPoint(points[tris[i+2]]));
+                Vector3 p=(a+b+c)/3,normal=Vector3.Cross(b-a,c-a).normalized;
+                int surface=Mathf.Abs(p.x)>.072f&&p.y<.075f&&Mathf.Abs(p.z)>.07f?2
+                    :p.y>.087f&&Mathf.Abs(p.z)<.125f&&Mathf.Abs(normal.y)<.72f?1
+                    :Mathf.Abs(p.z)>.19f&&p.y<.07f?3:0;
+                groups[surface].Add(tris[i]);groups[surface].Add(tris[i+1]);groups[surface].Add(tris[i+2]);
+            }
+            // All cars share the split mesh; only their paint differs.
+            var mesh=Instantiate(source);mesh.name="Traffic · paint, glazing, tyres and trim";mesh.subMeshCount=4;
+            for(int i=0;i<groups.Length;i++)mesh.SetTriangles(groups[i],i,false);
+            mesh.RecalculateBounds();trafficSurfaces[source]=mesh;landscapeMeshes.Add(mesh);return mesh;
         }
 
         Transform WorldBox(Transform parent, string name, Vector3 local, Vector3 scale, string colour)
@@ -253,7 +294,7 @@ namespace TableTalk
         void DisposeLivingWorld()
         {
             if (worldMotion != null) Destroy(worldMotion.gameObject);
-            worldActors.Clear(); windRotors.Clear(); worldMotion = null; worldPoseReady = false;
+            worldActors.Clear(); windRotors.Clear(); trafficSurfaces.Clear(); worldMotion = null; worldPoseReady = false;
         }
     }
 }

@@ -13,3 +13,7 @@ it("keeps LAN/local and explicitly configured plain sockets working", () => {
 it("uses the current HTTPS host when no separate multiplayer host is configured", () => {
   expect(roomAddress(undefined, { ...page, protocol: "https:", host: "game.example" }, false)).toEqual({ host: "game.example", protocol: "wss" });
 });
+it("uses secure shared rooms from installed desktop and mobile origins", () => {
+  for (const protocol of ["tabletalk:", "capacitor:", "http:"])
+    expect(roomAddress("wss://game.workers.dev", { ...page, protocol }, false)).toEqual({ host: "game.workers.dev", protocol: "wss" });
+});

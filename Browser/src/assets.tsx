@@ -24,7 +24,7 @@ export interface AssetCatalog {
   bytes: number;
 }
 const assetHost = import.meta.env.VITE_ASSET_HOST?.replace(/\/$/, "");
-export const assetUrl = (src: string) => assetHost ? `${assetHost}/${src}` : `${import.meta.env.BASE_URL}${src}`;
+export const assetUrl = (src: string) => import.meta.env.VITE_PACKAGED_APP === 'true' && src.startsWith('unity/') ? `${import.meta.env.BASE_URL}${src}` : assetHost ? `${assetHost}/${src}` : `${import.meta.env.BASE_URL}${src}`;
 
 interface AssetContextValue {
   catalog?: AssetCatalog;

@@ -1,0 +1,10 @@
+import { packager } from '@electron/packager';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import {readFile} from 'node:fs/promises';
+const root = fileURLToPath(new URL('..', import.meta.url));
+const {version}=JSON.parse(await readFile(path.join(root,'desktop/app/package.json'),'utf8'));
+const destination=path.resolve(root,'downloads',version);
+if(!/^\d+\.\d+\.\d+$/.test(version)||!destination.startsWith(path.join(root,'downloads')+path.sep))throw new Error('Unexpected generated package destination');
+const output = await packager({ dir: path.join(root, 'desktop/app'), out: destination, name: 'TableTalk3D', platform: 'win32', arch: 'x64', electronVersion: '45.2.1', overwrite: true, asar: true, prune: true, executableName: 'TableTalk3D', icon: path.join(root,'desktop/app/art/icon.ico') });
+console.log(JSON.stringify(output));

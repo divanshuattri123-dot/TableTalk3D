@@ -1,0 +1,12 @@
+.colour-set-event { justify-content:center; gap:26px; perspective:1200px; }
+.colour-set-event .motion-banner { z-index:2; }
+.colour-set-deeds { display:flex; align-items:center; justify-content:center; width:100%; height:min(55dvh,400px); }
+.colour-set-deeds > div { width:clamp(110px,15vw,200px); flex-shrink:0; margin-inline:-12px; transform:rotate(var(--fan-angle)); animation:set-deed-arrive .65s cubic-bezier(.16,.8,.24,1) both; animation-delay:calc(var(--deed-order) * 70ms); }
+.colour-set-deeds .title-deed { width:100%; padding:5px; }
+.colour-set-deeds .title-deed h2 { font-size:clamp(13px,1.6vw,20px); }
+.colour-set-deeds .title-deed > header { padding:12px 5px; }
+.colour-set-deeds .title-deed dl > div { padding:3px; font-size:10px; }
+.colour-set-deeds .title-deed footer,.colour-set-deeds .title-deed-region,.colour-set-deeds .title-deed-detail { display:none; }
+@keyframes set-deed-arrive { from { opacity:0;transform:translateY(60px) rotate(0) scale(.65); } to { opacity:1;transform:rotate(var(--fan-angle)); } }
+@media (max-height:500px) { .colour-set-event { inset:55px 16px 55px;gap:10px; }.colour-set-deeds { height:190px; }.colour-set-deeds > div { width:130px; }.colour-set-deeds .deed-symbol { font-size:22px;margin:4px; }.colour-set-deeds .title-deed dl { padding:3px; }.colour-set-deeds .title-deed dl > div { font-size:8px; padding:2px; }.colour-set-deeds .title-deed > header small { font-size:6px; }.colour-set-deeds .title-deed > header { padding:6px 3px; } }
+@media (prefers-reduced-motion:reduce) { .colour-set-deeds > div { animation:none; } }

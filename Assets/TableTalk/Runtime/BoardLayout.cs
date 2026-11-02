@@ -41,7 +41,7 @@ namespace TableTalk
     }
     [System.Serializable] public class BoardSnapshot
     {
-        public string roomCode, phase, activePlayerId, currencySymbol;
+        public string roomCode, phase, activePlayerId, currencySymbol, world;
         public int boardSize = 40, eventId;
         public TileSnapshot[] tiles;
         public PlayerSnapshot[] players;

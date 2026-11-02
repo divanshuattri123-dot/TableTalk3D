@@ -26,6 +26,7 @@ import { canTradeProperty, decisionPlayerId, netWorth } from "./engine/reducer";
 import { formatRupees } from "./engine/currency";
 import { canClassicManage, classicBuildingGroupLocked, classicLiquidationValue, classicSpendableCash } from "./engine/classic";
 import { makeStartAction } from "./network/startAction";
+import {rollDice} from './network/random';
 import { isPlayerColorTaken, playerColorKey } from "./engine/playerColors";
 import { usePresentation } from "./presentation/usePresentation";
 import { presentationInteractionBusy } from "./presentation/timeline";
@@ -39,7 +40,18 @@ import BoardStage from "./view/BoardStage";
 import GameMenu from "./view/GameMenu";
 import type { TablePanel } from "./view/GameMenu";
 import WelcomeMenu from "./view/WelcomeMenu";
+import MobileWelcome from "./view/MobileWelcome";
+import MobileLobby from "./view/MobileLobby";
+import CityPicker from './view/CityPicker';
+import MapPicker from './view/MapPicker';
+import {isWorldId} from './engine/worlds';
+import type {WorldId} from './engine/worlds';
+import {isCityId} from './engine/cities';
+import type {CityId} from './engine/cities';
+import {usePublisher} from './publisher/PublisherShell';
+import {STORE_PRODUCTS} from './publisher/catalog';
 import useMobileInterface from "./view/useMobileInterface";
+import { nativeMobileShell, roomShareUrl } from "./platform";
 import { enterGameFullscreen, exitGameFullscreen, fullscreenActive, releaseGameOrientation } from "./view/fullscreen";
 import LandscapeGate from "./view/LandscapeGate";
 import { useGameRoom } from "./network/useGameRoom";
@@ -92,10 +104,11 @@ const phaseLabel = (phase: GameState["phase"]): string =>
     gameOver: "Game complete"
   })[phase];
 
-const dice = (): readonly [number, number] => [
-  Math.floor(Math.random() * 6) + 1,
-  Math.floor(Math.random() * 6) + 1
-];
+const dice=rollDice;
+const packagedApp=import.meta.env.VITE_PACKAGED_APP==='true';
+function savedMapChoice():{world:WorldId;city:CityId} {
+  try{const choice=JSON.parse(localStorage.getItem('table-talk-map-choice')??'{}');return{world:isWorldId(choice.world)?choice.world:'theme000',city:isCityId(choice.city)?choice.city:'india'};}catch{return{world:'theme000',city:'india'};}
+}
 
 const tileGridPosition = (position: number, size: BoardSize): CSSProperties => {
   const side = size / 4, grid = side + 1, offset = position % side;
@@ -123,7 +136,7 @@ const makeCardDraws = (state: GameState, player: Player): CardDraw[] => {
   const draws: CardDraw[] = [];
   let position = (player.position + pending.total) % state.boardSize;
   for (let depth = 0; depth < 4; depth += 1) {
-    const tile = getTile(position, state.boardSize);
+    const tile = getTile(position, state.boardSize, state.city);
     if (tile.kind !== "chance" && tile.kind !== "community") break;
     const draw: CardDraw = { deck: tile.kind, index: Math.floor(Math.random() * 8) };
     draws.push(draw);
@@ -154,10 +167,14 @@ function TokenColorPicker({ color, players = [], localId, onChoose }: { color: s
 }
 
 function App() {
-  const [name, setName] = useState("");
-  const [roomInput, setRoomInput] = useState(roomFromUrl());
-  const [color, setColor] = useState(COLORS[0] as string);
-  const [session, setSession] = useState<Session | undefined>(savedSession);
+  const publisher=usePublisher();
+  const equippedToken=STORE_PRODUCTS.find(p=>p.id===publisher.wallet.equipped)?.assetId;
+  const [name, setName] = useState(() => { try { return String(JSON.parse(localStorage.getItem('table-talk-profile') ?? '{}').name ?? '').slice(0,24); } catch { return ''; } });
+  const [roomInput, setRoomInput] = useState(()=>packagedApp?'':roomFromUrl());
+  const [color, setColor] = useState(() => { try { return playerColorKey(JSON.parse(localStorage.getItem('table-talk-profile') ?? '{}').color ?? '') || COLORS[0]; } catch { return COLORS[0]; } });
+  const [session, setSession] = useState<Session | undefined>(()=>packagedApp?undefined:savedSession());
+  const [mapChoice,setMapChoice]=useState(savedMapChoice),[mapsOpen,setMapsOpen]=useState(false);
+  const chooseMap=(patch:Partial<typeof mapChoice>)=>setMapChoice(previous=>{const next={...previous,...patch};try{localStorage.setItem('table-talk-map-choice',JSON.stringify(next));}catch{}return next;});
   const previewCode = /^[A-Z]{4}$/.test(roomInput) ? roomInput : "";
   const preview = useGameRoom(undefined, session ? "" : previewCode);
   const returningId = savedSession(previewCode)?.player.id;
@@ -168,12 +185,15 @@ function App() {
   const { update } = useViewSettings();
   const mobile = useMobileInterface();
   const [welcomeMenu, setWelcomeMenu] = useState(false);
-  const [tokenId, setTokenId] = useState<string>();
+  const [tokenId, setTokenId] = useState<string|undefined>(equippedToken);
+  useEffect(()=>setTokenId(equippedToken),[equippedToken]);
   const [diceId, setDiceId] = useState<string>();
   const [studio, setStudio] = useState<string>();
-  useEffect(() => { if (session) writeSeat(session, seatStores()); }, [session]);
+  const [recentRoom,setRecentRoom]=useState(()=>{try{return localStorage.getItem('table-talk-recent-room')??'';}catch{return '';}});
+  useEffect(() => { if (session) { writeSeat(session, seatStores()); setRecentRoom(session.roomCode); try { localStorage.setItem('table-talk-recent-room',session.roomCode); } catch { /* The existing per-room seat is still usable. */ } } }, [session]);
   const token = byId.get(tokenId ?? catalog?.featured.tokens[0] ?? "");
   const die = byId.get(diceId ?? catalog?.featured.dice[0] ?? "");
+  const saveProfile = () => { try { localStorage.setItem('table-talk-profile',JSON.stringify({name:name.trim().slice(0,24),color})); } catch { /* A player can still join with blocked storage. */ } };
   const chooseAsset = (asset: GameAsset, use: AssetUse) => {
     if (use === "token") setTokenId(asset.id);
     else if (use === "dice") setDiceId(asset.id);
@@ -186,6 +206,9 @@ function App() {
   const begin = (roomCode: string) => {
     const normalized = roomCode.trim().toUpperCase();
     if (!name.trim() || !/^[A-Z]{4}$/.test(normalized)) return;
+    saveProfile();
+    setRecentRoom(normalized);
+    try{localStorage.setItem('table-talk-recent-room',normalized);}catch{/* The open seat still works without persistent storage. */}
     setWelcomeMenu(false);
     void enterGameFullscreen();
     const nextSession: Session = {
@@ -198,26 +221,37 @@ function App() {
   };
 
   if (session) {
-    return <GameRoom session={session} onChooseColor={nextColor => {
+    return <GameRoom session={session} preferredMap={mapChoice} onChooseColor={nextColor => {
       const nextSession = { ...session, player: { ...session.player, color: nextColor } };
       writeSeat(nextSession, seatStores());
       setColor(nextColor); setSession(nextSession);
     }} onLeave={() => {
       setName(session.player.name);
-      setRoomInput(session.roomCode);
+      setRoomInput('');
+      window.history.replaceState({},'',window.location.pathname);
       setSession(undefined);
     }} />;
   }
 
+  if (mobile || import.meta.env.VITE_PACKAGED_APP === 'true') return <>
+    <MobileWelcome name={name} color={color} roomCode={roomInput} onName={setName} onRoomCode={setRoomInput} resumeCode={recentRoom && savedSession(recentRoom) ? recentRoom : undefined} onResume={()=>begin(recentRoom)}
+      colorPicker={<TokenColorPicker color={color} players={preview.game?.players} localId={returningId} onChoose={setColor}/>}
+      joinReady={Boolean(joinReady)} roomStatus={previewCode ? !preview.game ? preview.error || (preview.connection === 'offline' ? 'Could not check this room. Try again when online.' : 'Checking available seats…') : !returning && preview.game.phase !== 'lobby' ? 'This game has already started.' : !returning && preview.game.players.length >= 6 ? 'This room is full.' : taken ? 'That colour is taken. Choose another colour.' : `${preview.game.players.length} / 6 players · Your colour is available.` : undefined}
+      error={error && <>{error} <button type="button" onClick={reload}>Retry</button></>} onCreate={()=>begin(randomCode())} onJoin={()=>begin(roomInput)} onMenu={()=>setWelcomeMenu(true)} onMaps={()=>setMapsOpen(true)} onSaveProfile={saveProfile}/>
+    {mapsOpen&&<MapPicker world={mapChoice.world} city={mapChoice.city} onWorld={world=>chooseMap({world})} onCity={city=>chooseMap({city})} onClose={()=>setMapsOpen(false)}/>}
+    {welcomeMenu && <WelcomeMenu onCustomize={category=>{setWelcomeMenu(false);setStudio(category);}} onClose={()=>setWelcomeMenu(false)}/>}
+    {studio && <Suspense fallback={<p className="asset-notice">Opening collection…</p>}><AssetStudio initialCategory={studio} selectedId={studio==='dice'?die?.id:token?.id} color={color} onClose={()=>setStudio(undefined)} onChoose={chooseAsset}/></Suspense>}
+  </>;
+
   return (
-    <main className="welcome-shell">
-      <header className="welcome-nav"><span className="wordmark">TABLE <i>TALK</i><sup>3D</sup></span><span className="welcome-status"><i className="live-dot" /> Free to play · No accounts</span>{mobile && <button className="mobile-menu-trigger" type="button" aria-label="Open game menu" aria-haspopup="dialog" aria-expanded={welcomeMenu} onClick={() => setWelcomeMenu(true)}><span aria-hidden="true">☰</span> Menu</button>}</header>
+    <main className={`welcome-shell${import.meta.env.VITE_PACKAGED_APP === "true" ? " packaged-welcome" : ""}`}>
+<header className="welcome-nav"><span className="wordmark">TABLE <i>TALK</i><sup>3D</sup></span><span className="welcome-status"><i className="live-dot" /> Free multiplayer</span><button className="publisher-link" type="button" onClick={publisher.openStore}>Store</button><button className="publisher-link" type="button" onClick={publisher.openAccount}>Guest profile</button>{(mobile || import.meta.env.VITE_PACKAGED_APP === "true") && <button className="mobile-menu-trigger" type="button" aria-label="Open game menu" aria-haspopup="dialog" aria-expanded={welcomeMenu} onClick={() => setWelcomeMenu(true)}><span aria-hidden="true">☰</span> Menu</button>}</header>
       <div className="welcome-layout">
       {!mobile && <section className="welcome-showcase" aria-label="Your 3D game piece">
         <p className="eyebrow">Big deals. Your people. One table.</p>
         <h2>The city is<br />up for <em>grabs.</em></h2>
         <p>Pick your piece. Call your friends.<br />Build a little empire together.</p>
-        <Suspense fallback={<div className="showcase-loading">Opening the 3D collection…</div>}><ModelPreview asset={token} color={color} className="hero-model" /></Suspense>
+        {import.meta.env.VITE_PACKAGED_APP !== "true" && <Suspense fallback={<div className="showcase-loading">Opening the 3D collection…</div>}><ModelPreview asset={token} color={color} className="hero-model" /></Suspense>}
         <div className="showcase-footer"><span>YOUR 3D PIECE</span><button type="button" onClick={() => setStudio("token")}>Explore {catalog?.counts.model.toLocaleString() ?? "1,044"} models ↗</button></div>
         <div className="board-scale"><span>More friends.<br /><b>Bigger neighbourhood.</b></span><div>{[["2–3",40],["4",48],["5",56],["6",64]].map(([count, size]) => <span key={count}><b>{size}</b><small>{count} players</small></span>)}</div></div>
       </section>}
@@ -263,17 +297,19 @@ function App() {
           </div>
         </div>
         {error && <p className="inline-error">{error} <button type="button" onClick={reload}>Retry</button></p>}
-        <p className="welcome-note">No install. No sign-up. Just a link.<br />Saved rooms · Automatic reconnect · Touch-friendly 3D</p>
+        <p className="welcome-note">{import.meta.env.VITE_PACKAGED_APP === "true" ? "Your city is ready. Internet connects your friends." : "No install. No sign-up. Just a link."}<br />Saved rooms · Automatic reconnect · Touch-friendly 3D</p>
       </section>
       </div>
       {!mobile && <footer className="welcome-bottom"><span>A property trading game for your own crew.</span><button type="button" onClick={() => setStudio("all")}>Browse all {catalog ? catalog.assets.length.toLocaleString() : "6,430"} assets ↗</button></footer>}
-      {mobile && welcomeMenu && <WelcomeMenu onCustomize={category => { setWelcomeMenu(false); setStudio(category); }} onClose={() => setWelcomeMenu(false)} />}
+      {welcomeMenu && <WelcomeMenu onCustomize={category => { setWelcomeMenu(false); setStudio(category); }} onClose={() => setWelcomeMenu(false)} />}
       {studio && <Suspense fallback={<p className="asset-notice">Opening collection…</p>}><AssetStudio initialCategory={studio} selectedId={studio === "dice" ? die?.id : token?.id} color={color} onClose={() => setStudio(undefined)} onChoose={chooseAsset} /></Suspense>}
     </main>
   );
 }
 
-function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLeave: () => void; onChooseColor: (color: string) => void }) {
+function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: Session; onLeave: () => void; onChooseColor: (color: string) => void;preferredMap:{world:WorldId;city:CityId} }) {
+  const mobile = useMobileInterface();
+  const [lobbyStudio,setLobbyStudio] = useState<"token" | "dice">();
   const { game, connection, error, sendAction, reconnect } = useGameRoom(session);
   const [copied, setCopied] = useState(false);
   const [unityReady, setUnityReady] = useState(false);
@@ -284,6 +320,14 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
   const [sceneUsable, setSceneUsable] = useState(false);
   const motion = usePresentation(game, unityReady);
   const sentMove = useRef("");
+  const mapConfigured=useRef(false);
+  const initialMapRequests=useRef({world:false,city:false});
+  useEffect(()=>{
+    if(mapConfigured.current||!game||game.phase!=='lobby'||game.players[0]?.id!==session.player.id||game.mode===undefined||connection!=='connected')return;
+    if(game.world===undefined){if(!initialMapRequests.current.world)initialMapRequests.current.world=sendAction({type:'SET_WORLD',playerId:session.player.id,world:preferredMap.world});return;}
+    if(game.city===undefined){if(!initialMapRequests.current.city)initialMapRequests.current.city=sendAction({type:'SET_CITY',playerId:session.player.id,city:preferredMap.city});return;}
+    mapConfigured.current=true;
+  },[game,connection,preferredMap,session.player.id,sendAction]);
 
   useEffect(() => {
     document.body.classList.add("in-game");
@@ -313,7 +357,7 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
   }, [game, me, moveKey, motion.busy, motion.visible, sceneUsable, sendAction, connection]);
 
   const copyRoomLink = async () => {
-    const link = `${window.location.origin}${window.location.pathname}?room=${session.roomCode}`;
+    const link = roomShareUrl(session.roomCode, window.location.href);
     try {
       await navigator.clipboard.writeText(link);
       setCopied(true);
@@ -344,11 +388,13 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
   const current = game.players.find((player) => player.id === decisionPlayerId(game));
   const isCurrent = connection === "connected" && me?.id === decisionPlayerId(game) && !me?.bankrupt && !motion.busy && sceneUsable;
   const isHost = game.players[0]?.id === me?.id;
+  const mobileLobby = mobile && game.phase === 'lobby';
   const shareText = copied ? "Link copied" : "Copy room link";
 
   return (
-    <main className="game-page immersive-game" data-phase={game.phase}>
+    <main className={`game-page immersive-game${mobileLobby ? ' mobile-lobby-mode' : ''}`} data-phase={game.phase}>
       <header className="game-header">
+        {mobileLobby && <button className="mobile-lobby-back menu-round-back" type="button" aria-label="Back to main menu" onClick={onLeave}>‹</button>}
         <button className="wordmark" type="button" onClick={onLeave} aria-label="Leave this table">
           TABLE <i>TALK</i>
         </button>
@@ -369,11 +415,12 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
       {connection !== "connected" && <div className="connection-recovery" role="status"><strong>{connection === "offline" ? "You’re offline" : "Reconnecting to your table…"}</strong><span>Confirmed moves are saved. Keep this room open.</span><button type="button" onClick={reconnect}>Retry now</button></div>}
       {game.notice && <p className="global-error" role="status">{game.notice}</p>}
       {screenNotice && <p className="fullscreen-notice" role="status">{screenNotice}</p>}
+      {game.rentClaim && game.rentClaim.ownerId === me?.id && !me?.bankrupt && <div className="rent-claim" role="status"><span><b>{getTile(game.rentClaim.propertyId, game.boardSize, game.city).name}</b><small>Claim before the next movement roll</small></span><button type="button" disabled={connection !== "connected" || motion.busy || !sceneUsable || ["awaitingTradeResponse", "awaitingDebt", "awaitingMortgageDecision"].includes(game.phase)} onClick={() => sendAction({ type: "CLAIM_RENT", playerId: me!.id, claimId: game.rentClaim!.id })}>Claim {formatMoney(game.rentClaim.amount)}</button></div>}
 
       <section className="game-layout">
-        <BoardStage panel={tablePanel} onPanelChange={setTablePanel} game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />
+        {mobileLobby ? <MobileLobby game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} onCopy={copyRoomLink} copied={copied} colorPicker={<TokenColorPicker color={me?.color ?? session.player.color} players={game.players} localId={session.player.id} onChoose={color=>sendAction({type:'SET_APPEARANCE',playerId:session.player.id,color})}/>}/> : <BoardStage panel={tablePanel} onPanelChange={setTablePanel} game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />}
         {game.phase !== "lobby" && <div className="live-seats" aria-label="Live player balances">{game.players.map(player => <button type="button" key={player.id} className={`${player.id === decisionPlayerId(game) ? "seat-active" : ""} ${player.bankrupt ? "seat-out" : ""}`} style={{ "--player-color": player.color } as CSSProperties} onClick={() => setDrawer("players")}><PlayerPortrait player={player} /><span><b>{player.name}{player.id === session.player.id ? " · you" : ""}</b><strong>{player.bankrupt ? "Out" : formatMoney(player.cash)}</strong>{player.inJail && <small>In jail</small>}</span></button>)}</div>}
-        <aside className="side-rail" aria-label="Game controls and status">
+        {!mobileLobby && <aside className="side-rail" aria-label="Game controls and status">
           {game.phase === "lobby" ? (
             <Lobby game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} />
           ) : (
@@ -385,13 +432,15 @@ function GameRoom({ session, onLeave, onChooseColor }: { session: Session; onLea
               )}
             </>
           )}
-        </aside>
+        </aside>}
       </section>
 
-      {drawer && <div className="hud-drawer-backdrop" onClick={() => setDrawer(undefined)}><section className={`hud-drawer${drawer === "menu" ? " game-menu-drawer" : ""}`} role="dialog" aria-modal="true" aria-labelledby="hud-drawer-title" onClick={event => event.stopPropagation()}><header><h2 id="hud-drawer-title">{drawer === "menu" ? "Game menu" : drawer === "players" ? "At the table" : "Table chatter"}</h2><button type="button" autoFocus onClick={() => setDrawer(undefined)} aria-label="Close panel">×</button></header>{drawer === "menu" ? <GameMenu roomCode={session.roomCode} copied={copied} fullscreen={fullscreen} onPanel={panel => { setDrawer(undefined); setTablePanel(panel); }} onPlayers={() => setDrawer("players")} onHistory={() => setDrawer("log")} onCopy={copyRoomLink} onFullscreen={toggleFullscreen} onLeave={onLeave} /> : drawer === "players" ? <PlayerRoster game={game} localId={session.player.id} /> : <EventLog game={game} />}</section></div>}
+{drawer && !(mobileLobby && drawer === "menu") && <div className="hud-drawer-backdrop" onClick={() => setDrawer(undefined)}><section className={`hud-drawer${drawer === "menu" ? " game-menu-drawer" : ""}`} role="dialog" aria-modal="true" aria-labelledby="hud-drawer-title" onClick={event => event.stopPropagation()}><header><h2 id="hud-drawer-title">{drawer === "menu" ? "Game menu" : drawer === "players" ? "At the table" : "Table chatter"}</h2><button type="button" autoFocus onClick={() => setDrawer(undefined)} aria-label="Close panel">×</button></header>{drawer === "menu" ? <GameMenu roomCode={session.roomCode} copied={copied} fullscreen={fullscreen} showFullscreen={!nativeMobileShell()} onPanel={panel => { setDrawer(undefined); setTablePanel(panel); }} onPlayers={() => setDrawer("players")} onHistory={() => setDrawer("log")} onCopy={copyRoomLink} onFullscreen={toggleFullscreen} onLeave={onLeave} /> : drawer === "players" ? <PlayerRoster game={game} localId={session.player.id} /> : <EventLog game={game} />}</section></div>}
 
-      <EventStage game={game} frame={motion.frame} busy={connection !== "connected" || presentationInteractionBusy(game, motion) || !sceneUsable} localId={session.player.id} sendAction={sendAction} onCardRead={motion.acknowledgeCard} financeTools={me && <ClassicFinanceMenu game={game} local={me} available={connection === "connected" && !motion.busy && sceneUsable} sendAction={sendAction} />} />
+      <EventStage game={game} frame={motion.frame} busy={connection !== "connected" || presentationInteractionBusy(game, motion) || !sceneUsable} localId={session.player.id} sendAction={sendAction} onCardRead={motion.acknowledgeCard} counterTools={me && game.pendingTrade ? () => <TradeComposer key={game.pendingTrade!.id} game={game} local={me} sendAction={sendAction} counterTrade={game.pendingTrade!} /> : undefined} financeTools={me && <ClassicFinanceMenu game={game} local={me} available={connection === "connected" && !motion.busy && sceneUsable} sendAction={sendAction} />} />
       <LandscapeGate onLeave={onLeave} />
+      {mobileLobby && drawer === 'menu' && <WelcomeMenu onClose={()=>setDrawer(undefined)} onCustomize={category=>{setDrawer(undefined);setLobbyStudio(category);}}/>}
+      {mobileLobby && lobbyStudio && <Suspense fallback={<p className="asset-notice">Opening collection…</p>}><AssetStudio initialCategory={lobbyStudio} selectedId={lobbyStudio==='token'?me?.tokenId:me?.diceId} color={me?.color ?? session.player.color} onClose={()=>setLobbyStudio(undefined)} onChoose={(asset,use)=>{sendAction({type:'SET_APPEARANCE',playerId:session.player.id,...(use==='dice'?{diceId:asset.id}:{tokenId:asset.id})});setLobbyStudio(undefined);}}/></Suspense>}
     </main>
   );
 }
@@ -407,6 +456,11 @@ function Lobby({
   isHost: boolean;
   sendAction: (action: GameAction) => void;
 }) {
+  const [maps,setMaps]=useState(false);
+  useEffect(() => {
+    if (import.meta.env.VITE_PACKAGED_APP === "true" && isHost && game.mode === undefined)
+      sendAction({ type: "SET_MODE", playerId: localId, mode: "classic", rulesEdition: "hasbro-2025" });
+  }, [game.mode, isHost, localId, sendAction]);
   const start = () => {
     sendAction(makeStartAction(game, localId));
   };
@@ -416,7 +470,10 @@ function Lobby({
     <section className="lobby-panel">
       <p className="eyebrow">Seats at the table</p>
       <h2>{game.players.length} / 6 players</h2>
-      <label className="field-label">Rules mode<select className="text-input" aria-label="Rules mode" value={game.mode ?? "expanding"} disabled={!isHost} onChange={e => sendAction({ type: "SET_MODE", playerId: localId, mode: e.target.value as "classic" | "expanding" })}><option value="expanding">Expanding India · larger with friends</option><option value="classic">Classic · 40 spaces, shuffled decks</option></select></label>
+      <button type="button" className="lobby-world-trigger" onClick={()=>setMaps(true)}>Choose 3D map</button>
+      {maps&&<MapPicker world={game.world} city={game.city} disabled={!isHost} onWorld={world=>sendAction({type:'SET_WORLD',playerId:localId,world})} onCity={city=>sendAction({type:'SET_CITY',playerId:localId,city})} onClose={()=>setMaps(false)}/>}
+      <CityPicker value={game.city} disabled={!isHost} onSelect={city=>sendAction({type:'SET_CITY',playerId:localId,city})}/>
+      <label className="field-label">Rules mode<select className="text-input" aria-label="Rules mode" value={game.rulesEdition === "hasbro-2025" ? "classic-2025" : game.mode ?? "expanding"} disabled={!isHost} onChange={e => sendAction({ type: "SET_MODE", playerId: localId, mode: e.target.value === "expanding" ? "expanding" : "classic", rulesEdition: e.target.value === "classic-2025" ? "hasbro-2025" : undefined })}><option value="classic-2025">Classic · Hasbro 2025 · claim rent</option><option value="expanding">Expanding India · larger with friends</option><option value="classic">Classic traditional · automatic rent</option></select></label>
       <div className="map-size-note"><b>{game.boardSize} spaces</b><span>{game.mode === "classic" ? "Classic India" : "Expanding India"}</span><small>{game.mode === "classic" ? "40 spaces for 2–6 players. Shuffled 16-card decks, starting dice contest and off-turn finances." : "4 players → 48 · 5 → 56 · 6 → 64. Locks at start."}</small></div>
       <PlayerRoster game={game} localId={localId} />
       {local && <details className="lobby-colours"><summary>Your token colour</summary><TokenColorPicker color={local.color} players={game.players} localId={localId} onChoose={color => sendAction({ type: "SET_APPEARANCE", playerId: localId, color })} /></details>}
@@ -441,7 +498,7 @@ function Board({ game, current, onSelect }: { game: GameState; current?: Player;
     <><nav className="flat-camera-tools" aria-label="2D board camera"><button type="button" onClick={fit} aria-label="Fit 2D board">⌂</button><button type="button" onClick={() => setZoom(value => Math.min(4, value + 1))} disabled={zoom === 4} aria-label="Zoom into 2D board">＋</button><button type="button" onClick={() => setZoom(value => Math.max(1, value - 1))} disabled={zoom === 1} aria-label="Zoom out of 2D board">−</button></nav>
     <section ref={viewport} className={`board-wrap ${zoom > 1 ? "is-zoomed" : ""}`} style={{ "--flat-zoom": zoom } as CSSProperties} aria-label="Property game board">
       <div className="board" style={{ gridTemplateColumns: `repeat(${game.boardSize / 4 + 1}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${game.boardSize / 4 + 1}, minmax(0, 1fr))` }}>
-        {getBoard(game.boardSize).map((tile) => {
+        {getBoard(game.boardSize, game.city).map((tile) => {
           const players = game.players.filter((player) => !player.bankrupt && player.position === tile.position);
           const stripe = isStreetTile(tile) ? GROUP_COLORS[tile.group] : undefined;
           const property = isPurchasableTile(tile) ? game.properties[tile.position] : undefined;
@@ -525,13 +582,13 @@ function PlayerRoster({ game, localId }: { game: GameState; localId: string }) {
   return (
     <section className="player-roster" aria-label="Players">
       {game.players.map((player) => {
-        const properties = getBoard(game.boardSize).filter(
+        const properties = getBoard(game.boardSize, game.city).filter(
           (tile) => isPurchasableTile(tile) && game.properties[tile.position]?.ownerId === player.id
         );
         return (
           <div className={`player-row ${player.id === decisionPlayerId(game) ? "active" : ""} ${player.bankrupt ? "bankrupt" : ""}`} key={player.id}>
             <PlayerPortrait player={player} />
-            <div><b>{player.name}{player.id === localId ? " (you)" : ""}</b><small>{properties.length} deed{properties.length === 1 ? "" : "s"}{player.inJail ? " · in Jail" : ""}</small><small>{byId.get(player.tokenId ?? catalog?.featured.tokens[game.players.indexOf(player) % (catalog?.featured.tokens.length || 1)] ?? "")?.label ?? "Token"} · {getTile(player.position, game.boardSize).name}</small>
+            <div><b>{player.name}{player.id === localId ? " (you)" : ""}</b><small>{properties.length} deed{properties.length === 1 ? "" : "s"}{player.inJail ? " · in Jail" : ""}</small><small>{byId.get(player.tokenId ?? catalog?.featured.tokens[game.players.indexOf(player) % (catalog?.featured.tokens.length || 1)] ?? "")?.label ?? "Token"} · {getTile(player.position, game.boardSize, game.city).name}</small>
               {properties.length > 0 && <details className="roster-deeds"><summary>View deeds</summary><ul>{properties.map((tile) => <li key={tile.position}>{tile.name}{propertyLabel(game.properties[tile.position]!) ? ` · ${propertyLabel(game.properties[tile.position]!)}` : ""}</li>)}</ul></details>}
             </div>
             <strong>{player.bankrupt ? "Out" : formatMoney(player.cash)}</strong>
@@ -569,7 +626,7 @@ function Controls({
     if (!debt) { setShowBuild(false); setShowTrade(false); setConfirmBankruptcy(false); }
   }, [game.phase, debt?.playerId, local.id]);
   const ownProperties = useMemo(
-    () => getBoard(game.boardSize).filter((tile) => isPurchasableTile(tile) && game.properties[tile.position]?.ownerId === local.id),
+    () => getBoard(game.boardSize, game.city).filter((tile) => isPurchasableTile(tile) && game.properties[tile.position]?.ownerId === local.id),
     [game.properties, game.boardSize, local.id]
   );
 
@@ -624,7 +681,7 @@ function ClassicFinanceMenu({game,local,available,sendAction}:{game:GameState;lo
   const [tool,setTool]=useState<"build"|"trade">();
   useEffect(()=>{if(!tool)return;const close=(event:KeyboardEvent)=>{if(event.key==="Escape")setTool(undefined);};window.addEventListener("keydown",close);return()=>window.removeEventListener("keydown",close);},[tool]);
   if(game.mode!=="classic" || !available || !canClassicManage(game,local.id))return null;
-  const properties=getBoard(game.boardSize).filter(t=>isPurchasableTile(t) && game.properties[t.position]!.ownerId===local.id);
+  const properties=getBoard(game.boardSize, game.city).filter(t=>isPurchasableTile(t) && game.properties[t.position]!.ownerId===local.id);
   return <div className="classic-finance-menu"><button className="event-secondary" type="button" onClick={()=>setTool("build")}>Manage deeds</button><button className="event-secondary" type="button" onClick={()=>setTool("trade")}>Propose trade</button>{tool && createPortal(<div className="finance-backdrop" onClick={()=>setTool(undefined)}><section className="finance-sheet" role="dialog" aria-modal="true" aria-label={tool==="build"?"Manage deeds during a decision":"Propose a trade during a decision"} onClick={e=>e.stopPropagation()}><header><h2>{tool==="build"?"Your property desk":"Make a deal"}</h2><button autoFocus type="button" aria-label="Close finance desk" onClick={()=>setTool(undefined)}>×</button></header>{tool==="build"?<PropertyTools game={game} player={local} properties={properties} sendAction={sendAction}/>:<TradeComposer game={game} local={local} sendAction={sendAction}/>}</section></div>,document.body)}</div>;
 }
 
@@ -655,12 +712,13 @@ function PropertyTools({
         const canBuild = !locked && game.auction?.kind !== "house" && game.auction?.kind !== "hotel" && tile.kind === "property" && clearSet && game.phase !== "awaitingDebt" && property.houses < 5 && property.houses === Math.min(...levels) && cash >= tile.houseCost && (property.houses === 4 ? game.bankHotels > 0 : game.bankHouses > 0);
         const canSell = !locked && clearSet && property.houses > 0 && property.houses === Math.max(...levels) && (property.houses < 5 || game.bankHouses >= 4);
         const canMortgage = !locked && (property.mortgaged ? game.phase !== "awaitingDebt" && cash >= tile.mortgageValue + Math.ceil(tile.mortgageValue / 10) : !levels.some(level => level > 0));
+        const buildReason=tile.kind!=="property"?"":locked?"This district is reserved by an active auction.":game.auction?.kind==="house"||game.auction?.kind==="hotel"?"Finish the building auction first.":!district.every(member=>game.properties[member.position]?.ownerId===player.id)?"Own every deed in this colour set to build.":!clearSet?"Unmortgage the whole colour set first.":game.phase==="awaitingDebt"?"Settle the debt before buying buildings.":property.houses>=5?"Hotel complete.":property.houses!==Math.min(...levels)?"Build evenly: improve the less developed deeds first.":cash<tile.houseCost?"You need more available cash to build.":property.houses===4&&game.bankHotels===0?"The bank has no hotels left.":property.houses<4&&game.bankHouses===0?"The bank has no houses left.":"";
         const refund = tile.kind === "property" ? classic && property.buildingCosts?.length ? property.buildingCosts.at(-1)!/2 : Math.floor(tile.houseCost/2) : 0;
         return (
           <div className="deed-row" key={tile.position}>
-            <div><b>{tile.name}</b><small>{propertyLabel(property) || "Unimproved"}</small></div>
+            <div><b>{tile.name}</b><small>{propertyLabel(property) || "Unimproved"}</small>{tile.kind==="property"&&<small className="deed-rule-note" id={`deed-build-${tile.position}`}>{buildReason||`${property.houses===4?"Hotel":"House"} costs ${formatMoney(tile.houseCost)}`}</small>}</div>
             <div className="deed-actions">
-              {tile.kind === "property" && <><button type="button" disabled={!canBuild} title="Build evenly on a complete, unmortgaged set with available bank stock." aria-label={`Build on ${tile.name}`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "build" })}>+</button><button type="button" disabled={!canSell} title={property.houses === 5 && game.bankHouses < 4 ? "No replacement houses: use Sell district buildings instead." : "Sell evenly from the most developed properties."} aria-label={`Sell a building on ${tile.name}`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "sell" })}>Sell {formatMoney(refund)}</button></>}
+              {tile.kind === "property" && <><button type="button" disabled={!canBuild} title={buildReason||"Build evenly on a complete colour set."} aria-describedby={`deed-build-${tile.position}`} aria-label={`Build on ${tile.name}`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "build" })}>{property.houses===4?"Hotel":"House"} {formatMoney(tile.houseCost)}</button><button type="button" disabled={!canSell} title={property.houses === 5 && game.bankHouses < 4 ? "No replacement houses: use Sell district buildings instead." : "Sell evenly from the most developed properties."} aria-label={`Sell a building on ${tile.name}`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "sell" })}>Sell {formatMoney(refund)}</button></>}
               {tile.kind === "property" && !locked && property.houses === 5 && game.bankHouses < 4 && <button type="button" aria-label={`Sell all buildings in ${tile.group} district`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "sellGroup" })}>Sell district buildings {formatMoney(liquidation)}</button>}
               <button type="button" disabled={!canMortgage} title="Sell every building in the district before mortgaging. Repaying a mortgage includes 10% interest." aria-label={`${property.mortgaged ? "Unmortgage" : "Mortgage"} ${tile.name}`} onClick={() => sendAction({ type: "MORTGAGE", playerId: player.id, propertyId: tile.position, mortgage: !property.mortgaged })}>{property.mortgaged ? "Unmortgage" : `Mortgage ${formatMoney(tile.mortgageValue)}`}</button>
             </div>
@@ -687,59 +745,59 @@ function TradeResponse({
   return (
     <div className="trade-response">
       <p className="eyebrow">Trade from {from?.name}</p>
-      <p>You receive {formatMoney(trade.offeredCash)}{trade.offeredPropertyIds.length ? ` + ${trade.offeredPropertyIds.map((id) => getTile(id, game.boardSize).name).join(", ")}` : ""}.</p>
-      <p>You give {formatMoney(trade.requestedCash)}{trade.requestedPropertyIds.length ? ` + ${trade.requestedPropertyIds.map((id) => getTile(id, game.boardSize).name).join(", ")}` : ""}.</p>
+      <p>You receive {formatMoney(trade.offeredCash)}{trade.offeredPropertyIds.length ? ` + ${trade.offeredPropertyIds.map((id) => getTile(id, game.boardSize, game.city).name).join(", ")}` : ""}.</p>
+      <p>You give {formatMoney(trade.requestedCash)}{trade.requestedPropertyIds.length ? ` + ${trade.requestedPropertyIds.map((id) => getTile(id, game.boardSize, game.city).name).join(", ")}` : ""}.</p>
       <div><button className="primary-button" type="button" onClick={() => sendAction({ type: "TRADE_ACCEPT", playerId: local.id, offerId: trade.id })}>Accept</button><button className="secondary-button" type="button" onClick={() => sendAction({ type: "TRADE_DECLINE", playerId: local.id, offerId: trade.id })}>Decline</button></div>
     </div>
   );
 }
 
-function TradeComposer({ game, local, sendAction }: { game: GameState; local: Player; sendAction: (action: GameAction) => void }) {
+function TradeComposer({ game, local, sendAction, counterTrade }: { game: GameState; local: Player; sendAction: (action: GameAction) => void; counterTrade?: NonNullable<GameState['pendingTrade']> }) {
   const otherPlayers = game.players.filter((player) => player.id !== local.id && !player.bankrupt);
-  const [toPlayerId, setToPlayerId] = useState(otherPlayers[0]?.id ?? "");
-  const [offeredCash, setOfferedCash] = useState("0");
-  const [requestedCash, setRequestedCash] = useState("0");
-  const [offeredIds, setOfferedIds] = useState<number[]>([]);
-  const [requestedIds, setRequestedIds] = useState<number[]>([]);
-  const [offeredCards,setOfferedCards]=useState<CardDeck[]>([]),[requestedCards,setRequestedCards]=useState<CardDeck[]>([]);
+  const [toPlayerId, setToPlayerId] = useState(counterTrade?.fromPlayerId ?? otherPlayers[0]?.id ?? "");
+  const [offeredCash, setOfferedCash] = useState(String(counterTrade?.requestedCash ?? 0));
+  const [requestedCash, setRequestedCash] = useState(String(counterTrade?.offeredCash ?? 0));
+  const [offeredIds, setOfferedIds] = useState<number[]>(counterTrade?.requestedPropertyIds ?? []);
+  const [requestedIds, setRequestedIds] = useState<number[]>(counterTrade?.offeredPropertyIds ?? []);
+  const [offeredCards,setOfferedCards]=useState<CardDeck[]>(counterTrade?.requestedJailCards ?? []),[requestedCards,setRequestedCards]=useState<CardDeck[]>(counterTrade?.offeredJailCards ?? []);
   const target = game.players.find((player) => player.id === toPlayerId);
   const classic=game.mode==="classic", round=(s:string)=>Math.max(0,classic?Math.round((Number(s)||0)*100)/100:Math.floor(Number(s)||0));
   const giving = round(offeredCash), asking = round(requestedCash);
   const hasAsset=offeredIds.length+requestedIds.length+offeredCards.length+requestedCards.length>0;
   const hasTerms = classic ? hasAsset : giving > 0 || asking > 0 || hasAsset;
   const myCash=classic?classicSpendableCash(game,local.id):local.cash, theirCash=classic?classicSpendableCash(game,toPlayerId):target?.cash??0;
-  const fee=(ids:number[])=>classic?ids.reduce((n,id)=>n+(game.properties[id]?.mortgaged?Math.ceil(getPurchasableTile(id,game.boardSize)!.mortgageValue/10):0),0):0;
+  const fee=(ids:number[])=>classic && game.rulesEdition !== "hasbro-2025" ? ids.reduce((n,id)=>n+(game.properties[id]?.mortgaged?Math.ceil(getPurchasableTile(id, game.boardSize, game.city)!.mortgageValue/10):0),0):0;
   const affordable = giving <= Math.max(0, myCash) && asking <= Math.max(0, theirCash) && (!fee(requestedIds) || myCash-giving+asking>=fee(requestedIds)) && (!fee(offeredIds) || theirCash-asking+giving>=fee(offeredIds));
-  const mine = getBoard(game.boardSize).filter((tile) => canTradeProperty(game, tile.position, local.id));
-  const theirs = getBoard(game.boardSize).filter((tile) => canTradeProperty(game, tile.position, toPlayerId));
+  const mine = getBoard(game.boardSize, game.city).filter((tile) => canTradeProperty(game, tile.position, local.id));
+  const theirs = getBoard(game.boardSize, game.city).filter((tile) => canTradeProperty(game, tile.position, toPlayerId));
   const toggle = (propertyId: number, list: number[], setList: (items: number[]) => void) => setList(list.includes(propertyId) ? list.filter((value) => value !== propertyId) : [...list, propertyId]);
 
   const sendOffer = () => {
     if (!target) return;
-    sendAction({
-      type: "TRADE_OFFER",
+    const terms = {
       playerId: local.id,
       offerId: `trade-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      toPlayerId,
       offeredCash: giving,
       offeredPropertyIds: offeredIds,
       requestedCash: asking,
       requestedPropertyIds: requestedIds,
       ...(classic?{offeredJailCards:offeredCards,requestedJailCards:requestedCards}:{})
-    });
+    };
+    if (counterTrade) sendAction({type:'TRADE_COUNTER', previousOfferId:counterTrade.id, ...terms});
+    else sendAction({type:'TRADE_OFFER', toPlayerId, ...terms});
   };
 
   return (
     <div className="trade-composer">
       <p className="eyebrow">Write a trade</p>
-      <label className="field-label">Trade with<select className="text-input" value={toPlayerId} onChange={(event) => { setToPlayerId(event.target.value); setRequestedIds([]); setRequestedCards([]); }}><option value="">Choose player</option>{otherPlayers.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label>
+      <label className="field-label">Trade with<select className="text-input" disabled={Boolean(counterTrade)} value={toPlayerId} onChange={(event) => { setToPlayerId(event.target.value); setRequestedIds([]); setRequestedCards([]); }}><option value="">Choose player</option>{otherPlayers.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label>
       <div className="cash-inputs"><label>Give ₹<input className="text-input" type="number" min="0" step={classic?"0.01":"1"} value={offeredCash} onChange={(event) => setOfferedCash(event.target.value)} /></label><label>Ask ₹<input className="text-input" type="number" min="0" step={classic?"0.01":"1"} value={requestedCash} onChange={(event) => setRequestedCash(event.target.value)} /></label></div>
       <PropertyChecks title="Your deeds" properties={mine} selected={offeredIds} toggle={(id) => toggle(id, offeredIds, setOfferedIds)} />
       <PropertyChecks title={`${target?.name ?? "Their"} deeds`} properties={theirs} selected={requestedIds} toggle={(id) => toggle(id, requestedIds, setRequestedIds)} />
-      {classic && <><JailCardChecks title="Your release cards" cards={local.jailCardDecks??[]} selected={offeredCards} onChange={setOfferedCards}/><JailCardChecks title="Their release cards" cards={target?.jailCardDecks??[]} selected={requestedCards} onChange={setRequestedCards}/><p className="waiting-note">Received mortgages cost 10% interest immediately, or principal + 10% to redeem. Minimum interest: you {formatMoney(fee(requestedIds))} · {target?.name??"partner"} {formatMoney(fee(offeredIds))}. Leading auction bids remain reserved.</p></>}
+      {classic && <><JailCardChecks title="Your release cards" cards={local.jailCardDecks??[]} selected={offeredCards} onChange={setOfferedCards}/><JailCardChecks title="Their release cards" cards={target?.jailCardDecks??[]} selected={requestedCards} onChange={setRequestedCards}/><p className="waiting-note">{game.rulesEdition === "hasbro-2025" ? "Received mortgages may stay mortgaged for free. Redemption costs principal + 10%." : `Received mortgages cost 10% interest immediately, or principal + 10% to redeem. Minimum interest: you ${formatMoney(fee(requestedIds))} · ${target?.name??"partner"} ${formatMoney(fee(offeredIds))}.`} Leading auction bids remain reserved.</p></>}
       {!hasTerms && <p className="waiting-note">{classic?"Include at least one deed or release card. Classic has no unsecured cash-only gifts.":"Choose cash or a deed to include in the offer."}</p>}
       {!affordable && <p className="inline-error" role="status">Each player needs enough unreserved cash, including any received-mortgage interest.</p>}
-      <button className="primary-button" disabled={!target || !hasTerms || !affordable} type="button" onClick={sendOffer}>Send trade offer</button>
+      <button className="primary-button" disabled={!target || !hasTerms || !affordable} type="button" onClick={sendOffer}>{counterTrade ? 'Send counter-offer' : 'Send trade offer'}</button>
     </div>
   );
 }

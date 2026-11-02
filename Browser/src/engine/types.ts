@@ -1,3 +1,5 @@
+import type { CityId } from './cities';
+import type {WorldId} from './worlds';
 export type Dice = readonly [number, number];
 
 export type ColorGroup =
@@ -129,6 +131,7 @@ export interface AuctionState {
 }
 
 export interface TradeOffer {
+  counterOfId?: string;
   id: string;
   fromPlayerId: string;
   toPlayerId: string;
@@ -169,6 +172,10 @@ export interface GameEvent {
 }
 
 export interface GameState {
+  world?: WorldId;
+  city?: CityId;
+  rulesEdition?: 'hasbro-2025';
+  rentClaim?: { id: number; ownerId: string; payerId: string; propertyId: number; amount: number };
   mode?: GameMode;
   decks?: Record<CardDeck, number[]>;
   setupRolls?: SetupRoll[][];
@@ -206,8 +213,11 @@ export interface GameState {
 export type PayKind = "jailFine" | "jailCard";
 
 export type GameAction =
+  | {type:'SET_WORLD';playerId:string;world:WorldId}
+  | { type:'SET_CITY'; playerId:string; city:CityId }
   | { type: "JOIN"; player: PlayerInput }
-  | { type: "SET_MODE"; playerId: string; mode: GameMode }
+  | { type: "SET_MODE"; playerId: string; mode: GameMode; rulesEdition?: 'hasbro-2025' }
+  | { type: "CLAIM_RENT"; playerId: string; claimId: number }
   | { type: "SET_APPEARANCE"; playerId: string; tokenId?: string; diceId?: string; color?: string }
   | { type: "START"; playerId: string; firstPlayerId: string; setupRolls?: SetupRoll[][]; deckOrder?: Record<CardDeck, number[]> }
   | { type: "ROLL"; playerId: string; dice: Dice }
@@ -239,4 +249,5 @@ export type GameAction =
       requestedJailCards?: CardDeck[];
     }
   | { type: "TRADE_ACCEPT"; playerId: string; offerId: string }
+  | { type: "TRADE_COUNTER"; playerId: string; previousOfferId: string; offerId: string; offeredCash: number; requestedCash: number; offeredPropertyIds: number[]; requestedPropertyIds: number[]; offeredJailCards?: CardDeck[]; requestedJailCards?: CardDeck[] }
   | { type: "TRADE_DECLINE"; playerId: string; offerId: string };

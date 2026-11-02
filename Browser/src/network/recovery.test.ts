@@ -28,6 +28,15 @@ async function buyFirst(room: SavedRoom) {
 }
 
 describe("durable room checkpoints", () => {
+  it('preserves the selected 3D map and city across a saved-room restart',async()=>{
+    const storage=memoryStorage(),room=new SavedRoom(storage,'MAPS');await room.load();
+    await room.apply({type:'JOIN',player},'a');await room.apply({type:'JOIN',player:other},'b');
+    await room.apply({type:'SET_WORLD',playerId:'p1',world:'theme010'},'world');
+    await room.apply({type:'SET_CITY',playerId:'p1',city:'tokyo'},'city');
+    await room.apply({type:'START',playerId:'p1',firstPlayerId:'p1'},'start');await buyFirst(room);
+    const restarted=new SavedRoom(storage,'MAPS');await restarted.load();expect(restarted.state).toEqual(room.state);
+    expect(restarted.state.world).toBe('theme010');expect(restarted.state.city).toBe('tokyo');
+  });
   it("restores Classic deck order, held cards and an interrupted mortgage-transfer decision",async()=>{
     const storage=memoryStorage(),room=new SavedRoom(storage,"CLSC");await room.load();
     await room.apply({type:"JOIN",player},"a");await room.apply({type:"JOIN",player:other},"b");await room.apply({type:"SET_MODE",playerId:"p1",mode:"classic"},"mode");
@@ -148,6 +157,12 @@ describe("automatic room recovery", () => {
     const { link, snapshot, socket } = channel(); link.open(); snapshot(); link.disconnected(true); socket.readyState = 3;
     expect(link.sendAction(action("END_TURN"))).toBe(false); expect(socket.send).not.toHaveBeenCalled();
   });
+  it("keeps controls offline when an old socket delivers a late state or pong",()=>{
+    const c=channel();c.link.open();c.snapshot();c.link.disconnected(true);c.snapshot();c.link.receive("pong");
+    expect(c.callbacks.status).toHaveBeenLastCalledWith("offline");expect(c.link.sendAction(action("END_TURN"))).toBe(false);
+    c.advance(60_000);c.link.tick();expect(c.socket.reconnect).not.toHaveBeenCalled();
+    c.link.resume();c.link.open();c.snapshot();expect(c.link.sendAction(action("END_TURN"))).toBe(true);
+  });
   it("adds a missing seat once without changing a returning player's name or cash", () => {
     const c = channel(); c.link.open(); c.link.receive(JSON.stringify({ type: "state", state: createInitialState("TEST") }));
     expect(JSON.parse(c.socket.send.mock.lastCall![0])).toEqual({ type: "action", action: { type: "JOIN", player }, id: "client:join" });
@@ -167,6 +182,27 @@ describe("automatic room recovery", () => {
     const c = channel(); c.link.open(); c.snapshot(); c.link.resume();
     expect(c.socket.send).toHaveBeenLastCalledWith('{"type":"sync"}'); c.advance(31_000); c.link.resume();
     expect(c.socket.reconnect).toHaveBeenCalledOnce();
+  });
+  it("blocks stale-screen actions on resume until a fresh room snapshot arrives", () => {
+    const c=channel();c.link.open();c.snapshot();c.link.resume();
+    expect(c.callbacks.status).toHaveBeenLastCalledWith("connecting");
+    expect(c.link.sendAction(action("END_TURN"))).toBe(false);
+    c.link.receive("pong");expect(c.link.sendAction(action("END_TURN"))).toBe(false);
+    c.snapshot();expect(c.link.sendAction(action("END_TURN"))).toBe(true);
+  });
+  it("coalesces visibility and pageshow resyncs while waiting for the same snapshot", () => {
+    const c=channel();c.link.open();c.snapshot();c.link.resume();c.link.resume();
+    expect(c.socket.send).toHaveBeenCalledTimes(1);expect(c.socket.reconnect).not.toHaveBeenCalled();
+  });
+  it("reconnects if a resume snapshot never arrives even when heartbeat pong continues", () => {
+    const c=channel();c.link.open();c.snapshot();c.link.resume();c.advance(13_000);c.link.receive("pong");c.link.tick();
+    expect(c.socket.reconnect).toHaveBeenCalledOnce();
+  });
+  it("preserves the receipt of an in-flight decision through the resume barrier", () => {
+    const c=channel();c.link.open();c.snapshot();c.link.sendAction(action("END_TURN"));
+    const receipt=c.socket.send.mock.lastCall![0];c.link.resume();
+    expect(c.link.sendAction(action("BUY",{propertyId:3}))).toBe(false);c.snapshot();
+    expect(c.socket.send).toHaveBeenLastCalledWith(receipt);
   });
   it("reopens an offline connection immediately even if its stale socket still claims to be open", () => {
     const c = channel(); c.link.open(); c.snapshot(); c.link.disconnected(true);

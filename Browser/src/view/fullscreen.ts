@@ -1,3 +1,4 @@
+import { nativeMobileShell } from '../platform';
 type FullscreenDocument = Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => Promise<void> };
 type FullscreenElement = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
 type OrientationControl = { lock?: (orientation: "landscape") => Promise<void>; unlock?: () => void };
@@ -12,7 +13,7 @@ export function releaseGameOrientation(orientation: OrientationControl = screen.
   try { orientation?.unlock?.(); } catch { /* Some browsers expose the API but disallow it in an embedded page. */ }
 }
 
-export const fullscreenActive = () => Boolean(document.fullscreenElement || (document as FullscreenDocument).webkitFullscreenElement);
+export const fullscreenActive = () => nativeMobileShell() || Boolean(document.fullscreenElement || (document as FullscreenDocument).webkitFullscreenElement);
 
 export async function enterGameFullscreen(element: HTMLElement = document.documentElement): Promise<boolean> {
   try {

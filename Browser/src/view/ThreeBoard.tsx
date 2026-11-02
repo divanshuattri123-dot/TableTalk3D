@@ -76,7 +76,7 @@ export default function ThreeBoard({ game, settings, onSelect, onFallback, onCam
     const rim = new THREE.Mesh(new RoundedBoxGeometry(boardSpan(game.boardSize) + .34, .13, boardSpan(game.boardSize) + .34, 2, .1), new THREE.MeshStandardMaterial({ color: "#435a52", roughness: .8 }));
     rim.position.y = -.72; scene.add(rim);
 
-    const board = getBoard(game.boardSize);
+    const board = getBoard(game.boardSize, game.city);
     const tileGeo = new THREE.BoxGeometry(1, .15, 1);
     const tiles = new THREE.InstancedMesh(tileGeo, new THREE.MeshStandardMaterial({ color: "#b2d0ac", roughness: .9 }), board.length);
     const matrix = new THREE.Matrix4();

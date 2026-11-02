@@ -1,4 +1,5 @@
 import {
+  cityText,
   getBoard,
   boardSizeForPlayers,
   classicPosition,
@@ -14,6 +15,8 @@ import {
 import { formatRupees } from "./currency";
 import { isPlayerColorTaken, playerColorKey } from "./playerColors";
 import { canClassicTradeProperty, reduceClassic, startClassic } from "./classic";
+import { cityInfo, isCityId } from './cities';
+import {isWorldId,worldInfo} from './worlds';
 import type {
   AuctionState,
   BoardSize,
@@ -1083,6 +1086,15 @@ const handleTradeOffer = (
   );
 };
 
+const handleTradeCounter = (state: GameState, action: Extract<GameAction, { type: "TRADE_COUNTER" }>): GameState => {
+  const previous = state.pendingTrade;
+  if (state.phase !== "awaitingTradeResponse" || !previous || previous.id !== action.previousOfferId || previous.toPlayerId !== action.playerId || !action.offerId || action.offerId === previous.id) return reject(state, "Only the recipient may counter the current offer with a new ID.");
+  const offer: TradeOffer = { ...action, id: action.offerId, counterOfId: previous.id, fromPlayerId: action.playerId, toPlayerId: previous.fromPlayerId, resumePhase: previous.resumePhase };
+  if (!offer.offeredCash && !offer.requestedCash && !offer.offeredPropertyIds.length && !offer.requestedPropertyIds.length) return reject(state, "A counter-offer must include cash or a deed.");
+  const error = validTradeTerms(state, offer);
+  return error ? reject(state, error) : addEvent({ ...state, pendingTrade: offer }, `${playerName(state, action.playerId)} counter-offered to ${playerName(state, offer.toPlayerId)}.`, "info", { playerId: action.playerId });
+};
+
 const handleTradeAccept = (
   state: GameState,
   action: Extract<GameAction, { type: "TRADE_ACCEPT" }>
@@ -1147,14 +1159,25 @@ const handleTradeDecline = (
 
 const applyAction = (state: GameState, action: GameAction): GameState => {
   switch (action.type) {
+    case 'SET_WORLD': {
+      if(state.phase!=='lobby'||state.players[0]?.id!==action.playerId)return reject(state,'Only the host can choose a map before starting.');
+      if(!isWorldId(action.world))return reject(state,'Choose an available map.');
+      return addEvent({...state,world:action.world},`The room selected ${worldInfo(action.world).name}.`);
+    }
+    case 'SET_CITY': {
+      if(state.phase!=='lobby' || state.players[0]?.id!==action.playerId)return reject(state,'Only the host can choose a city before starting.');
+      if(!isCityId(action.city))return reject(state,'Choose an available city.');
+      return addEvent({...state,city:action.city},`The room selected ${cityInfo(action.city).name}.`);
+    }
     case "SET_MODE": {
       if (state.phase !== "lobby" || state.players[0]?.id !== action.playerId) return reject(state, "Only the room creator can choose a mode before starting.");
       if (action.mode !== "classic" && action.mode !== "expanding") return reject(state, "Choose Classic or Expanding.");
       const initial = createInitialState(state.roomCode, action.mode === "classic" ? 40 : boardSizeForPlayers(state.players.length));
-      return addEvent({ ...state, mode: action.mode, boardSize: initial.boardSize, properties: initial.properties,
+      return addEvent({ ...state, mode: action.mode, rulesEdition: action.mode === 'classic' ? action.rulesEdition : undefined, boardSize: initial.boardSize, properties: initial.properties,
         bankHouses: initial.bankHouses, bankHotels: initial.bankHotels }, `The room selected ${action.mode === "classic" ? "Classic · 40 spaces" : "Expanding Indian board"}.`);
     }
     case "RESOLVE_MORTGAGES": return reject(state, "Mortgage-transfer decisions belong to Classic mode.");
+    case "CLAIM_RENT": return reject(state, "Rent claims belong to Hasbro 2025 Classic games.");
     case "JOIN":
       return handleJoin(state, action);
     case "SET_APPEARANCE": {
@@ -1195,6 +1218,8 @@ const applyAction = (state: GameState, action: GameAction): GameState => {
       return handleAuctionBid(state, action);
     case "TRADE_OFFER":
       return handleTradeOffer(state, action);
+    case "TRADE_COUNTER":
+      return handleTradeCounter(state, action);
     case "TRADE_ACCEPT":
       return handleTradeAccept(state, action);
     case "TRADE_DECLINE":
@@ -1225,13 +1250,13 @@ const synchronizeDebt = (state: GameState): GameState => {
   return { ...next, phase: next.pendingTrade ? "awaitingTradeResponse" : "awaitingDebt", debts: outstanding, debtResumePhase: resume };
 };
 
-export const reduceGame = (state: GameState, action: GameAction): GameState => {
+const reduceCore = (state: GameState, action: GameAction): GameState => {
   if (state.mode === "classic" && state.phase !== "lobby") return reduceClassic(state, action);
   const before = synchronizeDebt(state), debt = before.debts?.[0];
   if (debt) {
     const actor = "playerId" in action ? action.playerId : "";
     const reply = before.phase === "awaitingTradeResponse" && (
-      before.pendingTrade?.toPlayerId === actor && (action.type === "TRADE_ACCEPT" || action.type === "TRADE_DECLINE") ||
+      before.pendingTrade?.toPlayerId === actor && (action.type === "TRADE_ACCEPT" || action.type === "TRADE_DECLINE" || action.type === "TRADE_COUNTER") ||
       before.pendingTrade?.fromPlayerId === actor && action.type === "TRADE_DECLINE"
     );
     const managing = before.phase === "awaitingDebt" && "playerId" in action && action.playerId === debt.playerId &&
@@ -1257,4 +1282,15 @@ export const reduceGame = (state: GameState, action: GameAction): GameState => {
     }, `${getTile(propertyId!, next.boardSize).name} is up for a bank repossession auction.`);
   }
   return next;
+};
+
+export const reduceGame = (state:GameState,action:GameAction):GameState => {
+  const next=reduceCore(state,action);
+  if(!next.city || next.city==='india')return next;
+  const translate=(text:string)=>cityText(text,next.city,next.boardSize);
+  return {...next,eventLog:next.eventLog.map(event=>{
+    if(event.id<state.nextEventId)return event;
+    const actor=next.players.find(p=>p.id===event.playerId),prefix=actor && event.text.startsWith(actor.name+' ')?actor.name+' ':'';
+    return {...event,text:prefix+translate(event.text.slice(prefix.length))};
+  }),...(next.card?{card:{...next.card,text:translate(next.card.text)}}:{}),...(next.notice?{notice:translate(next.notice)}:{}),...(next.debts?{debts:next.debts.map(debt=>({...debt,reason:translate(debt.reason)}))}:{})};
 };

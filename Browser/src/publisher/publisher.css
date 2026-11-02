@@ -1,0 +1,102 @@
+:root { --publisher-navy:#112b3b;--publisher-gold:#e9c181;--publisher-teal:#177d88; }
+.publisher-intro { position:fixed;inset:0;z-index:200;display:grid;place-items:center;overflow:hidden;color:#efcf95;background:radial-gradient(ellipse at 50% 60%,#234e5b,#0e2534 50%,#081820);font-family:"Trebuchet MS","Segoe UI",sans-serif; }
+.publisher-intro::before,.publisher-intro::after { content:"";position:absolute;width:65vmin;height:65vmin;border:1px solid #eac68a16;transform:rotate(45deg); }
+.publisher-intro::after { width:90vmin;height:90vmin; }
+.publisher-signature { position:relative;z-index:1;text-align:center;animation:publisher-sign-in 1s ease-out both; }
+.publisher-mark { display:block;width:clamp(100px,18vmin,180px);margin:0 auto 15px;filter:drop-shadow(0 8px 20px #0004); }
+.publisher-orbit { stroke-dasharray:440;stroke-dashoffset:440;animation:publisher-orbit-draw 1.4s ease-out forwards; }
+.publisher-monogram { animation:publisher-monogram-in .9s .3s both;transform-origin:center; }
+.publisher-signature h1 { margin:0;font:500 clamp(30px,6vw,64px)/1.2 Georgia,serif;letter-spacing:.025em;text-shadow:0 4px 15px #0005;animation:publisher-word-in .7s .6s both; }
+.publisher-signature p { margin:15px 0 0;font-size:clamp(8px,1.4vw,12px);letter-spacing:.29em;animation:publisher-word-in .7s .95s both; }
+.publisher-light { position:absolute;inset:-50%;background:linear-gradient(110deg,transparent 40%,#f9d9a116 48%,transparent 56%);animation:publisher-light-pass 2.6s ease-in-out both; }
+.publisher-intro > button { position:absolute;z-index:2;right:max(20px,env(safe-area-inset-right));bottom:max(18px,env(safe-area-inset-bottom));display:flex;gap:25px;align-items:center;min-height:42px;padding:8px 16px;border:1px solid #ecc78d4d;border-radius:24px;background:#122d3b99;color:#f4dcb4;font:600 12px "Segoe UI",sans-serif; }
+@keyframes publisher-sign-in { from { opacity:0;transform:translateY(10px); } }
+@keyframes publisher-orbit-draw { to { stroke-dashoffset:0; } }
+@keyframes publisher-monogram-in { from { opacity:0;transform:scale(.9); } }
+@keyframes publisher-word-in { from { opacity:0;transform:translateY(8px); } }
+@keyframes publisher-light-pass { from { transform:translateX(-35%); } to { transform:translateX(35%); } }
+.publisher-login { position:relative;isolation:isolate;display:grid;grid-template-rows:auto 1fr auto;min-height:100dvh;padding:24px 6vw;color:#f8f5ed;background:radial-gradient(ellipse at 0 70%,#357b7c,#183e50 55%,#102a3b);font-family:"Segoe UI",sans-serif;overflow:hidden; }
+.publisher-login > header { display:flex;align-items:center;justify-content:space-between;gap:20px;z-index:1; }
+.publisher-login > header > span { font:500 22px Georgia,serif;color:#e6cb9a; }
+.publisher-login > header small { padding:7px 11px;border:1px solid #ffffff44;border-radius:20px;font-size:9px;letter-spacing:.15em; }
+.login-card { justify-self:end;align-self:center;width:min(440px,100%);padding:30px 36px;background:#fffdf5;border:1px solid #ffffff88;border-radius:24px 4px;box-shadow:0 20px 70px #07192466;color:#173b4c;z-index:1;animation:publisher-sign-in .4s both; }
+.publisher-kicker { font-size:9px;font-weight:800;letter-spacing:.16em; }
+.login-card h1 { margin:16px 0;font:900 clamp(35px,4.3vw,64px)/.98 "Trebuchet MS",sans-serif;letter-spacing:-.035em; }
+.login-card > p { font-size:13px;line-height:1.65; }
+.login-card form,.grownup-gate form { display:grid;gap:10px;margin-top:22px; }
+.login-card label,.grownup-gate label { font-size:12px;font-weight:700; }
+.login-card input,.grownup-gate input { min-height:48px;width:100%;padding:10px 14px;border:1px solid #a7bfc2;border-radius:9px;background:white;color:#163b4c;font:600 16px "Segoe UI",sans-serif; }
+.publisher-primary { display:inline-flex;align-items:center;justify-content:center;gap:14px;min-height:46px;padding:12px 19px;border:0;border-radius:26px;background:#137c86;box-shadow:0 3px 0 #075363;color:white;font:800 12px "Trebuchet MS",sans-serif;letter-spacing:.055em;cursor:pointer;transition:transform .15s,background .15s; }
+.publisher-primary:disabled { opacity:.55;cursor:default; }
+.publisher-primary:not(:disabled):active { transform:translateY(2px);box-shadow:0 1px 0 #075363; }
+.publisher-primary small { font-size:9px;letter-spacing:0;font-weight:500; }
+.cloud-signin { display:flex;justify-content:space-between;align-items:center;width:100%;min-height:42px;padding:10px 0;border:0;border-bottom:1px solid #cbd8d4;background:none;color:#42626f;font-size:12px;text-align:left; }
+.login-card .login-information { padding:10px 12px;border-left:3px solid #bf995e;background:#ecefe6;font-size:11px; }
+.login-card .login-privacy { margin-top:18px;color:#607775;font-size:10px;line-height:1.6; }
+.publisher-link { padding:8px 4px;border:0;background:none;color:inherit;font:700 12px "Segoe UI",sans-serif;cursor:pointer;text-decoration:underline;text-underline-offset:4px; }
+.publisher-login > footer { display:flex;justify-content:space-between;gap:20px;padding-top:18px;font-size:10px;letter-spacing:.12em;color:#d3dfd6;z-index:1; }
+.publisher-login > footer span { letter-spacing:0;font-weight:400; }
+.login-scenery { position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none; }
+.login-scenery::after { content:"";position:absolute;left:-10%;bottom:0;width:75%;height:40%;background:repeating-linear-gradient(90deg,transparent 0 85px,#c5b57e38 85px 88px),repeating-linear-gradient(0deg,#133445 0 85px,#aebfa52e 85px 88px);transform:perspective(600px) rotateX(65deg) rotateZ(-16deg);transform-origin:bottom; }
+.login-scenery i { position:absolute;left:calc(3% + var(--tower,0) * 7%);bottom:13%;width:7%;height:32%;border:1px solid #b8e5db66;border-top:4px solid #d7c38b;background:repeating-linear-gradient(0deg,transparent 0 12px,#d7e2c929 12px 14px),repeating-linear-gradient(90deg,#285668 0 12px,#8cc3ba44 12px 14px);box-shadow:15px 8px 0 #0d283a88;transform:skewY(-12deg);animation:publisher-city-rise 1s both; }
+.login-scenery i:nth-child(2) { --tower:1;height:46%;animation-delay:.08s; }.login-scenery i:nth-child(3) { --tower:2;height:27%;animation-delay:.16s; }.login-scenery i:nth-child(4) { --tower:3;height:58%;animation-delay:.24s; }.login-scenery i:nth-child(5) { --tower:4;height:39%;animation-delay:.32s; }.login-scenery i:nth-child(6) { --tower:5;height:24%;animation-delay:.4s; }.login-scenery i:nth-child(7) { --tower:6;height:33%;animation-delay:.48s; }
+@keyframes publisher-city-rise { from { opacity:0;translate:0 18px; } }
+.publisher-overlay { position:fixed;inset:0;z-index:180;display:grid;place-items:center;padding:18px;background:#102b3bba;backdrop-filter:blur(5px);font-family:"Segoe UI",sans-serif; }
+.grownup-gate,.test-purchase-confirm { position:relative;width:min(460px,100%);max-height:calc(100dvh - 36px);overflow:auto;padding:32px;border:2px solid white;border-radius:24px 4px;background:#fffdf5;color:#183e50;box-shadow:0 20px 70px #001d3088;animation:publisher-sign-in .3s both; }
+.grownup-gate h1 { max-width:85%;font:800 32px/1.08 "Trebuchet MS",sans-serif;letter-spacing:-.035em; }
+.grownup-gate p,.test-purchase-confirm p { font-size:13px;line-height:1.65; }
+.grownup-gate > small { display:block;margin-top:16px;color:#59716e;font-size:11px; }
+.publisher-close { position:absolute;top:14px;right:14px;width:36px;height:36px;padding:0;border:1px solid #b4c8c6;border-radius:50%;background:white;color:#315e6a;font-size:25px; }
+.publisher-store { position:fixed;inset:0;z-index:170;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;padding:22px 4vw 12px;color:#1c4051;background:#eef3f0;font-family:"Segoe UI",sans-serif; }
+.publisher-store > header { display:flex;align-items:center;gap:18px; }
+.publisher-store h1 { margin:5px 0;font:900 clamp(28px,3.5vw,45px)/1.1 "Trebuchet MS",sans-serif;letter-spacing:-.035em; }
+.store-back { flex-shrink:0;width:43px;height:43px;padding:0 0 4px;border:1px solid #b5c7c7;border-radius:50%;background:white;color:#274d59;font-size:35px; }
+.store-preview-badge { margin-left:auto;padding:8px 12px;border-radius:18px;background:#e0e8df;color:#44615b;font-size:9px;font-weight:800;letter-spacing:.08em; }
+.store-tabs { display:flex;gap:8px;padding:16px 0; }
+.store-tabs button { min-height:38px;padding:8px 16px;border:1px solid #b0c4c5;border-radius:22px;background:white;color:#355c67;font-size:12px;font-weight:700; }
+.store-tabs button[aria-pressed="true"] { background:#193e50;color:white;border-color:#193e50; }
+.store-products { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-content:start;overflow:auto;padding:4px 3px 12px;overscroll-behavior:contain; }
+.store-product { display:flex;flex-direction:column;overflow:hidden;min-height:330px;border:1px solid #c1cec9;border-radius:21px 4px;background:#fffdf6;box-shadow:0 4px 0 #c6d1cb;animation:publisher-sign-in .3s both; }
+.store-product-art { display:grid;grid-template-rows:minmax(0,1fr) auto;place-items:center;gap:12px;min-height:180px;padding:18px;color:#fff5dd;background:radial-gradient(ellipse at top,#ffffff40,transparent 75%),var(--product-accent); }
+.store-product-art img { display:block;width:140px;height:140px;max-width:100%;object-fit:contain;filter:drop-shadow(0 10px 4px #0003); }
+.store-product-art svg { width:100px;height:100px; }
+.store-product-art > span { font-size:8px;letter-spacing:.13em;font-weight:800; }
+.store-product-copy { display:flex;flex-direction:column;gap:8px;padding:18px;flex:1; }
+.store-product-copy h2 { margin:0;font:800 clamp(16px,1.6vw,23px)/1.1 "Trebuchet MS",sans-serif; }
+.store-product-copy p { margin:0 0 8px;font-size:11px;line-height:1.55;color:#56716f; }
+.store-product-copy > div { margin-top:auto; }
+.store-product-copy button { width:100%; }
+.store-owned { display:block;padding:12px 0;color:#1f7866;font-size:10px;font-weight:800; }
+.publisher-store > footer { display:grid;grid-template-columns:1fr 1fr;gap:5px 20px;padding-top:9px;border-top:1px solid #c7d5cd; }
+.publisher-store > footer > div { display:flex;gap:18px; }
+.publisher-store > footer > p { margin:0;font-size:10px;line-height:1.5;color:#627871; }
+.publisher-store > footer .store-feedback { grid-column:1/-1;min-height:16px;color:#176b70;font-weight:700; }
+.purchase-confirm-overlay { z-index:185; }
+.test-purchase-confirm { display:grid;gap:10px; }
+.test-purchase-confirm h2 { margin:5px 0;font:800 30px/1.1 "Trebuchet MS",sans-serif; }
+.menu-side-panels { display:grid;grid-template-rows:1fr 1fr;gap:14px;min-height:0; }
+.menu-side-panels .menu-join-panel { min-height:0;gap:6px;padding:12px; }
+.menu-side-panels .menu-join-panel > svg,.menu-side-panels .menu-code-art { display:none; }
+.menu-side-panels .menu-join-panel .menu-pill { min-height:43px;font-size:21px; }
+.menu-store-panel { display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px;color:#fff7de;background:radial-gradient(ellipse at 20% 10%,#dbb977,#a4793a 60%,#745331); }
+.menu-store-panel > svg { position:absolute;width:58px;height:48px;right:6%;top:8%;opacity:.4; }
+.menu-store-panel .menu-pill { min-height:43px;width:100%;max-width:290px;font-size:21px;color:#785725; }
+.menu-store-panel > small { font-size:11px; }
+.menu-guest-link { min-height:32px;padding:3px;border:0;background:none;color:#496a72;font-size:10px;text-decoration:underline;text-underline-offset:3px; }
+.sample-ad-placement { grid-column:1/-1;display:flex;justify-content:center;gap:14px;padding-top:5px;color:#6a7b7d;font-size:7px;letter-spacing:.09em; }
+.sample-ad-placement span { letter-spacing:0; }
+@media (min-width:1100px) { .menu-store-panel { gap:20px; }.menu-store-panel > svg { width:100px;height:80px; }.menu-store-panel .menu-pill,.menu-side-panels .menu-join-panel .menu-pill { font-size:28px;min-height:55px; } }
+@media (orientation:landscape) and (max-height:550px) { .publisher-login { padding:12px 5vw; }.publisher-login > header > span { font-size:17px; }.login-card { width:390px;padding:18px 25px;margin:10px 0; }.login-card h1 { font-size:37px;margin:10px 0; }.login-card form { margin-top:12px;gap:7px; }.login-card > p { margin:8px 0;font-size:11px; }.login-card .login-privacy { font-size:9px;margin-top:9px; }.login-card input { min-height:42px; }.publisher-login > footer { padding-top:5px; }.cloud-signin { min-height:34px; }.publisher-store { padding:10px 18px 5px; }.publisher-store h1 { font-size:27px; }.store-tabs { padding:8px 0; }.store-tabs button { min-height:32px;padding:5px 14px;font-size:11px; }.store-products { gap:12px; }.store-product { min-height:260px; }.store-product-art { min-height:110px;gap:4px;padding:10px; }.store-product-art img { height:80px;width:80px; }.store-product-art svg { height:70px; }.store-product-copy { padding:12px;gap:6px; }.store-product-copy p { font-size:10px; }.store-product-copy .publisher-primary { min-height:37px;font-size:10px;padding:9px;gap:6px; }.publisher-store > footer { padding-top:5px; }.publisher-store > footer .publisher-link { font-size:10px; }.grownup-gate { padding:20px 28px;width:540px; }.grownup-gate h1 { margin:12px 0;font-size:29px; }.grownup-gate form { grid-template-columns:1fr 1fr;gap:8px 15px;margin-top:12px; }.grownup-gate label { grid-column:1/-1; }.grownup-gate form p { grid-column:1/-1;margin:0; }.grownup-gate > small { margin-top:10px; }.menu-side-panels { gap:10px; }.menu-store-panel,.menu-side-panels .menu-join-panel { padding:8px;gap:6px; }.menu-store-panel .menu-pill,.menu-side-panels .menu-join-panel .menu-pill { min-height:38px;font-size:19px;padding:8px; }.menu-store-panel .menu-panel-kicker,.menu-side-panels .menu-panel-kicker { font-size:8px; }.menu-store-panel > small,.menu-side-panels .menu-join-panel > small { font-size:9px; } }
+@media (max-width:700px) and (orientation:portrait) { .publisher-login { padding:20px; }.login-card { justify-self:center;padding:27px; }.login-scenery { opacity:.35; }.publisher-login > header > span { font-size:19px; }.publisher-login > footer { font-size:8px; }.publisher-store { padding:18px 14px 8px; }.publisher-store > header { gap:10px; }.store-preview-badge { max-width:100px;font-size:8px;text-align:center; }.store-products { grid-template-columns:1fr 1fr;gap:10px; }.store-product { min-height:310px; }.store-product-art { min-height:135px;padding:12px; }.store-product-art img { width:100px;height:100px; }.store-product-copy { padding:13px; }.store-product-copy .publisher-primary { font-size:10px;padding:10px;gap:7px; }.publisher-store > footer { grid-template-columns:1fr; }.publisher-store > footer > div { justify-content:space-between;gap:5px; }.publisher-store > footer .publisher-link { font-size:10px; }.menu-side-panels { grid-template-columns:1fr 1fr;grid-template-rows:1fr;gap:12px; }.menu-side-panels .menu-join-panel { display:flex;min-height:160px;padding:10px; }.menu-side-panels .menu-join-panel .menu-pill,.menu-store-panel .menu-pill { font-size:15px;min-height:42px;padding:8px; }.menu-side-panels .menu-panel-kicker { font-size:8px;text-align:center; }.menu-store-panel > svg { display:none; }.menu-store-panel > small { font-size:9px;text-align:center; }.menu-side-panels .menu-join-panel > small { display:none; } }
+@media (prefers-reduced-motion:reduce) { .publisher-signature,.publisher-mark *,.publisher-signature h1,.publisher-signature p,.publisher-light,.login-scenery i,.store-product,.login-card { animation:none; }.publisher-orbit { stroke-dashoffset:0; } }
+@media (orientation:landscape) and (max-height:450px) {
+  .login-card { padding:16px 22px;margin:8px 0; }
+  .login-card h1 { font-size:32px;margin:9px 0; }
+  .login-card > p:not(.login-privacy):not(.login-information) { display:none; }
+  .login-card form { grid-template-columns:minmax(0,1fr) auto;gap:7px 9px;margin-top:12px; }
+  .login-card form label { grid-column:1/-1; }
+  .login-card input { min-width:0;font-size:12px; }
+  .login-card .publisher-primary { min-width:135px;padding:10px;font-size:10px; }
+  .login-card .login-privacy { margin-top:7px;font-size:9px;line-height:1.4; }
+  .login-information { max-height:65px;overflow:auto; }
+}

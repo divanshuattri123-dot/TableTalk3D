@@ -24,6 +24,24 @@ Recordings/
 *.log
 .DS_Store
 .env*
+tmp/
+Applications/node_modules/
+Applications/web/
+Applications/player-assets/
+Applications/desktop/app/web/
+Applications/downloads/
+Applications/android/.gradle/
+Applications/android/local.properties
+Applications/android/**/build/
+Applications/android/app/src/main/assets/public/
+Applications/ios/App/App/public/
+Applications/ios/App/Pods/
 # The performance package writes transient run metadata under Resources.
 Assets/Resources/PerformanceTestRunInfo.json*
 Assets/Resources/PerformanceTestRunSettings.json*
+NativeUnreal/**/Binaries/
+NativeUnreal/**/Intermediate/
+NativeUnreal/**/Saved/
+NativeUnreal/**/DerivedDataCache/
+NativeUnreal/SourceArt/
+NativeUnreal/Packages/

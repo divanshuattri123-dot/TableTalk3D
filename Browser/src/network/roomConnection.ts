@@ -14,6 +14,8 @@ interface Callbacks {
 
 export class RoomConnection {
   private ready = false;
+  private offline = false;
+  private snapshotRequestedAt?: number;
   private lastHeard: number;
   private lastPing = 0;
   private sequence = 0;
@@ -21,8 +23,8 @@ export class RoomConnection {
   constructor(private socket: Socket, private callbacks: Callbacks, private player: PlayerInput | undefined,
     private clientId: string, private now = Date.now) { this.lastHeard = now(); }
 
-  open() { this.ready = false; this.lastHeard = this.now(); this.callbacks.status("connecting"); }
-  disconnected(offline = false) { this.ready = false; this.callbacks.status(offline ? "offline" : "reconnecting"); }
+  open() { this.ready = false; this.lastHeard = this.now(); this.snapshotRequestedAt=this.now(); this.callbacks.status(this.offline?"offline":"connecting"); }
+  disconnected(offline = false) { this.ready = false; this.offline=offline; this.snapshotRequestedAt=undefined; this.callbacks.status(offline ? "offline" : "reconnecting"); }
   receive(raw: string) {
     this.lastHeard = this.now();
     if (raw === "pong") return;
@@ -36,10 +38,11 @@ export class RoomConnection {
       return;
     }
     if (message.type !== "state") return;
+    this.snapshotRequestedAt=undefined;
     if (message.ackId) this.pending.delete(message.ackId);
     this.callbacks.state(message.state);
     this.callbacks.error(undefined);
-    if (!this.ready) {
+    if (!this.ready && !this.offline) {
       this.ready = true; this.callbacks.status("connected");
       if (this.player && !message.state.players.some(p => p.id === this.player!.id)) {
         this.pending.set(`${this.clientId}:join`, { action: { type: "JOIN", player: this.player }, sentAt: 0 });
@@ -67,11 +70,18 @@ export class RoomConnection {
   }
   retry() { this.disconnected(); this.socket.reconnect(); }
   resume() {
+    if(this.socket.readyState===0)return;
+    if(this.snapshotRequestedAt!==undefined&&this.socket.readyState===1&&this.now()-this.snapshotRequestedAt<12_000)return;
     if (!this.ready || this.socket.readyState !== 1 || this.now() - this.lastHeard > 30_000) this.retry();
-    else this.socket.send(JSON.stringify({ type: "sync" }));
+    else {
+      // A sleeping screen may show a stale decision even when its socket still looks open.
+      this.ready=false;this.snapshotRequestedAt=this.now();this.callbacks.status("connecting");
+      this.socket.send(JSON.stringify({ type: "sync" }));
+    }
   }
   tick() {
-    if (this.socket.readyState !== 1) return;
+    if (this.offline || this.socket.readyState !== 1) return;
+    if(this.snapshotRequestedAt!==undefined&&this.now()-this.snapshotRequestedAt>=12_000){this.retry();return;}
     if (this.now() - this.lastHeard > 45_000) { this.retry(); return; }
     if (this.now() - this.lastPing > 20_000) { this.socket.send("ping"); this.lastPing = this.now(); }
     // Resending the same receipt cannot charge rent or roll the dice twice.

@@ -11,6 +11,7 @@
     "test:colors": "node scripts/verify-player-colors.mjs",
     "test:expanded": "node scripts/verify-expanded-rooms.mjs",
     "test:recovery": "node scripts/verify-recovery.mjs",
+    "test:resume": "node --experimental-transform-types scripts/verify-client-resume.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json"

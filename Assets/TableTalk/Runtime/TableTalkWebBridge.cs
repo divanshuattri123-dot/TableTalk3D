@@ -67,6 +67,7 @@ namespace TableTalk
             RenderSettings.reflectionIntensity = night ? .18f : .75f;
             angledView = settings.camera == "perspective";
             worldMotionReduced = settings.reducedMotion;
+            SetFoliageMotion(settings.reducedMotion);
             ConfigureScreenLabels(settings.screenLabels);
             bool battery = settings.quality == "low";
             float shadowRange = BoardLayout.ShadowRange(shown?.boardSize ?? 40, angledView, battery);
@@ -86,6 +87,7 @@ namespace TableTalk
             }
             RenderSettings.ambientSkyColor = ColorOf(night ? "#718bb4" : "#c7dcf6");
             RenderSettings.ambientEquatorColor = ColorOf(night ? "#506d78" : "#a5bdba");
+            ApplyArtDirection(night, battery, settings.mobile);
             if (shown != null) WholeBoard();
         }
 

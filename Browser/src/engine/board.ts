@@ -1,4 +1,6 @@
 import { CLASSIC_CARDS } from "./classicCards";
+import { CITIES, themedBoard } from './cities';
+import type { CityId } from './cities';
 import type {
   CardDeck,
   BoardSize,
@@ -176,7 +178,16 @@ const expandedBoard = (tiers: number): readonly Tile[] => {
 };
 const BOARDS: Record<BoardSize, readonly Tile[]> = { 40: BOARD, 48: expandedBoard(1), 56: expandedBoard(2), 64: expandedBoard(3) };
 export const boardSizeForPlayers = (count: number): BoardSize => count >= 6 ? 64 : count === 5 ? 56 : count === 4 ? 48 : 40;
-export const getBoard = (size: BoardSize = 40): readonly Tile[] => BOARDS[size];
+const CITY_BOARDS = Object.fromEntries(CITIES.map(city=>[city.id,Object.fromEntries(Object.entries(BOARDS).map(([size,board])=>[size,themedBoard(board,city.id)]))])) as Record<CityId,Record<BoardSize,readonly Tile[]>>;
+export const getBoard = (size: BoardSize = 40, city:CityId='india'): readonly Tile[] => CITY_BOARDS[city]?.[size] ?? BOARDS[size];
+export function cityText(text:string,city:CityId|undefined,size:BoardSize=40) {
+  if(!city || city==='india')return text;
+  const target=getBoard(size,city);
+  const names=BOARDS[size].flatMap((tile,i)=>tile.name===target[i]!.name?[]:[{from:tile.name,to:target[i]!.name},...(tile.boardLabel&&tile.boardLabel!==tile.name?[{from:tile.boardLabel,to:target[i]!.name}]:[])]).sort((a,b)=>b.from.length-a.from.length);
+  // One replacement pass prevents a translated name from matching another source name.
+  const pattern=new RegExp(names.map(n=>n.from.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'),'g');
+  return text.replace(pattern,match=>names.find(n=>n.from===match)!.to);
+}
 export const classicPosition = (position: number, size: BoardSize = 40): number => position + Math.floor(position / 10) * (size / 4 - 10);
 export const railroadPositions = (size: BoardSize = 40): number[] => RAILROAD_POSITIONS.map((position) => classicPosition(position, size));
 export const utilityPositions = (size: BoardSize = 40): number[] => UTILITY_POSITIONS.map((position) => classicPosition(position, size));
@@ -186,10 +197,10 @@ export const isPurchasableTile = (tile: Tile): tile is PurchasableTile =>
 
 export const isStreetTile = (tile: Tile): tile is StreetTile => tile.kind === "property";
 
-export const getTile = (position: number, size: BoardSize = 40): Tile => getBoard(size)[position] as Tile;
+export const getTile = (position: number, size: BoardSize = 40, city?:CityId): Tile => getBoard(size,city)[position] as Tile;
 
-export const getPurchasableTile = (position: number, size: BoardSize = 40): PurchasableTile | undefined => {
-  const tile = getTile(position, size);
+export const getPurchasableTile = (position: number, size: BoardSize = 40, city?:CityId): PurchasableTile | undefined => {
+  const tile = getTile(position, size,city);
   return tile && isPurchasableTile(tile) ? tile : undefined;
 };
 

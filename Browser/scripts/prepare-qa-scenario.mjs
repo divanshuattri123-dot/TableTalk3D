@@ -33,7 +33,8 @@ try {
   if(mode==="trade") {
     assert(["awaitingRoll","awaitingEndTurn"].includes(state.phase));
     const id=state.activePlayerId,to=id===host.id?state.players.find(p=>p.id!==id&&!p.bankrupt).id:host.id;
-    await send({type:"TRADE_OFFER",playerId:id,offerId:`qa-${randomUUID()}`,toPlayerId:to,offeredCash:10,offeredPropertyIds:[],requestedCash:0,requestedPropertyIds:[]});
+    const requested=state.mode==='classic'?Object.entries(state.properties).find(([,p])=>p.ownerId===to&&!p.houses)?.[0]:undefined;
+    await send({type:"TRADE_OFFER",playerId:id,offerId:`qa-${randomUUID()}`,toPlayerId:to,offeredCash:10,offeredPropertyIds:[],requestedCash:0,requestedPropertyIds:requested?[Number(requested)]:[]});
   }
   if(mode==="card") {
     assert.equal(state.phase,"awaitingRoll");const id=state.activePlayerId;assert.equal(state.players.find(p=>p.id===id).position,0);

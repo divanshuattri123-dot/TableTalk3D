@@ -9,6 +9,8 @@ namespace TableTalk
         Transform landscape;
         readonly List<Mesh> landscapeMeshes = new List<Mesh>();
         readonly List<Texture2D> landscapeTextures = new List<Texture2D>();
+        public Material treeFoliage;
+        readonly List<Material> foliageInstances = new List<Material>();
 
         void BuildLandscape(int size)
         {
@@ -37,6 +39,8 @@ namespace TableTalk
             }
 
             var bark = Material(ColorOf("#76634b"), 0, .08f);
+            bark.SetTexture("_BaseMap", BarkTexture());
+            bark.SetTextureScale("_BaseMap", new Vector2(3, 4));
             var branchMesh = new LandscapeMesh();
             var crowns = new[] { new LandscapeMesh(), new LandscapeMesh(), new LandscapeMesh(), new LandscapeMesh() };
             var foliageColors = new[] { "#748d4f", "#859957", "#97aa68", "#647f50" };
@@ -59,8 +63,8 @@ namespace TableTalk
                     else root = new Vector3(along,-.39f,(half+1.1f)*(side==0?1:-1));
                 }
                 else if (root.x < -half - 4.5f || root.x > RiverBankX(half, root.z) - 1 || Mathf.Abs(root.x - HighwayX(half, root.z, false)) < 2.1f || Mathf.Abs(root.x - HighwayX(half, root.z, true)) < 2.1f) continue;
-                float height = verge ? .95f + Hash(i*19.7f)*.55f : 1.1f + Hash(i * 19.7f) * 1.7f;
-                float width = verge ? .29f : .45f + Hash(i * 13.2f) * .35f;
+                float height = verge ? 1.0f + Hash(i*19.7f)*.6f : 1.1f + Hash(i * 19.7f) * 1.7f;
+                float width = verge ? .31f + Hash(i*11.3f)*.08f : .45f + Hash(i * 13.2f) * .35f;
                 var top = root + new Vector3((Hash(i + 3) - .5f) * .2f, height * .73f, (Hash(i + 8) - .5f) * .2f);
                 branchMesh.Branch(root, top, .07f + height * .016f, .025f);
                 for (int limb = 0; limb < 7; limb++)
@@ -69,15 +73,22 @@ namespace TableTalk
                     float reach = width * (.6f + Hash(i * 3 + limb) * .5f);
                     var end = top + new Vector3(Mathf.Cos(angle) * reach, (limb / 7f - .25f) * height * .5f, Mathf.Sin(angle) * reach);
                     branchMesh.Branch(Vector3.Lerp(root, top, .55f + limb * .05f), end, .032f, .009f);
-                    crowns[(i + limb / 2) % 4].Crown(end, new Vector3(width * .78f, height * .26f, width * .74f), i * 31 + limb);
+                    float silhouette = .88f + Hash(i*13+limb*3)*.22f;
+                    crowns[(i + limb / 2) % 4].Crown(end, new Vector3(width * .78f * silhouette, height * .26f, width * .74f / silhouette), i * 31 + limb);
                 }
                 crowns[i % 4].Crown(top + Vector3.up * height * .25f, new Vector3(width * .74f, height * .29f, width * .8f), i + 211);
             }
             AddLandscapeMesh("Branching hardwood trunks", branchMesh, bark);
             for (int i = 0; i < crowns.Length; i++)
             {
-                var leaves = Material(ColorOf(foliageColors[i]), 0, .08f);
-                leaves.SetTexture("_BaseMap", FoliageTexture(i));
+                var leaves = treeFoliage != null ? new Material(treeFoliage) : Material(ColorOf(foliageColors[i]), 0, .08f);
+                if (treeFoliage != null)
+                {
+                    ownedMaterials.Add(leaves); foliageInstances.Add(leaves);
+                    leaves.SetColor("_BaseColor", Color.Lerp(Color.white, ColorOf(foliageColors[i]), .12f));
+                    leaves.SetFloat("_LeafWindStrength", worldMotionReduced ? 0 : .018f);
+                }
+                else leaves.SetTexture("_BaseMap", FoliageTexture(i));
                 leaves.SetFloat("_AlphaClip", 1); leaves.SetFloat("_Cutoff", .33f); leaves.SetFloat("_Cull", 0);
                 leaves.EnableKeyword("_ALPHATEST_ON"); leaves.renderQueue = 2450;
                 AddLandscapeMesh("Layered leaf canopy " + i, crowns[i], leaves);
@@ -95,6 +106,25 @@ namespace TableTalk
             AddLandscapeMesh("Low garden planting", shrubs, Material(ColorOf("#839858"), 0, .1f));
             BuildLivingLandscape(half);
             StaticBatchingUtility.Combine(landscape.gameObject);
+        }
+
+        Texture2D BarkTexture()
+        {
+            const int size=128;
+            var texture=new Texture2D(size,size,TextureFormat.RGB24,true){name="Fine vertical bark",wrapMode=TextureWrapMode.Repeat,filterMode=FilterMode.Trilinear};
+            var pixels=new Color[size*size];
+            for(int y=0;y<size;y++)for(int x=0;x<size;x++)
+            {
+                float grain=Hash(x*1.7f+Mathf.Floor(y/13f)*.13f);
+                float ridge=.5f+.5f*Mathf.Sin(x*.65f+Mathf.Sin(y*.12f)*.3f);
+                pixels[y*size+x]=Color.Lerp(new Color(.48f,.45f,.39f),new Color(.92f,.85f,.72f),ridge*.5f+grain*.3f);
+            }
+            texture.SetPixels(pixels);texture.Apply(true,true);landscapeTextures.Add(texture);return texture;
+        }
+
+        void SetFoliageMotion(bool reduced)
+        {
+            foreach(var material in foliageInstances)if(material!=null)material.SetFloat("_LeafWindStrength",reduced?0:.018f);
         }
 
         Texture2D FoliageTexture(int seed)
@@ -141,6 +171,7 @@ namespace TableTalk
             foreach (var mesh in landscapeMeshes) if (mesh != null) Destroy(mesh);
             foreach (var texture in landscapeTextures) if (texture != null) Destroy(texture);
             landscapeMeshes.Clear(); landscapeTextures.Clear();
+            foliageInstances.Clear();
         }
 
         static float Hash(float seed) => Mathf.Repeat(Mathf.Sin(seed * 127.1f + 311.7f) * 43758.5453f, 1);

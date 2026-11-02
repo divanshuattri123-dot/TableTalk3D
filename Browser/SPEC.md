@@ -1,5 +1,47 @@
 # Multiplayer Property Game — Engine Specification
 
+## Version 0.6.0 additions (31 October 2026)
+
+Menu/city update, 1 November 2026: `SET_CITY {playerId, city}` is a host-only,
+lobby-only choice. Optional `GameState.city` defaults to the original Indian
+board in old saves. India/Tricity, London, Atlantic City, New York, Paris and
+Tokyo preserve the same property IDs, economic schedules, group membership,
+card movement targets and turn order. Their names are synchronized in the
+journal, card text, title deeds, auctions, trades and renderer snapshots. City
+names are a custom theme; prices remain in rupees. The current 3D city geometry
+is shared, rather than six independently rebuilt geographical city models.
+
+Mobile entry is a landscape game hub with separate room and player setup
+screens. The lobby has player cards and city/rule choices. Unity loads only
+after starting. Menu animation stays outside the reducer; reduced-motion and
+older-browser fallbacks remain playable. Returning home does not delete the
+saved seat or server match.
+
+`SET_MODE` accepts optional `rulesEdition: "hasbro-2025"` for Classic. The absent
+flag preserves legacy behavior in saved rooms. Expanding clears the flag; an
+active game cannot change its mode or edition. New installed-app lobbies default
+to the 2025 choice; the browser continues to offer Expanding India.
+
+In that edition, a landing creates `rentClaim: {id, ownerId, payerId, propertyId,
+amount}`. `CLAIM_RENT {playerId, claimId}` is an owner decision, including off-turn.
+It charges rent once and uses the existing mandatory-debt pipeline if needed. The
+claim survives End Turn but expires on the next movement ROLL. Utility-rent dice
+do not expire a claim. Other blocking decisions must finish first. Mortgage
+recipients may retain a mortgage for zero immediate cost or redeem at principal
+plus 10%; the traditional edition retains its immediate interest decision.
+
+`TRADE_COUNTER` carries `playerId, previousOfferId, offerId` and the same cash,
+deed and optional release-card terms as TRADE_OFFER. Only the current recipient
+may replace the pending offer. Its recipient becomes the previous sender, while
+`resumePhase`, active player, dice and balances stay unchanged. Invalid terms
+leave the previous offer intact. Each acceptance/decline targets the current ID;
+an old offer cannot be accepted after a counter. Nothing transfers until accept.
+
+Android, iOS and Windows packages use this same reducer and production room
+endpoint. They bundle the Unity player locally, stream optional collection assets,
+share public browser room links and retain separate local seat storage per app.
+They do not migrate a browser seat to an app automatically.
+
 The original sections describe Expanding India and existing saves. The separate
 Classic contract at the end supersedes those rules only when `mode === "classic"`.
 Selecting a mode is a lobby-only choice, never a saved-match migration.

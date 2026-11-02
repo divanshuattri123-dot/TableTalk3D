@@ -6,6 +6,8 @@ Shader "TableTalk/City Surface"
         _BaseColor("Tint", Color) = (1,1,1,1)
         _CityLighting("Recovered contact lighting", 2D) = "white" {}
         _OcclusionStrength("Contact shadow strength", Range(0,1)) = .65
+        _FacadeDetail("Facade finish", Range(0,1)) = .75
+        _NightLighting("Occupied night windows", Range(0,1)) = 0
         _Cutoff("Cutoff", Float) = .5
         _Cull("Cull", Float) = 2
     }
@@ -31,7 +33,7 @@ Shader "TableTalk/City Surface"
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_ST;
                 half4 _BaseColor;
-                half _OcclusionStrength, _Cutoff, _Cull;
+                half _OcclusionStrength, _Cutoff, _Cull, _FacadeDetail, _NightLighting;
             CBUFFER_END
             struct Attributes { float4 positionOS:POSITION; float3 normalOS:NORMAL; float2 uv:TEXCOORD0; float2 lightUv:TEXCOORD1; };
             struct Varyings { float4 positionCS:SV_POSITION; float3 positionWS:TEXCOORD0; half3 normalWS:TEXCOORD1; float2 uv:TEXCOORD2; float2 lightUv:TEXCOORD3; half fog:TEXCOORD4; };
@@ -51,9 +53,17 @@ Shader "TableTalk/City Surface"
                 // The supplied UV2 atlas preserves facade recesses without a phone-sized SSAO pass.
                 half occlusion=lerp(1,saturate(dot(contact,half3(.333,.333,.333))*2.7+.18),_OcclusionStrength);
                 half glass=saturate((albedo.b-albedo.r)*5)*saturate((albedo.g-albedo.r)*5);
+                half3 normal=NormalizeNormalPerPixel(i.normalWS);
+                float2 facade=float2(abs(normal.x)>.5 ? i.positionWS.z : i.positionWS.x,i.positionWS.y)*float2(18,12);
+                float2 grid=frac(facade), aa=max(fwidth(facade),.015);
+                half pane=smoothstep(.12-aa.x,.12+aa.x,grid.x)*(1-smoothstep(.88-aa.x,.88+aa.x,grid.x))*smoothstep(.15-aa.y,.15+aa.y,grid.y)*(1-smoothstep(.84-aa.y,.84+aa.y,grid.y));
+                half facadeMask=glass*(1-smoothstep(.35,.75,abs(normal.y)));
+                half occupancy=step(.38,frac(sin(dot(floor(facade),float2(127.1,311.7)))*43758.5453));
+                albedo*=1-facadeMask*(1-pane)*_FacadeDetail*.32;
                 SurfaceData s=(SurfaceData)0;
                 s.albedo=albedo; s.alpha=1; s.normalTS=half3(0,0,1);
-                s.metallic=lerp(.015,.28,glass); s.smoothness=lerp(.24,.8,glass); s.occlusion=occlusion;
+                s.metallic=lerp(.015,.4,glass); s.smoothness=lerp(.27,.86,glass); s.occlusion=occlusion;
+                s.emission=half3(1,.62,.25)*facadeMask*pane*occupancy*_NightLighting*1.7;
                 InputData d=(InputData)0;
                 d.positionWS=i.positionWS; d.positionCS=i.positionCS;
                 d.normalWS=NormalizeNormalPerPixel(i.normalWS); d.viewDirectionWS=GetWorldSpaceNormalizeViewDir(i.positionWS);

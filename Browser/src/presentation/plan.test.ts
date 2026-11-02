@@ -12,6 +12,26 @@ const start = () => [
 const at = (state: GameState, position: number) => ({ ...state, players: state.players.map(p => p.id === "a" ? { ...p, position } : p) });
 
 describe("pure presentation planning", () => {
+  it("celebrates a newly completed set after purchase without inventing dice or replaying it", () => {
+    let state = at(start(), 3);
+    state = { ...state, phase: "awaitingBuy", pendingPurchase: { playerId: "a", propertyId: 3 }, properties: { ...state.properties, 1: { ownerId: "a", houses: 0, mortgaged: false } } };
+    const bought = reduceGame(state, { type: "BUY", playerId: "a", propertyId: 3 });
+    const frames = planPresentation(state, bought);
+    expect(frames.map(f => f.kind)).toEqual(["purchase", "set"]);
+    expect(frames[1]).toMatchObject({ playerId: "a", tileIds: [1, 3] });
+    expect(planPresentation(bought, structuredClone(bought))).toEqual([]);
+    expect(planPresentation(undefined, bought)).toEqual([]);
+  });
+  it("celebrates sets acquired by trade only after acceptance", () => {
+    const state = start();
+    state.properties[1] = { ownerId: "a", houses: 0, mortgaged: false };
+    state.properties[3] = { ownerId: "b", houses: 0, mortgaged: false };
+    const offered = reduceGame(state, { type: "TRADE_OFFER", playerId: "a", offerId: "set-trade", toPlayerId: "b", offeredCash: 10, requestedCash: 0, offeredPropertyIds: [], requestedPropertyIds: [3] });
+    expect(planPresentation(state, offered)).toEqual([]);
+    const accepted = reduceGame(offered, { type: "TRADE_ACCEPT", playerId: "b", offerId: "set-trade" });
+    expect(planPresentation(offered, accepted).map(f => f.kind)).toEqual(["trade", "set"]);
+    expect(accepted.players[0]?.cash).toBe(1490);
+  });
   it("uses Classic card IDs and shows the chained back-three / Community sequence",()=>{
     const state={...at(start(),29),mode:"classic" as const,decks:{chance:[9,...Array.from({length:16},(_,i)=>i).filter(i=>i!==9)],community:Array.from({length:16},(_,i)=>i)}};
     const rolled=reduceGame(state,{type:"ROLL",playerId:"a",dice:[3,4]}),landed=reduceGame(rolled,{type:"MOVE_RESULT",playerId:"a"});

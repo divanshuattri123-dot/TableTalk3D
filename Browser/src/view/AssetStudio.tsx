@@ -1,6 +1,7 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { assetUrl, useAssets } from "../assets";
 import type { GameAsset } from "../assets";
+import {watchAudioPreview} from './gameAudio';
 const ModelPreview = lazy(() => import("./ModelPreview"));
 
 export type AssetUse = "token" | "dice" | "city" | "art" | "music";
@@ -28,8 +29,8 @@ export default function AssetStudio({ onClose, onChoose, initialCategory = "toke
     window.addEventListener("keydown", escape);
     return () => { document.body.style.overflow = overflow; window.removeEventListener("keydown", escape); };
   }, [onClose]);
+  useEffect(()=>watchAudioPreview(audio.current,document),[asset?.id]);
   useEffect(() => {
-    audio.current?.pause();
     if (asset?.kind !== "data") return;
     const controller = new AbortController(); setText("Loading the source data…");
     fetch(assetUrl(asset.src), { signal: controller.signal }).then((response) => response.text()).then((value) => setText(value.slice(0, 12000))).catch(() => {});

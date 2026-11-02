@@ -1,4 +1,40 @@
-# Rules audit - separate Classic mode, 24 October 2026
+# Rules audit - G0009 edition update, 31 October 2026
+
+## G0009 (2025) comparison
+
+Reference: Hasbro's [G0009 instructions page](https://instructions.hasbro.com/en-us/instruction/monopoly-board-game-classic-game-with-storage-tray-and-larger-tokens-family-games-8)
+and its linked two-page 2025 instruction PDF. Both pages were extracted, and the
+board/rent/building/trade/debt panels on page 2 were visually inspected. This
+edition is selectable as **Classic · Hasbro 2025 · claim rent**. Existing saved
+matches keep their stored edition; the absent edition flag keeps older behavior.
+
+| Checked area | 2025 implementation |
+| --- | --- |
+| Setup | 2–6 players, 1500 each, highest-roll start, clockwise turns, 40 spaces |
+| Rent deadline | Owner presses Claim before the next movement roll; End Turn alone does not expire it |
+| Mortgaged transfers | Keep for zero immediate cost; optional redemption for principal + 10% |
+| Movement / corners | GO reward, doubles, third-double jail, no Free Parking pot, Just Visiting |
+| Jail | Fine/card before roll, doubles escape, retained third failed roll after mandatory fine |
+| Cards | Ordered shuffled 16-effect decks; held release cards removed and returned to their deck |
+| Property / utilities | Buy or auction, full-set rent, railroad ownership count, fresh 4x/10x utility dice |
+| Building | Even development/sales, four houses then hotel, finite 32/12 bank stock and last-piece auction |
+| Trading | Cash/deeds/release cards, no improved streets, atomic acceptance, counter-offers, no unsecured loans |
+| Inability to pay | Normal play pauses; sell buildings, mortgage or negotiate before insolvency surrender |
+| Bankruptcy | Creditor estate/card transfers or immediate bank estate auctions; last survivor wins |
+
+The existing Classic test suite and network run still verify traditional rooms.
+The new G0009 network run checks rent claim/expiry, unchanged dice during a
+counter-offer, acceptance and identical reconnect snapshots. The deployment
+comparison preserved the pre-existing traditional QA save byte-for-byte.
+
+Boundaries: Indian names/currency and reworded traditional card effects are
+localizations. This is not Hasbro certification or a verified copy of every
+printed G0009 deed and card face. Transaction decisions are serialized; building
+requests are not simultaneous physical-table negotiations. Optional timed/short
+variants are not supplied. A passing suite does not prove every possible action
+sequence or physical-device performance.
+
+## Previous audit - separate Classic mode, 24 October 2026
 
 ## Current release audit
 

@@ -27,6 +27,7 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
   const { settings, update } = useViewSettings();
   const { catalog, byId, error, reload } = useAssets();
   const [studio, setStudio] = useState<string>();
+  const [rendererAttempt,setRendererAttempt]=useState(0);
   const preferences = panel === "settings", help = panel === "help", prices = panel === "prices";
   const setPreferences = (open: boolean) => onPanelChange(open ? "settings" : undefined);
   const setHelp = (open: boolean) => onPanelChange(open ? "help" : undefined);
@@ -34,7 +35,7 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
   const [tile, setTile] = useState<number>();
   const local = game.players.find((player) => player.id === localId);
   const current = game.players.find((player) => player.id === decisionPlayerId(game));
-  const location = getTile(game.pendingPurchase?.propertyId ?? current?.position ?? 0, game.boardSize);
+  const location = getTile(game.pendingPurchase?.propertyId ?? current?.position ?? 0, game.boardSize, game.city);
   const locationOwner = game.players.find((player) => player.id === game.properties[location.position]?.ownerId);
   const instruction = game.phase === "awaitingDebt" ? "Settle the negative balance before play continues" : game.phase === "awaitingUtilityRoll" ? "Roll fresh dice for utility rent · no movement" : game.phase === "awaitingMortgageDecision" ? "Choose interest or redemption for received mortgages" : game.phase === "lobby" ? "Invite your friends, then start" : game.phase === "awaitingRoll" ? "Roll the dice" : game.phase === "awaitingBuy" ? "Buy this property or auction it" : game.phase === "awaitingAuction" ? "Open auction · bid or pass" : game.phase === "awaitingTradeResponse" ? "A trade is waiting for an answer" : game.phase === "awaitingMove" ? "Dice rolling…" : game.phase === "gameOver" ? "Game complete" : "Manage your deeds, then end your turn";
   useGameAudio(game, settings);
@@ -79,17 +80,17 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
     </section></div>}
     {error && <p className="asset-notice">{error} <button type="button" onClick={reload}>Retry collection</button></p>}
     {settings.view === "3d" ? <Suspense fallback={<div className="scene-loading"><span className="pulse-token" /><b>Building your 3D table…</b><small>The rules and room are ready.</small></div>}>
-      {settings.renderer === "unity" ? <UnityBoard game={shown} target={target} settings={settings} frame={frame} syncVersion={syncVersion} onSelect={setTile} onComplete={onComplete} onReady={unityReady} onFallback={() => update({ view: "2d" })} onReadPrices={() => setPrices(true)} /> : <ThreeBoard game={shown} settings={settings} onSelect={setTile} onFallback={() => update({ view: "2d" })} onCamera={() => update({ camera: settings.camera === "top" ? "perspective" : "top" })} />}
+      {settings.renderer === "unity" ? <UnityBoard key={rendererAttempt} game={shown} target={target} settings={settings} frame={frame} syncVersion={syncVersion} onSelect={setTile} onComplete={onComplete} onReady={unityReady} onFallback={() => update({ view: "2d" })} onRetry={()=>setRendererAttempt(n=>n+1)} onReadPrices={() => setPrices(true)} /> : <ThreeBoard game={shown} settings={settings} onSelect={setTile} onFallback={() => update({ view: "2d" })} onCamera={() => update({ camera: settings.camera === "top" ? "perspective" : "top" })} />}
     </Suspense> : render2D(setTile)}
     <div className="landing-ribbon"><div><small>{game.phase === "lobby" ? "Tap any space to inspect it" : `${current?.name ?? "Player"} is at`}</small><b>{location.name}</b><span>{location.region && `${location.region} · `}{isPurchasableTile(location) ? `${money(location.price)} · ${locationOwner ? `Owned by ${locationOwner.name}` : "Unowned deed"}` : location.kind === "tax" ? `Pay ${money(location.amount)}` : location.kind === "go" ? "Collect ₹200 when passing GO" : instruction}</span></div><button type="button" onClick={() => setTile(location.position)}>Full details ↗</button></div>
-    <div className="table-caption"><label className="tile-jump"><span className="sr-only">Inspect any board tile</span><select aria-label="Inspect any board tile" value="" onChange={(event) => { if (event.target.value) setTile(Number(event.target.value)); }}><option value="">Explore every property ↗</option>{getBoard(game.boardSize).map((entry) => <option value={entry.position} key={entry.position}>{entry.position + 1}. {entry.name}{entry.region ? ` — ${entry.region}` : ""}</option>)}</select></label></div>
+    <div className="table-caption"><label className="tile-jump"><span className="sr-only">Inspect any board tile</span><select aria-label="Inspect any board tile" value="" onChange={(event) => { if (event.target.value) setTile(Number(event.target.value)); }}><option value="">Explore every property ↗</option>{getBoard(game.boardSize, game.city).map((entry) => <option value={entry.position} key={entry.position}>{entry.position + 1}. {entry.name}{entry.region ? ` — ${entry.region}` : ""}</option>)}</select></label></div>
     <div className="my-piece-strip"><span>Your setup</span><button type="button" onClick={() => setStudio("token")}>{byId.get(local?.tokenId ?? catalog?.featured.tokens[0] ?? "")?.label ?? "Choose a 3D piece"} ↗</button><button type="button" onClick={() => setStudio("dice")}>Change dice ↗</button><button type="button" onClick={() => setStudio("scenery")}>Change city ↗</button></div>
     {studio && <Suspense fallback={<div className="asset-notice">Opening your collection…</div>}><AssetStudio initialCategory={studio} color={local?.color} selectedId={studio === "dice" ? local?.diceId : studio === "token" ? local?.tokenId : undefined} onClose={() => setStudio(undefined)} onChoose={choose} /></Suspense>}
     {tile !== undefined && <TileInspector game={game} position={tile} onClose={() => setTile(undefined)} />}
     {prices && <div className="modal-backdrop" onClick={() => setPrices(false)}><section className="price-reader" role="dialog" aria-modal="true" aria-labelledby="prices-title" onClick={event => event.stopPropagation()}>
       <header><div><p className="eyebrow">Indian property guide</p><h2 id="prices-title">Property prices</h2></div><button type="button" autoFocus aria-label="Close property prices" onClick={() => setPrices(false)}>×</button></header>
       <p>Bank prices in rupees. Tap a place for its full rent and building costs.</p>
-      <div className="price-reader-list">{getBoard(game.boardSize).filter(isPurchasableTile).map(entry => <button type="button" key={entry.position} style={{ "--deed-color": isStreetTile(entry) ? GROUP_COLORS[entry.group] : "#778c73" } as CSSProperties} onClick={() => { setPrices(false); setTile(entry.position); }}><span><b>{entry.name}</b><small>{entry.region}</small></span><strong>{money(entry.price)}</strong></button>)}</div>
+      <div className="price-reader-list">{getBoard(game.boardSize, game.city).filter(isPurchasableTile).map(entry => <button type="button" key={entry.position} style={{ "--deed-color": isStreetTile(entry) ? GROUP_COLORS[entry.group] : "#778c73" } as CSSProperties} onClick={() => { setPrices(false); setTile(entry.position); }}><span><b>{entry.name}</b><small>{entry.region}</small></span><strong>{money(entry.price)}</strong></button>)}</div>
     </section></div>}
     {help && <div className="modal-backdrop" onClick={() => setHelp(false)}>
       <section className="rules-modal" role="dialog" aria-modal="true" aria-labelledby="rules-title" onClick={(event) => event.stopPropagation()}>
@@ -100,11 +101,11 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
           <li>Everyone starts with ₹1,500. Roll two dice, move and collect ₹200 each time you pass GO.</li>
           <li>Buy an unowned deed, or send it to an auction. Everyone can bid or pass — the last bidder wins.</li>
           <li>Own a full colour set to double its base rent. Build evenly across the set: four houses, then a hotel.</li>
-          <li>{game.mode === "classic" ? "Manage property even off-turn at a stable decision. Trade cash, unimproved deeds and real release cards. Leading bids are reserved. Received mortgages require immediate interest or redemption." : "On your turn, trade cash and unimproved deeds, mortgage for cash, or sell buildings at half cost."}</li>
+          <li>{game.mode === "classic" ? `Manage property even off-turn at a stable decision. Trade cash, unimproved deeds and release cards, or make a counter-offer. Leading bids are reserved. ${game.rulesEdition === "hasbro-2025" ? "Received mortgages can stay mortgaged at no immediate cost; redemption costs principal + 10%." : "Received mortgages require immediate interest or redemption."}` : "On your turn, trade cash and unimproved deeds, mortgage for cash, or sell buildings at half cost."}</li>
           <li>Doubles earn another roll; three consecutive doubles send you to Jail. Pay ₹50, use a card or try for doubles.</li>
-          <li>Rent, tax and cards resolve automatically. Negative cash pauses normal play until you sell buildings, mortgage, trade, or declare bankruptcy. {game.mode === "classic" ? "Classic requires you to raise available liquidation funds before surrender. Cards draw from shuffled 16-card decks, with held release cards removed until used." : "Negative net worth eliminates you automatically."} Last player standing wins.</li>
+          <li>{game.rulesEdition === "hasbro-2025" ? "Owners must press Claim rent before the next movement roll. Unclaimed rent expires. Tax and card payments resolve automatically." : "Rent, tax and cards resolve automatically."} Negative cash pauses normal play until you sell buildings, mortgage, trade, or declare bankruptcy. {game.mode === "classic" ? "Classic requires you to raise available liquidation funds before surrender. Cards draw from shuffled 16-card decks, with held release cards removed until used." : "Negative net worth eliminates you automatically."} Last player standing wins.</li>
         </ol>
-        <p>{game.mode === "classic" ? "Classic: 40 spaces for 2–6 players, highest-roll starting contest, ₹10 opening auctions, 32 houses / 12 hotels, scarcity bidding and fresh utility-rent dice. Indian names and rupees; automatic rent is a digital adaptation." : "Expanding India: 2–3 players: 40 spaces · 4: 48 · 5: 56 · 6: 64. The map locks at start."} Confirmed moves are saved automatically. If the connection drops, keep the table open — it reconnects to your seat. You can also reopen this room link in the same browser.</p>
+        <p>{game.mode === "classic" ? `Classic: 40 spaces for 2–6 players, highest-roll starting contest, ₹10 opening auctions, 32 houses / 12 hotels, scarcity bidding and fresh utility-rent dice. Indian names and rupees. ${game.rulesEdition === "hasbro-2025" ? "Hasbro G0009 (2025) rent and mortgage rules." : "Traditional edition with automatic rent."}` : "Expanding India: 2–3 players: 40 spaces · 4: 48 · 5: 56 · 6: 64. The map locks at start."} Confirmed moves are saved automatically. If the connection drops, keep the table open — it reconnects to your seat. You can also reopen this room link in the same browser.</p>
         <button className="primary-button" type="button" onClick={() => setHelp(false)}>Got it. Let’s play.</button>
       </section>
     </div>}
@@ -112,7 +113,7 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
 }
 
 function TileInspector({ game, position, onClose }: { game: GameState; position: number; onClose: () => void }) {
-  const tile = getTile(position, game.boardSize), property = game.properties[position];
+  const tile = getTile(position, game.boardSize, game.city), property = game.properties[position];
   const owner = game.players.find((player) => player.id === property?.ownerId);
   const stripe = isStreetTile(tile) ? GROUP_COLORS[tile.group] : "#eab960";
   return <div className="modal-backdrop" onClick={onClose}><section className="tile-inspector" style={{ "--deed-color": stripe } as CSSProperties} role="dialog" aria-modal="true" aria-labelledby="deed-title" onClick={(event) => event.stopPropagation()}>

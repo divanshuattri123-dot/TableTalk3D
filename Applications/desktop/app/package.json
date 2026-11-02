@@ -1,0 +1,9 @@
+{
+  "name": "tabletalk3d",
+  "productName": "TableTalk3D",
+  "version": "0.7.0",
+  "private": true,
+  "main": "main.cjs",
+  "description": "TableTalk3D multiplayer property game",
+  "author": "TableTalk"
+}

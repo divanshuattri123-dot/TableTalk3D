@@ -1,0 +1,17 @@
+{
+  "version": "0.7.0",
+  "budgets": {
+    "mobilePackage": 300000000,
+    "pcFolder": 3000000000
+  },
+  "actual": {
+    "androidApk": 21866984,
+    "windowsFolder": 411468002
+  },
+  "passed": true,
+  "notes": [
+    "Decimal MB/GB package budgets; no filler.",
+    "Mobile web assets are local; optional collection assets stream on demand.",
+    "Android/iOS hardware performance still requires device testing."
+  ]
+}

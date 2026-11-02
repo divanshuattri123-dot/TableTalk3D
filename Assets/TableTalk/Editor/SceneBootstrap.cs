@@ -39,6 +39,13 @@ namespace TableTalk.Editor
             }
 
             if (!Path.IsPathRooted(outputPath)) outputPath = Path.Combine(projectRoot, outputPath);
+            BuildWebGLTo(outputPath);
+        }
+
+        public static void BuildMobileWebGL() => BuildWebGLTo(Path.Combine(Directory.GetParent(Application.dataPath).FullName,"Build","AppsWeb"));
+
+        static void BuildWebGLTo(string outputPath)
+        {
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
             var scenes = EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray();
             if (scenes.Length == 0) throw new InvalidOperationException("Enable at least one scene in Build Settings.");

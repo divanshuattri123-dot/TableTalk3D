@@ -2,6 +2,7 @@ import { Server, routePartykitRequest } from "partyserver";
 import type { Connection } from "partyserver";
 import type { ClientMessage, ServerMessage } from "../src/network/protocol";
 import { SavedRoom } from "./roomStore";
+import {serveUnityChunks} from './chunkedAssets';
 
 const asClientMessage = (raw: string): ClientMessage | undefined => {
   try {
@@ -69,8 +70,9 @@ export default {
     const partyResponse = await routePartykitRequest(request, env);
     if (partyResponse) return partyResponse;
 
-    const asset = await env.ASSETS.fetch(request);
     const path = new URL(request.url).pathname;
+    if(path.endsWith('.data.gz')){const chunked=await serveUnityChunks(request,env.ASSETS);if(chunked)return chunked;}
+    const asset = await env.ASSETS.fetch(request);
     const unityContentType = path.endsWith(".wasm.gz") ? "application/wasm"
       : path.endsWith(".framework.js.gz") ? "application/javascript"
       : path.endsWith(".data.gz") ? "application/gzip" : undefined;
