@@ -39,6 +39,11 @@ versionCode 6, 47,868,569 bytes. SHA-256:
 - Hosted large Unity data is streamed from ordered asset parts on the free
   Worker. Downloaded gzip bytes, SHA-256 and CORS matched the local build.
   Existing smaller player releases remain available for already-open clients.
+- The deployed player completed a real browser download and rendered Forest
+  World. GitHub Pages deployment 41510745819 passed and its mobile Home visibly
+  shows Play, Join, Maps, Store, Settings and Preview 0.8.0.
+- The public GitHub Release APK was downloaded independently and its size and
+  SHA-256 match the local package. Release tag: `v0.8.0-test`.
 
 ## Limits
 
