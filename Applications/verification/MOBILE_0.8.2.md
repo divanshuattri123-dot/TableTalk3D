@@ -36,6 +36,14 @@ Verified 3 November 2026. This is a test release, not production/store approval.
 - Saved QA room PTPY was byte-identical across deployment. SHA-256:
   92dc2a3512460c26c0191d6d4d1b12958a9a32e0c062f8efcc6f263000a3889d.
 
+## Public browser and download
+
+GitHub Pages deployment run 41596220751 succeeded. In a fresh public QA room
+RTMJ, the real Unity pair was present, the old Roll slab was absent, and clicking
+the dice produced double sixes followed by movement to the City Power Grid
+purchase decision. Public browser loaded native player 54ab18f662cd. The public
+APK was downloaded back and matched the exact local byte count and SHA-256.
+
 ## Android package
 
 - APK: 56,745,613 bytes, version 0.8.2 / code 8.
