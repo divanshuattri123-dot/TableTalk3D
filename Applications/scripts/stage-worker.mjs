@@ -2,7 +2,9 @@ import {cp,mkdir,readFile,readdir,stat,writeFile,unlink} from 'node:fs/promises'
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
-const root=fileURLToPath(new URL('../..',import.meta.url)),stage=path.join(root,'tmp/worker-release-080');
+const root=fileURLToPath(new URL('../..',import.meta.url));
+const version=JSON.parse(await readFile(path.join(root,'Applications/package.json'),'utf8')).version;
+const stage=path.join(root,`tmp/worker-release-${version.replaceAll('.','')}`);
 const source=path.resolve(root,'../../2026-10-19/build-a-browser-based-multiplayer-monopoly/public');
 await mkdir(stage,{recursive:true});
 await cp(source,stage,{recursive:true,force:true});

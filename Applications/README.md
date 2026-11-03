@@ -1,7 +1,7 @@
 # TableTalk3D applications — family preview
 
-The current Android test update is **0.8.0**, with a Da Publications startup, Home
-menu, eleven bundled 3D worlds and six independent city-name editions. It retains
+The current Android test update is **0.8.1**, with a Da Publications startup, Home
+menu, mixed human/AI seats, eleven bundled 3D worlds and six independent city-name editions. It retains
 the improved foliage, traffic, audio/background and saved-room return fixes. Windows and iOS
 packages remain at 0.7.0 while mobile is the priority. Unreal PC work is deferred.
 

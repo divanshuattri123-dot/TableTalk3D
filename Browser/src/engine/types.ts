@@ -89,6 +89,8 @@ export interface PlayerInput {
 }
 
 export interface Player extends PlayerInput {
+  bot?: true;
+  botTradeOffered?: boolean;
   cash: number;
   position: number;
   inJail: boolean;
@@ -213,6 +215,8 @@ export interface GameState {
 export type PayKind = "jailFine" | "jailCard";
 
 export type GameAction =
+  | {type:'ADD_BOT';playerId:string}
+  | {type:'REMOVE_BOT';playerId:string;botId:string}
   | {type:'SET_WORLD';playerId:string;world:WorldId}
   | { type:'SET_CITY'; playerId:string; city:CityId }
   | { type: "JOIN"; player: PlayerInput }

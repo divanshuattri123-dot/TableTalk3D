@@ -1,5 +1,8 @@
 # Multiplayer Property Game — Engine Specification
 
+AI update, 3 November 2026: [BOTS_SPEC.md](BOTS_SPEC.md) defines mixed human/AI
+seats, deterministic lobby actions, shared-rule strategy and durable server turns.
+
 ## Version 0.6.0 additions (31 October 2026)
 
 Menu/city update, 1 November 2026: `SET_CITY {playerId, city}` is a host-only,

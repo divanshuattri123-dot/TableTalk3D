@@ -3,6 +3,9 @@ import type { Connection } from "partyserver";
 import type { ClientMessage, ServerMessage } from "../src/network/protocol";
 import { SavedRoom } from "./roomStore";
 import {serveUnityChunks} from './chunkedAssets';
+import {hasBotDecision,chooseBotAction,botThinkDelay} from './botRunner';
+import {randomIndex} from '../src/network/random';
+import type {GameState} from '../src/engine/types';
 
 const asClientMessage = (raw: string): ClientMessage | undefined => {
   try {
@@ -29,13 +32,31 @@ export class GameRoom extends Server<Env> {
     await this.room.load();
   }
 
-  onConnect(connection: Connection) {
+  async onConnect(connection: Connection) {
     this.send(connection, { type: "state", state: this.room.state });
+    await this.scheduleBot();
   }
 
   onClose(connection: Connection) {
     // Complete the close handshake so a reload does not leave a half-open socket.
     connection.close(1000, "Leaving table");
+  }
+
+  private async scheduleBot(previous?:GameState){
+    if(!this.room.state.players.some(player=>player.bot))return;
+    const connected=[...this.getConnections()].some(connection=>connection.readyState===1);
+    if(!connected||!hasBotDecision(this.room.state)){await this.ctx.storage.deleteAlarm();return;}
+    if(await this.ctx.storage.getAlarm()===null)
+      await this.ctx.storage.setAlarm(Date.now()+botThinkDelay(previous,this.room.state,randomIndex(600)));
+  }
+
+  async onAlarm(){
+    if(![...this.getConnections()].some(connection=>connection.readyState===1))return;
+    const previous=this.room.state;
+    const state=await this.room.apply(chooseBotAction);
+    if(state!==previous)this.broadcast(JSON.stringify({type:'state',state} satisfies ServerMessage));
+    if(state.notice){console.error('AI decision rejected',state.notice);return;}
+    await this.scheduleBot(previous);
   }
 
   async onMessage(sender: Connection, message: string | ArrayBuffer) {
@@ -52,8 +73,10 @@ export class GameRoom extends Server<Env> {
 
     if (incoming.type === "sync") { this.send(sender, { type: "state", state: this.room.state }); return; }
     try {
+      const previous=this.room.state;
       const state = await this.room.apply(incoming.action, incoming.id);
       this.broadcast(JSON.stringify({ type: "state", state, ackId: incoming.id } satisfies ServerMessage));
+      await this.scheduleBot(previous);
     } catch (error) {
       console.error("Room checkpoint failed", error);
       this.send(sender, { type: "error", message: "Could not save this move yet. Reconnecting to retry safely.", id: incoming.id, retryable: true });

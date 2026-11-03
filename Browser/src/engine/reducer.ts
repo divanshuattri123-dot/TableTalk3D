@@ -13,7 +13,7 @@ import {
   isStreetTile
 } from "./board";
 import { formatRupees } from "./currency";
-import { isPlayerColorTaken, playerColorKey } from "./playerColors";
+import { isPlayerColorTaken, playerColorKey, PLAYER_COLORS } from "./playerColors";
 import { canClassicTradeProperty, reduceClassic, startClassic } from "./classic";
 import { cityInfo, isCityId } from './cities';
 import {isWorldId,worldInfo} from './worlds';
@@ -1159,6 +1159,22 @@ const handleTradeDecline = (
 
 const applyAction = (state: GameState, action: GameAction): GameState => {
   switch (action.type) {
+    case 'ADD_BOT': {
+      if(state.phase!=='lobby'||state.players[0]?.id!==action.playerId||state.players[0]?.bot)return reject(state,'Only the host can add AI players before starting.');
+      const color=PLAYER_COLORS.find(value=>!isPlayerColorTaken(state.players,value));
+      if(state.players.length>=6||!color)return reject(state,'This room has six players. Remove an AI to invite a friend.');
+      let seat=1;while(state.players.some(p=>p.id===`ai-${seat}`))seat++;
+      const id=`ai-${seat}`,name=`AI ${['Mira','Arjun','Tara','Kabir','Zoya','Dev'][(seat-1)%6]}`;
+      const next=handleJoin(state,{type:'JOIN',player:{id,name,color}});
+      return {...next,players:next.players.map(p=>p.id===id?{...p,bot:true}:p)};
+    }
+    case 'REMOVE_BOT': {
+      if(state.phase!=='lobby'||state.players[0]?.id!==action.playerId)return reject(state,'Only the host can remove AI players before starting.');
+      const bot=state.players.find(p=>p.id===action.botId&&p.bot);
+      if(!bot)return reject(state,'Choose an AI player to remove.');
+      const players=state.players.filter(p=>p.id!==bot.id),initial=createInitialState(state.roomCode,state.mode==='classic'?40:boardSizeForPlayers(players.length));
+      return addEvent({...state,players,boardSize:initial.boardSize,properties:initial.properties,bankHouses:initial.bankHouses,bankHotels:initial.bankHotels},`${bot.name} left the lobby.`);
+    }
     case 'SET_WORLD': {
       if(state.phase!=='lobby'||state.players[0]?.id!==action.playerId)return reject(state,'Only the host can choose a map before starting.');
       if(!isWorldId(action.world))return reject(state,'Choose an available map.');
@@ -1251,6 +1267,7 @@ const synchronizeDebt = (state: GameState): GameState => {
 };
 
 const reduceCore = (state: GameState, action: GameAction): GameState => {
+  if(action.type==='ADD_BOT'||action.type==='REMOVE_BOT')return applyAction(state,action);
   if (state.mode === "classic" && state.phase !== "lobby") return reduceClassic(state, action);
   const before = synchronizeDebt(state), debt = before.debts?.[0];
   if (debt) {
@@ -1285,7 +1302,11 @@ const reduceCore = (state: GameState, action: GameAction): GameState => {
 };
 
 export const reduceGame = (state:GameState,action:GameAction):GameState => {
-  const next=reduceCore(state,action);
+  let next=reduceCore(state,action);
+  if(!next.notice&&next.activePlayerId!==state.activePlayerId)
+    next={...next,players:next.players.map(p=>p.bot&&p.id===next.activePlayerId?{...p,botTradeOffered:false}:p)};
+  if(action.type==='TRADE_OFFER'&&next.pendingTrade?.id===action.offerId)
+    next={...next,players:next.players.map(p=>p.bot&&p.id===action.playerId?{...p,botTradeOffered:true}:p)};
   if(!next.city || next.city==='india')return next;
   const translate=(text:string)=>cityText(text,next.city,next.boardSize);
   return {...next,eventLog:next.eventLog.map(event=>{

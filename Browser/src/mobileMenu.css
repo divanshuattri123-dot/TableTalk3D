@@ -122,6 +122,15 @@
 .empty-seat > span { display:grid; place-items:center; width:42px; height:42px; margin-bottom:7px; border-radius:50%; background:white; box-shadow:0 3px 3px #53677633; font-size:30px; font-weight:300; }
 .empty-seat b { font-size:12px; }
 .empty-seat small { font-size:9px; }
+.empty-seat .seat-invite,.empty-seat .seat-add-ai { width:100%;max-width:170px;min-height:38px;padding:7px;border:1px solid #9aafb9;border-radius:18px;background:#fffdf5;color:#294653;font:800 12px "Trebuchet MS","Segoe UI",sans-serif; }
+.empty-seat .seat-add-ai { border-color:#247c88;background:#247c88;color:white; }
+.empty-seat .seat-invite:focus-visible,.empty-seat .seat-add-ai:focus-visible { outline:3px solid #e02c41;outline-offset:2px; }
+.bot-style { font-size:10px;color:#345466; }
+.bot-lobby-controls { padding:10px 0;display:grid;gap:8px;font-size:12px; }
+.bot-lobby-controls p { margin:0;color:#526773; }
+.bot-lobby-controls button { min-height:38px;padding:7px 12px;border:1px solid #9cb0a0;border-radius:12px;background:#f5f7e9;color:#294635;font-weight:800; }
+.bot-lobby-row { display:flex;align-items:center;justify-content:space-between;gap:10px; }
+@media (orientation:landscape) and (max-height:500px) { .empty-seat > span { width:28px;height:28px;margin-bottom:0;font-size:23px; } .mobile-lobby-seat:has(.bot-style) { gap:4px; } .mobile-lobby-seat:has(.bot-style) .silver-portrait { width:42px;height:42px;flex-basis:42px; } }
 .mobile-lobby-footer { display:flex; justify-content:space-between; align-items:center; gap:12px; width:min(1050px,100%); margin:0 auto; }
 .lobby-share-code { display:grid; grid-template-columns:auto auto; align-items:center; gap:2px 10px; min-height:44px; padding:6px 12px; border:1px solid #b3c0c7; border-radius:8px; background:white; color:#304953; }
 .lobby-share-code small { font-size:8px; letter-spacing:.06em; }

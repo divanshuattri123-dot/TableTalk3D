@@ -1,3 +1,16 @@
+# 0.8.1 — Friends and AI at the same table
+
+- The host can add or remove AI in the lobby. Any mix of humans and AI works
+  with 2–6 total seats, including one human against one to five AI players.
+- AI takes unused colours and counts toward expanding-map size. Existing saves
+  remain unchanged. Running games do not replace seats with bots.
+- Different playing styles vary reserves, bidding, building and deal prices.
+  AI buys, auctions, builds, mortgages, handles debt/jail and negotiates trades
+  through the same reducer as humans. No paid AI API is used.
+- Server alarms pace the decisions and preserve them across room restarts.
+  AI waits for human decisions and pauses when the room has no connected viewers.
+- Reuses the local Unity 0.8.0 player and all eleven worlds.
+
 # 0.8.0 — Publisher startup, Home and eleven maps
 
 - A readable Da Publications intro leads to Home on app launch. Saved rooms use

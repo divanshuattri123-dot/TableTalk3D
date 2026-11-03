@@ -23,9 +23,12 @@ export class SavedRoom {
       this.checkpoint = saved;
     }
   }
-  apply(action: GameAction, id?: string): Promise<GameState> {
+  apply(input: GameAction | ((state:GameState)=>GameAction|undefined), id?: string): Promise<GameState> {
     const result = this.tail.then(async () => {
       if (id && this.checkpoint.receipts.includes(id)) return this.state;
+      // Automatic decisions must use the state after earlier human moves have committed.
+      const action=typeof input==='function'?input(this.state):input;
+      if(!action)return this.state;
       const state = reduceGame(this.state, action);
       if (state === this.state && !id) return state;
       const next: Checkpoint = { version: 1, state, receipts: id ? [...this.checkpoint.receipts, id].slice(-512) : this.checkpoint.receipts };

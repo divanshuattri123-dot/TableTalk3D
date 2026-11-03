@@ -37,7 +37,7 @@ jobs:
           PAGES_BASE_PATH: /TableTalk3D/
           VITE_PARTYKIT_HOST: table-talk-realtime.divanshuattri123.workers.dev
           VITE_ASSET_HOST: https://table-talk-realtime.divanshuattri123.workers.dev
-          VITE_APP_VERSION: 0.8.0
+          VITE_APP_VERSION: 0.8.1
       - uses: actions/upload-pages-artifact@v4
         with:
           path: Browser/dist

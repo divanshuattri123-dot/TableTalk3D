@@ -1,0 +1,16 @@
+{
+  "version": "0.8.1",
+  "versionCode": 7,
+  "apkBytes": 47869385,
+  "sha256": "31d3d1760990ca3a1a43b69326e8a94ff0fa1fd4772b6c16a3b96b070fb0b986",
+  "unity": {
+    "loaderUrl": "Build/d06dbcdc6206/AppsWeb.loader.js",
+    "dataUrl": "Build/d06dbcdc6206/AppsWeb.data",
+    "frameworkUrl": "Build/d06dbcdc6206/AppsWeb.framework.js",
+    "codeUrl": "Build/d06dbcdc6206/AppsWeb.wasm",
+    "productVersion": "0.8.0"
+  },
+  "webFilesCompared": 44,
+  "mismatches": [],
+  "allPackagedAssetsMatch": true
+}

@@ -55,7 +55,7 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
     setStudio(undefined);
   };
   return <section className="board-stage" aria-label="Interactive table">
-    <div className="play-turn-banner" style={{ "--turn-color": current?.color ?? "#77c5a1" } as CSSProperties}><span className="play-turn-dot" /><div><b>{game.winnerId ? `${game.players.find(player => player.id === game.winnerId)?.name ?? "The last player"} wins!` : current ? `${current.name}${current.id === localId ? " (you)" : ""}${game.debts?.length ? " · debt settlement" : "’s turn"}` : `Room ${game.roomCode}`}</b><span>{instruction}</span></div><strong>{game.boardSize}<small>SPACES</small></strong></div>
+    <div className="play-turn-banner" style={{ "--turn-color": current?.color ?? "#77c5a1" } as CSSProperties}><span className="play-turn-dot" /><div><b>{game.winnerId ? `${game.players.find(player => player.id === game.winnerId)?.name ?? "The last player"} wins!` : current ? `${current.name}${current.id === localId ? " (you)" : ""}${game.debts?.length ? " · debt settlement" : "’s turn"}` : `Room ${game.roomCode}`}</b><span>{current?.bot&&['awaitingRoll','awaitingBuy','awaitingEndTurn'].includes(game.phase)?'Considering the next move…':instruction}</span></div><strong>{game.boardSize}<small>SPACES</small></strong></div>
     <div className="table-toolbar" aria-label="Table tools">
       <button type="button" className="collection-button" onClick={() => setStudio("token")} aria-label="Open token collection">◇ <span>Pieces</span></button>
       <button type="button" aria-expanded={preferences} onClick={() => setPreferences(!preferences)} aria-label="Game settings">⚙ <span>Settings</span></button>

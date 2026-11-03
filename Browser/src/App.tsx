@@ -2,19 +2,15 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   getBoard,
-  railroadPositions,
-  classicPosition,
   colorGroupTiles,
-  cardAt,
   getPurchasableTile,
   getTile,
   isPurchasableTile,
   isStreetTile
 } from "./engine/board";
 import type {
-  CardDraw,
-  CardDeck,
   BoardSize,
+  CardDeck,
   GameAction,
   GameState,
   Player,
@@ -26,6 +22,8 @@ import { canTradeProperty, decisionPlayerId, netWorth } from "./engine/reducer";
 import { formatRupees } from "./engine/currency";
 import { canClassicManage, classicBuildingGroupLocked, classicLiquidationValue, classicSpendableCash } from "./engine/classic";
 import { makeStartAction } from "./network/startAction";
+import {makeCardDraws} from "./network/cardDraws";
+import BotLobbyControls from "./view/BotLobbyControls";
 import {rollDice} from './network/random';
 import { isPlayerColorTaken, playerColorKey } from "./engine/playerColors";
 import { usePresentation } from "./presentation/usePresentation";
@@ -123,40 +121,6 @@ const propertyLabel = (property: PropertyState): string => {
   if (property.houses === 5) return "Hotel";
   if (property.houses > 0) return `${property.houses} house${property.houses === 1 ? "" : "s"}`;
   return "";
-};
-
-const nearestRailroad = (position: number, size: BoardSize): number =>
-  railroadPositions(size).find((railroad) => railroad > position) ?? railroadPositions(size)[0]!;
-
-const makeCardDraws = (state: GameState, player: Player): CardDraw[] => {
-  if (state.mode === "classic") return [];
-  const pending = state.pendingRoll;
-  if (!pending) return [];
-
-  const draws: CardDraw[] = [];
-  let position = (player.position + pending.total) % state.boardSize;
-  for (let depth = 0; depth < 4; depth += 1) {
-    const tile = getTile(position, state.boardSize, state.city);
-    if (tile.kind !== "chance" && tile.kind !== "community") break;
-    const draw: CardDraw = { deck: tile.kind, index: Math.floor(Math.random() * 8) };
-    draws.push(draw);
-    const card = cardAt(draw.deck, draw.index);
-    if (!card) break;
-    switch (card.effect.kind) {
-      case "moveTo":
-        position = classicPosition(card.effect.position, state.boardSize);
-        continue;
-      case "nearestRailroad":
-        position = nearestRailroad(position, state.boardSize);
-        continue;
-      case "moveRelative":
-        position = (position + card.effect.spaces + state.boardSize) % state.boardSize;
-        continue;
-      default:
-        return draws;
-    }
-  }
-  return draws;
 };
 
 function TokenColorPicker({ color, players = [], localId, onChoose }: { color: string; players?: readonly Player[]; localId?: string; onChoose: (color: string) => void }) {
@@ -475,12 +439,12 @@ function Lobby({
       <CityPicker value={game.city} disabled={!isHost} onSelect={city=>sendAction({type:'SET_CITY',playerId:localId,city})}/>
       <label className="field-label">Rules mode<select className="text-input" aria-label="Rules mode" value={game.rulesEdition === "hasbro-2025" ? "classic-2025" : game.mode ?? "expanding"} disabled={!isHost} onChange={e => sendAction({ type: "SET_MODE", playerId: localId, mode: e.target.value === "expanding" ? "expanding" : "classic", rulesEdition: e.target.value === "classic-2025" ? "hasbro-2025" : undefined })}><option value="classic-2025">Classic · Hasbro 2025 · claim rent</option><option value="expanding">Expanding India · larger with friends</option><option value="classic">Classic traditional · automatic rent</option></select></label>
       <div className="map-size-note"><b>{game.boardSize} spaces</b><span>{game.mode === "classic" ? "Classic India" : "Expanding India"}</span><small>{game.mode === "classic" ? "40 spaces for 2–6 players. Shuffled 16-card decks, starting dice contest and off-turn finances." : "4 players → 48 · 5 → 56 · 6 → 64. Locks at start."}</small></div>
-      <PlayerRoster game={game} localId={localId} />
+      <BotLobbyControls game={game} localId={localId} sendAction={sendAction}/><PlayerRoster game={game} localId={localId} />
       {local && <details className="lobby-colours"><summary>Your token colour</summary><TokenColorPicker color={local.color} players={game.players} localId={localId} onChoose={color => sendAction({ type: "SET_APPEARANCE", playerId: localId, color })} /></details>}
       {duplicateColours && <p className="inline-error" role="status">Every player needs a different colour. Open “Your token colour” to choose a free one.</p>}
       {isHost ? (
         <button className="primary-button full-width" disabled={game.players.length < 2 || duplicateColours} onClick={start} type="button">
-          {game.players.length < 2 ? "Waiting for one friend" : "Start the game"}
+          {game.players.length < 2 ? "Add AI or invite a friend" : "Start the game"}
         </button>
       ) : (
         <p className="spectator-note">The room creator starts after everyone has joined.</p>

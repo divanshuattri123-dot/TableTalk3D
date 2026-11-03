@@ -1,8 +1,8 @@
 import type {Dice} from '../engine/types';
 
 const RANGE=0x1_0000_0000;
-const nextWord=()=>globalThis.crypto?.getRandomValues
-  ? globalThis.crypto.getRandomValues(new Uint32Array(1))[0]!
+const nextWord=()=>typeof crypto!=='undefined'&&crypto.getRandomValues
+  ? crypto.getRandomValues(new Uint32Array(1))[0]!
   : Math.floor(Math.random()*RANGE);
 
 export function randomIndex(size:number,word=nextWord):number {
