@@ -126,6 +126,14 @@ function channel() {
   return { socket, callbacks, link, snapshot, state, advance: (ms: number) => { now += ms; } };
 }
 describe("automatic room recovery", () => {
+  it('acknowledges duplicate snapshots without repainting the board, while retaining real appearance changes',()=>{
+    const c=channel();c.link.open();c.snapshot();c.link.sendAction(action('END_TURN'));c.snapshot('client:1');
+    for(let i=0;i<100;i++)c.snapshot();expect(c.callbacks.state).toHaveBeenCalledTimes(1);
+    expect(c.link.sendAction(action('END_TURN'))).toBe(true);
+    const updated={...c.state,players:c.state.players.map(p=>({...p,tokenId:'new-piece'}))};
+    c.link.receive(JSON.stringify({type:'state',state:updated,ackId:'client:2'}));expect(c.callbacks.state).toHaveBeenCalledTimes(2);
+    c.link.resume();c.link.receive(JSON.stringify({type:'state',state:updated}));expect(c.callbacks.state).toHaveBeenCalledTimes(3);
+  });
   it("ignores a rapid duplicate tap until the first action is acknowledged", () => {
     const c = channel(); c.link.open(); c.snapshot();
     expect(c.link.sendAction(action("END_TURN"))).toBe(true);

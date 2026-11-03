@@ -31,6 +31,10 @@ namespace TableTalk
         Vector2 lastDrag;
         float pinchDistance;
         bool angledView;
+        bool diceInputEnabled;
+        string lastDiceTarget;
+        [Serializable] public class DiceInput { public bool enabled; public string diceId; }
+        [Serializable] public class DiceTarget { public float x, y, width, height; }
         [Serializable] public class VisualSettings { public string quality, theme, camera; public bool mobile, reducedMotion, screenLabels; }
         public string CompletedFrameId { get; private set; }
         public bool WebMotionPlaying => webMotion != null;
@@ -130,8 +134,54 @@ namespace TableTalk
             var frame = JsonUtility.FromJson<MotionFrame>(json);
             if (frame == null || frame.id == lastFrameId) return;
             lastFrameId = frame.id;
+            diceInputEnabled = false;
             if (webMotion != null) StopCoroutine(webMotion);
+            // Stopping a roll coroutine skips its final cleanup; dice must not survive into movement.
+            if (diceRoot != null) diceRoot.gameObject.SetActive(false);
             webMotion = StartCoroutine(PlayFrame(frame));
+        }
+
+        void UseDice(string id)
+        {
+            if (id == currentDiceId && diceRoot != null) return;
+            var asset = tokens.FirstOrDefault(t => t.id == id);
+            dicePrefab = asset != null ? asset.prefab : defaultDicePrefab;
+            if (diceRoot != null) { Destroy(diceRoot.gameObject); diceRoot = null; }
+            currentDiceId = id;
+        }
+
+        [Preserve] public void SetDiceInput(string json)
+        {
+            var input = JsonUtility.FromJson<DiceInput>(json);
+            diceInputEnabled = input != null && input.enabled && webMotion == null && shown?.phase == "awaitingRoll";
+            lastDiceTarget = null;
+            if (!diceInputEnabled) { if (webMotion == null && diceRoot != null) diceRoot.gameObject.SetActive(false); return; }
+            UseDice(input.diceId); MakeDice(); WholeBoard();
+            float size = BoardLayout.Span(shown.boardSize) / 12f * 1.35f;
+            for (int i = 0; i < 2; i++)
+            {
+                dicePieces[i].localScale = Vector3.one * size;
+                dicePieces[i].position = new Vector3((i == 0 ? -.85f : .85f) * size, 3.7f, (i == 0 ? -.25f : .25f) * size);
+                dicePieces[i].rotation = Quaternion.Euler(i == 0 ? 16 : -12, i == 0 ? 24 : -18, i == 0 ? -8 : 10);
+            }
+            diceRoot.gameObject.SetActive(true);
+            PublishDiceTarget();
+        }
+
+        void PublishDiceTarget()
+        {
+            if (!diceInputEnabled || diceRoot == null || !diceRoot.gameObject.activeSelf) return;
+            var low = new Vector2(1, 1); var high = Vector2.zero;
+            foreach (var die in dicePieces)
+                for (int corner = 0; corner < 8; corner++)
+                {
+                    var local = new Vector3((corner & 1) == 0 ? -.6f : .6f, (corner & 2) == 0 ? -.6f : .6f, (corner & 4) == 0 ? -.6f : .6f);
+                    Vector2 point = boardCamera.WorldToViewportPoint(die.TransformPoint(local));
+                    low = Vector2.Min(low, point); high = Vector2.Max(high, point);
+                }
+            var json = JsonUtility.ToJson(new DiceTarget { x = (low.x + high.x) * .5f, y = 1 - (low.y + high.y) * .5f, width = high.x - low.x, height = high.y - low.y });
+            // Publish only changed camera projections, rather than repainting React every Unity frame.
+            if (json != lastDiceTarget) { lastDiceTarget = json; EmitWeb("dice-target", json); }
         }
 
         IEnumerator PlayFrame(MotionFrame frame)
@@ -140,13 +190,7 @@ namespace TableTalk
             pieces.TryGetValue(frame.playerId ?? "", out var piece);
             if (frame.kind == "dice")
             {
-                if (frame.diceId != currentDiceId)
-                {
-                    var asset = tokens.FirstOrDefault(t => t.id == frame.diceId);
-                    dicePrefab = asset != null ? asset.prefab : defaultDicePrefab;
-                    if (diceRoot != null) { Destroy(diceRoot.gameObject); diceRoot = null; }
-                    currentDiceId = frame.diceId;
-                }
+                UseDice(frame.diceId);
                 yield return TumbleDice(frame.dice, seconds);
             }
             else if (frame.kind == "move" && piece != null && frame.route != null)
@@ -256,6 +300,7 @@ namespace TableTalk
         IEnumerator TumbleDice(int[] values, float seconds)
         {
             MakeDice(); diceRoot.gameObject.SetActive(true); WholeBoard();
+            foreach (var die in dicePieces) die.localScale = Vector3.one * 1.35f;
             var normals = new[] { Vector3.up, Vector3.forward, Vector3.right, Vector3.left, Vector3.back, Vector3.down };
             var ends = Enumerable.Range(0, 2).Select(i => Quaternion.Euler(0, i == 0 ? 18 : -22, 0) * Quaternion.FromToRotation(normals[Mathf.Clamp(values?[i] ?? 1, 1, 6) - 1], Vector3.up)).ToArray();
             for (float t = 0; t < 1; t += Time.unscaledDeltaTime / seconds)
@@ -306,6 +351,7 @@ namespace TableTalk
         {
             UpdateBoardInput();
             PublishScreenLabels();
+            PublishDiceTarget();
         }
         void UpdateBoardInput()
         {

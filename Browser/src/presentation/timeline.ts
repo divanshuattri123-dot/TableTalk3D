@@ -59,7 +59,8 @@ export class PresentationTimeline {
     if (this.planned) this.reset(this.planned, this.unreadCard());
   }
   complete(id: string, source: "animation" | "reader") {
-    if (canCompleteFrame(this.frame, id, source)) this.advance();
+    if (!canCompleteFrame(this.frame, id, source))return false;
+    this.advance();return true;
   }
   private advance() {
     while (true) {

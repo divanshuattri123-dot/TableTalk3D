@@ -24,6 +24,7 @@ import { canClassicManage, classicBuildingGroupLocked, classicLiquidationValue, 
 import { makeStartAction } from "./network/startAction";
 import {makeCardDraws} from "./network/cardDraws";
 import BotLobbyControls from "./view/BotLobbyControls";
+import TapDice from './view/TapDice';
 import {rollDice} from './network/random';
 import { isPlayerColorTaken, playerColorKey } from "./engine/playerColors";
 import { usePresentation } from "./presentation/usePresentation";
@@ -277,6 +278,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
   const { game, connection, error, sendAction, reconnect } = useGameRoom(session);
   const [copied, setCopied] = useState(false);
   const [unityReady, setUnityReady] = useState(false);
+  const [diceToolsOpen,setDiceToolsOpen]=useState(false);
   const [drawer, setDrawer] = useState<"menu" | "players" | "log">();
   const [tablePanel, setTablePanel] = useState<TablePanel>();
   const [fullscreen, setFullscreen] = useState(fullscreenActive);
@@ -382,7 +384,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
       {game.rentClaim && game.rentClaim.ownerId === me?.id && !me?.bankrupt && <div className="rent-claim" role="status"><span><b>{getTile(game.rentClaim.propertyId, game.boardSize, game.city).name}</b><small>Claim before the next movement roll</small></span><button type="button" disabled={connection !== "connected" || motion.busy || !sceneUsable || ["awaitingTradeResponse", "awaitingDebt", "awaitingMortgageDecision"].includes(game.phase)} onClick={() => sendAction({ type: "CLAIM_RENT", playerId: me!.id, claimId: game.rentClaim!.id })}>Claim {formatMoney(game.rentClaim.amount)}</button></div>}
 
       <section className="game-layout">
-        {mobileLobby ? <MobileLobby game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} onCopy={copyRoomLink} copied={copied} colorPicker={<TokenColorPicker color={me?.color ?? session.player.color} players={game.players} localId={session.player.id} onChoose={color=>sendAction({type:'SET_APPEARANCE',playerId:session.player.id,color})}/>}/> : <BoardStage panel={tablePanel} onPanelChange={setTablePanel} game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />}
+        {mobileLobby ? <MobileLobby game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} onCopy={copyRoomLink} copied={copied} colorPicker={<TokenColorPicker color={me?.color ?? session.player.color} players={game.players} localId={session.player.id} onChoose={color=>sendAction({type:'SET_APPEARANCE',playerId:session.player.id,color})}/>}/> : <BoardStage diceEnabled={isCurrent&&game.phase==="awaitingRoll"&&!diceToolsOpen&&!drawer&&!tablePanel} onThrow={()=>{if(isCurrent&&me&&game.phase==="awaitingRoll")sendAction({type:"ROLL",playerId:me.id,dice:dice()});}} panel={tablePanel} onPanelChange={setTablePanel} game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />}
         {game.phase !== "lobby" && <div className="live-seats" aria-label="Live player balances">{game.players.map(player => <button type="button" key={player.id} className={`${player.id === decisionPlayerId(game) ? "seat-active" : ""} ${player.bankrupt ? "seat-out" : ""}`} style={{ "--player-color": player.color } as CSSProperties} onClick={() => setDrawer("players")}><PlayerPortrait player={player} /><span><b>{player.name}{player.id === session.player.id ? " · you" : ""}</b><strong>{player.bankrupt ? "Out" : formatMoney(player.cash)}</strong>{player.inJail && <small>In jail</small>}</span></button>)}</div>}
         {!mobileLobby && <aside className="side-rail" aria-label="Game controls and status">
           {game.phase === "lobby" ? (
@@ -390,7 +392,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
           ) : (
             <>
               {me ? (
-                <Controls game={game} local={me} isCurrent={isCurrent} available={connection === "connected" && !motion.busy && sceneUsable} presenting={motion.busy} sendAction={sendAction} />
+                <Controls nativeDice={unityReady} onToolsOpen={setDiceToolsOpen} game={game} local={me} isCurrent={isCurrent} available={connection === "connected" && !motion.busy && sceneUsable} presenting={motion.busy} sendAction={sendAction} />
               ) : (
                 <p className="spectator-note">Spectating only — this table had already started before you arrived.</p>
               )}
@@ -564,6 +566,8 @@ function PlayerRoster({ game, localId }: { game: GameState; localId: string }) {
 }
 
 function Controls({
+  nativeDice,
+  onToolsOpen,
   game,
   local,
   isCurrent,
@@ -571,6 +575,8 @@ function Controls({
   presenting,
   sendAction
 }: {
+  nativeDice:boolean;
+  onToolsOpen:(open:boolean)=>void;
   game: GameState;
   local: Player;
   isCurrent: boolean;
@@ -580,6 +586,7 @@ function Controls({
 }) {
   const [showBuild, setShowBuild] = useState(false);
   const [showTrade, setShowTrade] = useState(false);
+  useEffect(()=>{onToolsOpen(showBuild||showTrade);return()=>onToolsOpen(false);},[showBuild,showTrade,onToolsOpen]);
   const [confirmBankruptcy, setConfirmBankruptcy] = useState(false);
   const debt = game.debts?.[0], settling = debt?.playerId === local.id;
   const normalTurn = game.phase === "awaitingRoll" || game.phase === "awaitingEndTurn" || game.phase === "awaitingDebt" || game.phase === "awaitingJailPayment";
@@ -612,9 +619,7 @@ function Controls({
               <button className="secondary-button" type="button" disabled={local.getOutOfJailCards === 0} onClick={() => sendAction({ type: "PAY", playerId: local.id, kind: "jailCard" })}>Use jail card</button>
             </div>
           )}
-          <button className="roll-button" type="button" disabled={showTrade || showBuild} onClick={() => sendAction({ type: "ROLL", playerId: local.id, dice: dice() })}>
-            <span>ROLL</span><i>2d6</i>
-          </button>
+          {nativeDice?<p className="native-dice-note">Tap the dice on the board</p>:<TapDice disabled={showTrade||showBuild} onThrow={()=>sendAction({type:'ROLL',playerId:local.id,dice:dice()})}/>}
         </div>
       )}
 
@@ -628,7 +633,7 @@ function Controls({
         <div className="utility-actions">
           <button className="secondary-button" type="button" onClick={() => { setShowBuild((value) => !value); setShowTrade(false); }}>{settling ? "Sell / mortgage" : "Build / mortgage"}</button>
           <button className="secondary-button" type="button" onClick={() => { setShowTrade((value) => !value); setShowBuild(false); }}>Trade</button>
-          {game.phase === "awaitingEndTurn" && isCurrent && <button className="primary-button" type="button" disabled={showTrade || showBuild} onClick={() => sendAction({ type: "END_TURN", playerId: local.id })}>{game.lastRoll?.grantsExtraRoll && !local.inJail ? "Roll again" : "End turn"}</button>}
+          {game.phase === "awaitingEndTurn" && isCurrent && <button className="primary-button" type="button" disabled={showTrade || showBuild} onClick={() => sendAction({ type: "END_TURN", playerId: local.id })}>{game.lastRoll?.grantsExtraRoll && !local.inJail ? "Continue turn" : "End turn"}</button>}
           {settling && game.phase === "awaitingDebt" && <button className="bankrupt-button" disabled={!canSurrender} title={!canSurrender ? "Available building sales and mortgages can still clear your debt." : undefined} type="button" onClick={() => setConfirmBankruptcy(true)}>Declare bankruptcy</button>}
         </div>
       )}

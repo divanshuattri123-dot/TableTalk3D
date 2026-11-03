@@ -1,0 +1,83 @@
+{
+  "viewport": {
+    "width": 844,
+    "height": 390
+  },
+  "stages": [
+    {
+      "center": "unity-canvas",
+      "stage": "dice",
+      "touch": false
+    },
+    {
+      "center": "unity-canvas",
+      "stage": "dice",
+      "touch": false
+    },
+    {
+      "center": "unity-canvas",
+      "stage": "dice",
+      "touch": false
+    },
+    {
+      "center": "unity-canvas",
+      "stage": "dice",
+      "touch": false
+    },
+    {
+      "center": "unity-canvas",
+      "stage": "dice",
+      "touch": false
+    },
+    {
+      "center": "unity-canvas",
+      "stage": "dice",
+      "touch": false
+    },
+    {
+      "center": "unity-canvas",
+      "stage": "dice",
+      "touch": false
+    },
+    {
+      "center": "unity-canvas",
+      "stage": "move",
+      "touch": false
+    },
+    {
+      "center": "unity-canvas",
+      "stage": "move",
+      "touch": false
+    },
+    {
+      "center": "unity-canvas",
+      "stage": "move",
+      "touch": false
+    },
+    {
+      "center": "unity-canvas",
+      "stage": "move",
+      "touch": false
+    },
+    {
+      "center": "unity-canvas",
+      "stage": "move",
+      "touch": false
+    },
+    {
+      "center": "unity-canvas",
+      "stage": "move",
+      "touch": false
+    },
+    {
+      "center": "unity-canvas",
+      "stage": "move",
+      "touch": false
+    },
+    {
+      "center": "",
+      "stage": "purchase",
+      "touch": false
+    }
+  ]
+}

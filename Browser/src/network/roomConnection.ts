@@ -20,6 +20,7 @@ export class RoomConnection {
   private lastPing = 0;
   private sequence = 0;
   private pending = new Map<string, { action: GameAction; sentAt: number }>();
+  private lastStateKey?:string;
   constructor(private socket: Socket, private callbacks: Callbacks, private player: PlayerInput | undefined,
     private clientId: string, private now = Date.now) { this.lastHeard = now(); }
 
@@ -40,7 +41,8 @@ export class RoomConnection {
     if (message.type !== "state") return;
     this.snapshotRequestedAt=undefined;
     if (message.ackId) this.pending.delete(message.ackId);
-    this.callbacks.state(message.state);
+    const key=JSON.stringify(message.state);
+    if(!this.ready||key!==this.lastStateKey){this.callbacks.state(message.state);this.lastStateKey=key;}
     this.callbacks.error(undefined);
     if (!this.ready && !this.offline) {
       this.ready = true; this.callbacks.status("connected");

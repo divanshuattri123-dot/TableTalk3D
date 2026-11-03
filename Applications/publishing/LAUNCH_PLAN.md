@@ -1,6 +1,8 @@
 # Table Talk mobile launch preparation
 
-Status on 1 November 2026: **draft preparation, not published**.
+Status on 3 November 2026: **draft preparation, not published**. Owner reconfirmed
+that no publisher/ad accounts exist. See RELEASE_HANDOFF.md and the versioned
+release-readiness report for the current package and outstanding requirements.
 User's first-advertising-test limit: **₹5,000 total**. No Google Play or advertising
 accounts exist yet. Nothing in this document starts or funds a campaign.
 Mobile remains Unity. Unreal PC work is deferred.

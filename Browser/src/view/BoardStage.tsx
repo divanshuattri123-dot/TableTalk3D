@@ -17,12 +17,13 @@ const UnityBoard = lazy(() => import("./UnityBoard"));
 const AssetStudio = lazy(() => import("./AssetStudio"));
 const money = formatRupees;
 
-export default function BoardStage({ game, shown, target, frame, syncVersion, onComplete, onReady, onPlayable, localId, sendAction, render2D, panel, onPanelChange }: {
+export default function BoardStage({ game, shown, target, frame, syncVersion, onComplete, onReady, onPlayable, localId, sendAction, render2D, panel, onPanelChange, diceEnabled, onThrow }: {
   game: GameState; localId: string; sendAction: (action: GameAction) => void;
   shown: GameState; target: GameState; frame?: PresentationFrame; syncVersion: number; onComplete: (id: string) => void; onReady: (ready: boolean) => void;
   onPlayable: (ready: boolean) => void;
   render2D: (onSelect: (position: number) => void) => ReactNode;
   panel?: TablePanel; onPanelChange: (panel: TablePanel | undefined) => void;
+  diceEnabled:boolean; onThrow:()=>void;
 }) {
   const { settings, update } = useViewSettings();
   const { catalog, byId, error, reload } = useAssets();
@@ -80,7 +81,7 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
     </section></div>}
     {error && <p className="asset-notice">{error} <button type="button" onClick={reload}>Retry collection</button></p>}
     {settings.view === "3d" ? <Suspense fallback={<div className="scene-loading"><span className="pulse-token" /><b>Building your 3D table…</b><small>The rules and room are ready.</small></div>}>
-      {settings.renderer === "unity" ? <UnityBoard key={rendererAttempt} game={shown} target={target} settings={settings} frame={frame} syncVersion={syncVersion} onSelect={setTile} onComplete={onComplete} onReady={unityReady} onFallback={() => update({ view: "2d" })} onRetry={()=>setRendererAttempt(n=>n+1)} onReadPrices={() => setPrices(true)} /> : <ThreeBoard game={shown} settings={settings} onSelect={setTile} onFallback={() => update({ view: "2d" })} onCamera={() => update({ camera: settings.camera === "top" ? "perspective" : "top" })} />}
+      {settings.renderer === "unity" ? <UnityBoard diceEnabled={diceEnabled&&tile===undefined&&!panel&&!studio} diceId={local?.diceId} onThrow={onThrow} key={rendererAttempt} game={shown} target={target} settings={settings} frame={frame} syncVersion={syncVersion} onSelect={setTile} onComplete={onComplete} onReady={unityReady} onFallback={() => update({ view: "2d" })} onRetry={()=>setRendererAttempt(n=>n+1)} onReadPrices={() => setPrices(true)} /> : <ThreeBoard game={shown} settings={settings} onSelect={setTile} onFallback={() => update({ view: "2d" })} onCamera={() => update({ camera: settings.camera === "top" ? "perspective" : "top" })} />}
     </Suspense> : render2D(setTile)}
     <div className="landing-ribbon"><div><small>{game.phase === "lobby" ? "Tap any space to inspect it" : `${current?.name ?? "Player"} is at`}</small><b>{location.name}</b><span>{location.region && `${location.region} · `}{isPurchasableTile(location) ? `${money(location.price)} · ${locationOwner ? `Owned by ${locationOwner.name}` : "Unowned deed"}` : location.kind === "tax" ? `Pay ${money(location.amount)}` : location.kind === "go" ? "Collect ₹200 when passing GO" : instruction}</span></div><button type="button" onClick={() => setTile(location.position)}>Full details ↗</button></div>
     <div className="table-caption"><label className="tile-jump"><span className="sr-only">Inspect any board tile</span><select aria-label="Inspect any board tile" value="" onChange={(event) => { if (event.target.value) setTile(Number(event.target.value)); }}><option value="">Explore every property ↗</option>{getBoard(game.boardSize, game.city).map((entry) => <option value={entry.position} key={entry.position}>{entry.position + 1}. {entry.name}{entry.region ? ` — ${entry.region}` : ""}</option>)}</select></label></div>

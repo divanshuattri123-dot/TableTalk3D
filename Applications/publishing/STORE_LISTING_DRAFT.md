@@ -4,18 +4,19 @@ App name: **Table Talk: City Game**
 
 Short description:
 
-Trade, build and play with friends. Share a room code on Android and PC.
+Trade, build and play with friends or AI. Share a room code on Android and PC.
 
 Full description:
 
 Bring your people to the table. Table Talk is a property-trading board game for
-two to six friends, with a colourful 3D city and an easy room-code invitation.
+two to six players, with a colourful 3D city and an easy room-code invitation.
+Play alone against AI or mix human and AI players at the same table.
 
 Create a room, share its four-letter code and play together from separate
 devices. Android and PC players use the same table. Internet is required for
 multiplayer.
 
-Choose Indian city boards or other city editions. Buy deeds, collect rent, build
+Choose among eleven 3D worlds and six city-name editions. Buy deeds, collect rent, build
 houses and hotels, enter auctions and negotiate trades with counter-offers.
 Choose the 40-space Classic rules option or an expanding board for a larger group.
 
@@ -35,5 +36,5 @@ the verified production offer, and add the real support and privacy-policy links
 This title is not presented as an official Hasbro product. Only use art, audio and
 branding for which the publisher has commercial rights.
 
-Not advertised: offline play, AI opponents, global matchmaking, ranked ladders,
+Not advertised: offline play, global matchmaking, ranked ladders,
 real purchase restoration or guaranteed performance on every Android device.

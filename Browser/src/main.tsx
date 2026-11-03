@@ -15,6 +15,7 @@ import "./view/celebration.css";
 import PublisherShell from "./publisher/PublisherShell";
 import "./publisher/publisher.css";
 import './view/maps.css';
+import './view/motionHud.css';
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <AssetProvider><PublisherShell><App /></PublisherShell></AssetProvider>

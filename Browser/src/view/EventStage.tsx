@@ -8,6 +8,9 @@ import { classicSpendableCash } from "../engine/classic";
 import type { GameAction, GameState, Player } from "../engine/types";
 import type { PresentationFrame } from "../presentation/plan";
 import { GROUP_COLORS } from "./palette";
+import RollReadout from './RollReadout';
+import {rollDice} from '../network/random';
+import TapDice from './TapDice';
 
 const money = formatRupees;
 const ART = { presenting: "dba32b5b1a084458", hammer: "bf380b9028ee80ae", waiting: "7e5612f738223164", sold: "3d92b4733d425fa8", jail: "d73b9e891369cc5b", bankrupt: "ff6eb34a6f9e58ff", winner: "5be924bf8411012c", chest: "76a2561bbb2b243c" };
@@ -89,12 +92,13 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
   const auction = frame?.kind === "sold" ? frame.auction ?? previousAuction.current : game.auction;
   const eventColor = actor?.color ?? current?.color ?? "#e93244";
   if (frame?.kind === "card") return <ReadableCard key={frame.id} frame={frame} player={actor} onContinue={onCardRead} />;
+  if(frame?.kind==='dice')return <RollReadout frame={frame} name={actor?.name} color={eventColor}/>;
   if(game.phase === "awaitingMortgageDecision" && !busy)return <MortgageDecision key={game.mortgageTransfers![0]!.playerId+":"+game.mortgageTransfers![0]!.propertyIds.join(",")} game={game} localId={localId} sendAction={sendAction}/>;
   if(game.phase === "awaitingUtilityRoll" && !busy) {
     const rent=game.pendingUtility!, tile=getPurchasableTile(rent.propertyId, game.boardSize, game.city)!;
-    return <div className="event-backdrop"><section className="utility-stage" role="dialog" aria-modal="true" aria-label="Utility rent roll"><p className="eyebrow">Classic · utility rent</p><h1>{tile.name}</h1><p>{current?.name} must roll two fresh dice. Rent is <b>{rent.multiplier} × the total</b>. This roll never moves the token or earns an extra turn.</p>{acting?<button className="event-primary" type="button" onClick={()=>sendAction({type:"ROLL",playerId:localId,dice:[1+Math.floor(Math.random()*6),1+Math.floor(Math.random()*6)]})}>Roll for utility rent</button>:<p>Waiting for {current?.name} to roll for rent.</p>}{financeTools}</section></div>;
+    return <div className="event-backdrop"><section className="utility-stage" role="dialog" aria-modal="true" aria-label="Utility rent roll"><p className="eyebrow">Classic · utility rent</p><h1>{tile.name}</h1><p>{current?.name} must roll two fresh dice. Rent is <b>{rent.multiplier} × the total</b>. This roll never moves the token or earns an extra turn.</p>{acting?<TapDice utility onThrow={()=>sendAction({type:"ROLL",playerId:localId,dice:rollDice()})}/>:<p>Waiting for {current?.name} to roll for rent.</p>}{financeTools}</section></div>;
   }
-  if (auction && !game.pendingTrade && (game.phase === "awaitingAuction" || frame?.kind === "sold")) {
+  if (auction && !game.pendingTrade && (!busy||frame?.kind==='bid'||frame?.kind==='sold') && (game.phase === "awaitingAuction" || frame?.kind === "sold")) {
     const sold = frame?.kind === "sold", winner = game.players.find(p => p.id === (sold ? frame.playerId : auction.highestBidderId));
     const building=auction.kind === "house" || auction.kind === "hotel", targets=auction.buildTargets?.[localId]??[];
     const chosenTarget=targets.includes(Number(buildTarget))?Number(buildTarget):targets[0];
@@ -138,8 +142,7 @@ return <div className="event-backdrop trade-backdrop"><section className="trade-
   const cinematic = ["jail", "release", "bankrupt", "winner", "purchase", "sold", "mortgage", "build", "trade"].includes(frame.kind);
   const rent = frame.kind === "money" && frame.text.includes("rent for") && frame.tileId !== undefined;
   return <div className={`motion-event ${cinematic ? "cinematic-event" : ""} motion-${frame.kind}`} key={frame.id} style={{ "--event-color": eventColor } as CSSProperties} aria-live="polite">
-    <div className="motion-banner">{actor && <PlayerPortrait player={actor} />}<div><small>{frame.kind === "dice" ? frame.text.includes("DOUBLES") ? "DOUBLES · ROLL AGAIN AFTER LANDING" : "ROLLING THE DICE" : frame.kind === "move" ? "ON THE MOVE" : frame.kind === "jail" ? "GO DIRECTLY TO JAIL" : frame.kind === "release" ? "FREE TO GO" : frame.kind === "winner" ? "THE CITY HAS A WINNER" : frame.kind === "purchase" ? "IT’S YOURS!" : frame.kind.toUpperCase()}</small><strong>{frame.text}</strong></div></div>
-    {frame.kind === "dice" && <div className="settled-dice">{frame.dice?.map((value, i) => <span key={i}>{value}</span>)}</div>}
+    <div className="motion-banner">{actor && <PlayerPortrait player={actor} />}<div><small>{frame.kind === "move" ? "ON THE MOVE" : frame.kind === "jail" ? "GO DIRECTLY TO JAIL" : frame.kind === "release" ? "FREE TO GO" : frame.kind === "winner" ? "THE CITY HAS A WINNER" : frame.kind === "purchase" ? "IT’S YOURS!" : frame.kind.toUpperCase()}</small><strong>{frame.text}</strong></div></div>
     {cinematic && <Character pose={frame.kind === "jail" ? "jail" : frame.kind === "bankrupt" ? "bankrupt" : frame.kind === "winner" ? "winner" : frame.kind === "sold" ? "sold" : "presenting"} />}
     {rent && <div className="rent-preview"><TitleDeed game={game} position={frame.tileId!} rent={frame.amount ?? calculateRent(game, frame.tileId!, game.lastRoll?.total ?? 0)} /></div>}
     {frame.kind === "money" && <div className="money-burst"><strong>{money(frame.amount ?? 0)}</strong>{Array.from({ length: 12 }, (_, i) => <i key={i} style={{ "--coin": i } as CSSProperties}>₹</i>)}</div>}

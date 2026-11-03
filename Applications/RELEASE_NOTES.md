@@ -1,3 +1,19 @@
+# 0.8.2 — Clear mobile rolls and interrupted-animation recovery
+
+- Tap a real Unity 3D dice pair on the board to throw; its touch target follows
+  the camera. The rectangular Roll control is removed. Jail uses the same pair,
+  with shaded dice controls retained for 2D and utility-rent dialogs.
+- Compact, non-interactive dice results sit at the screen edge. The original 3D
+  dice and token animations remain visible; move/turn notices also leave the centre.
+- Auctions wait for prior roll/movement frames instead of covering them early.
+- An interrupted Unity roll hides its dice before the next frame starts.
+- Missing completion callbacks recover with a bounded grace period. Cards still
+  require Continue; stale callbacks do not advance or repaint the current frame.
+- Identical room echoes clear acknowledgements without repainting the board.
+  Reconnect snapshots and appearance changes continue to update correctly.
+- Publisher/account handoff, device QA sheet and unsigned AAB preparation added.
+  No live ads, billing or paid campaigns activated.
+
 # 0.8.1 — Friends and AI at the same table
 
 - The host can add or remove AI in the lobby. Any mix of humans and AI works

@@ -13,7 +13,7 @@ interface Release { loaderUrl: string; dataUrl: string; frameworkUrl: string; co
 declare global { interface Window { createUnityInstance?: (canvas: HTMLCanvasElement, options: object, progress: (value: number) => void) => Promise<UnityInstance> } }
 let loader: Promise<void> | undefined;
 
-export default function UnityBoard({ game, target, settings, frame, syncVersion, onSelect, onComplete, onReady, onFallback, onReadPrices, onRetry }: {
+export default function UnityBoard({ game, target, settings, frame, syncVersion, onSelect, onComplete, onReady, onFallback, onReadPrices, onRetry, diceEnabled, diceId, onThrow }: {
   game: GameState; target: GameState; frame?: PresentationFrame;
   syncVersion: number;
   settings: ViewSettings;
@@ -21,6 +21,7 @@ export default function UnityBoard({ game, target, settings, frame, syncVersion,
   onReady: (ready: boolean) => void; onFallback: () => void;
   onReadPrices: () => void;
   onRetry: () => void;
+  diceEnabled: boolean; diceId?: string; onThrow: () => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null), instance = useRef<UnityInstance | undefined>(undefined);
   const latest = useRef({ game, target, frame, onSelect, onComplete, onReady, onFallback });
@@ -32,6 +33,7 @@ export default function UnityBoard({ game, target, settings, frame, syncVersion,
   const registered = useRef(new Set<string>());
   const syncedVersion = useRef(-1);
   const [assetError, setAssetError] = useState("");
+  const [diceTarget,setDiceTarget]=useState<{x:number;y:number;width:number;height:number}>();
   useEffect(() => {
     const media = window.matchMedia("(pointer: coarse), (max-width: 700px)");
     const change = () => setMobile(media.matches); media.addEventListener("change", change);
@@ -61,6 +63,7 @@ export default function UnityBoard({ game, target, settings, frame, syncVersion,
       const { kind, value } = (event as CustomEvent<{ kind: string; value: string }>).detail;
       if (kind === "complete") latest.current.onComplete(value);
       if (kind === "select") latest.current.onSelect(Number(value));
+      if (kind === "dice-target") setDiceTarget(JSON.parse(value));
     };
     window.addEventListener("tabletalk-unity", receive);
     async function start() {
@@ -100,6 +103,9 @@ export default function UnityBoard({ game, target, settings, frame, syncVersion,
   useEffect(() => {
     if (ready && frame) instance.current?.SendMessage("GamePresentation", "PresentFrame", JSON.stringify({ ...frame, board: unitySnapshot(target) }));
   }, [frame, ready, target]);
+  useEffect(()=>{
+    if(ready) instance.current?.SendMessage('GamePresentation','SetDiceInput',JSON.stringify({enabled:diceEnabled&&!frame,diceId}));
+  },[ready,diceEnabled,diceId,frame,syncVersion]);
   useEffect(() => {
     if (ready) instance.current?.SendMessage("GamePresentation", "SetVisualSettings", JSON.stringify({ quality: settings.quality, theme: settings.theme, camera: settings.camera, reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches, mobile, screenLabels: true }));
   }, [ready, settings.quality, settings.theme, settings.camera, mobile, game.boardSize, game.world]);
@@ -124,6 +130,7 @@ export default function UnityBoard({ game, target, settings, frame, syncVersion,
   return <div className="unity-board-shell" data-renderer={ready ? "unity-ready" : "unity-loading"}>
     <canvas id="unity-canvas" ref={canvas} className="unity-canvas" draggable={false} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()} tabIndex={0} aria-label="Interactive 3D city board. Drag to pan, pinch or use buttons to zoom." />
     {ready && <ScreenBoardLabels size={game.boardSize} city={game.city} />}
+    {ready&&diceEnabled&&!frame&&diceTarget&&<button type="button" className="native-dice-touch" aria-label="Roll dice" title="Tap the 3D dice to throw" style={{left:`${diceTarget.x*100}%`,top:`${diceTarget.y*100}%`,width:`${diceTarget.width*100}%`,height:`${diceTarget.height*100}%`}} onClick={onThrow}><span>Tap the dice</span></button>}
     {!ready && !failure && <div className="unity-loading"><span className="pulse-token" /><h2>Opening your city</h2><p>Loading the Unity 3D player · {Math.round(progress * 100)}%</p><progress max="1" value={progress} /><small>Only the active city and pieces are loaded, not the entire collection.</small></div>}
     {failure && <div className="unity-loading" role="alert"><h2>Restore your board</h2><p>{failure}</p><button type="button" onClick={async()=>{const player=instance.current;instance.current=undefined;latest.current.onReady(false);if(player)try{await Promise.race([player.Quit(),new Promise(resolve=>window.setTimeout(resolve,2000))]);}catch{}onRetry();}}>Restore 3D</button><button type="button" onClick={onFallback}>Continue in 2D</button></div>}
     {assetError && <p className="asset-notice">{assetError}</p>}
