@@ -45,6 +45,14 @@ not people or generative chat characters.
   byte-for-byte unchanged across the public deployment.
 - Exact packaged files were served for 844 x 390 touch-layout QA. Add AI,
   Remove AI, six-seat layout and solo START passed.
+- Packaged UI/live-server round trip: human roll, movement and purchase; End
+  turn; automatic AI roll/movement/end; human rent claim against AI and control
+  returned. Cash became human 1,406 / AI 1,494; no browser runtime errors.
+- GitHub Pages deployment 41585835853 passed. Public APK release:
+  `https://github.com/divanshuattri123-dot/TableTalk3D/releases/tag/v0.8.1-test`.
+- GitHub Pages mobile lobby Add AI enabled solo START. Desktop lobby also
+  exposed Add AI player and host removal. Public APK was downloaded independently;
+  its byte count and SHA-256 match the local package.
 - Android build, signature and version checks passed. All 44 packaged web files
   match the prepared build byte for byte. Package budget passed.
 
