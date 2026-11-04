@@ -1,16 +1,17 @@
 # TableTalk3D applications — family preview
 
-The current Android test update is **0.8.4**, with a Da Publications startup, Home
+The current Android test update is **0.8.5**, with a Da Publications startup, Home
 menu, mixed human/AI seats, compact dice results and eleven bundled 3D worlds and six independent city-name editions. It retains
 the improved foliage, traffic, audio/background and saved-room return fixes. Windows and iOS
 packages remain at 0.7.0 while mobile is the priority. Unreal PC work is deferred.
 
 Da Publications intro -> guest sign-in when needed -> Home with Play, Join,
 Maps, Store and Settings. Use Return to room to resume a saved match.
-The store contains explicit free test unlocks for token skins and Remove Ads.
-Guest profiles and test receipts stay on this installation. Cloud accounts,
-real billing and ad delivery are not connected; this version cannot earn revenue
-or charge money. See STORE_SPEC.md for the production integration boundary.
+The browser preview Store contains explicit free test unlocks. The Android Play
+test candidate disables preview purchases and sample ads; its Store explains that
+purchases are unavailable. Guest profiles stay on this installation. Cloud
+accounts, real billing and ad delivery are not connected. See STORE_SPEC.md for
+the production integration boundary.
 
 These are hybrid applications: the complete React game and Unity WebGL renderer
 are packaged in Electron (Windows) and Capacitor (Android/iOS). They use the same
@@ -47,6 +48,9 @@ that seat. Multiplayer is free and there are no subscriptions in this preview.
 5. Android builds use `scripts/Build-Android.ps1` after the official SDK/JDK setup
    and the user's licence acceptance. The tools remain under LocalAppData, outside
    the source repository. Do not commit signing keys or SDK installations.
+   For a signed Play test candidate, run `scripts/Package-PlayTest.ps1` from the
+   repository root after preparing the Unity player. It builds sequentially and
+   verifies that every web file in the APK and signed AAB matches the final bundle.
 
 The packages preserve phone controls (name, colour, Create, Join, Menu), with
 preferences and customization inside Menu. Desktop has a larger menu and keeps

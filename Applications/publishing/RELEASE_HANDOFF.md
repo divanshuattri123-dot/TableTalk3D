@@ -5,7 +5,7 @@ Play or advertising accounts exist. There has been no paid advertising spend.
 
 ## Prepared
 
-- Android 0.8.4 Play test candidate and a signed upload AAB, with certificate/hash verification.
+- Android 0.8.5 Play test candidate and a signed upload AAB, with certificate/hash verification.
 - Upload key stays outside Git; see UPLOAD_SIGNING.md. Independent credential backup remains pending.
 - Privacy/support notice is available in the app and as privacy.html; owner confirmed no public support email yet.
 - Complete catalog inventory with SHA-256 and a Data Safety worksheet.
@@ -13,6 +13,9 @@ Play or advertising accounts exist. There has been no paid advertising spend.
 - Eleven worlds, six city editions, human/AI rooms and persistent saved games.
 - Updated listing text and a paused INR 5,000 campaign plan in LAUNCH_PLAN.md.
 - Roll-overlay fix and targeted graphics/network/presentation regression checks.
+- Revised trees expose branch forks, use leaf-shaped outer geometry and share
+  textured foliage with the ground shrubs. Unity checks cover all four board
+  sizes and auto/low/high quality. Physical-phone graphics testing remains pending.
 
 The local upload AAB is signed. The owner must protect and back up its upload
 key and enroll in Play App Signing. A signed bundle does not establish Play

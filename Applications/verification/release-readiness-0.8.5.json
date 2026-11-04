@@ -1,0 +1,71 @@
+{
+  "version": "0.8.5",
+  "checkedAt": "2026-11-04T18:25:13.444Z",
+  "testArtifact": {
+    "file": "TableTalk3D-0.8.5-test.apk",
+    "bytes": 47878329,
+    "sha256": "81d45b3cde1078bfef87a61d99e78c0c094babe691b0fc72f95e0770245d57a0",
+    "packageVerificationMatches": true
+  },
+  "signedBundleReady": true,
+  "publishingDocuments": [
+    "RELEASE_HANDOFF.md",
+    "DEVICE_QA.md",
+    "LAUNCH_PLAN.md",
+    "STORE_LISTING_DRAFT.md",
+    "AD_COPY_DRAFT.csv",
+    "UPLOAD_SIGNING.md",
+    "ASSET_RIGHTS_REVIEW.md"
+  ],
+  "playReady": false,
+  "paidAdsReady": false,
+  "adSpendINR": 0,
+  "adBudgetCeilingINR": 5000,
+  "externalGates": [
+    {
+      "name": "Play Console account",
+      "reason": "Publisher must create and verify the account.",
+      "status": "pending"
+    },
+    {
+      "name": "Signed upload bundle",
+      "reason": "Signed AAB verified against the exported upload certificate.",
+      "status": "complete"
+    },
+    {
+      "name": "Upload-key recovery",
+      "reason": "Local key and DPAPI-protected credentials exist; the owner still needs an independently recoverable backup.",
+      "status": "pending"
+    },
+    {
+      "name": "Physical device and long-session QA",
+      "reason": "Emulator/browser results do not establish physical Android 12+ performance.",
+      "status": "pending"
+    },
+    {
+      "name": "Commercial asset review",
+      "reason": "6430 catalog items need evidence; embedded/project art also needs review.",
+      "status": "pending"
+    },
+    {
+      "name": "Public support and privacy details",
+      "reason": "Owner has no public support email yet. An accurate test notice is prepared; final contact and policy review remain pending.",
+      "status": "pending"
+    },
+    {
+      "name": "Play declarations and required test track",
+      "reason": "Complete actual Play app-content setup, applicable testing and production access.",
+      "status": "pending"
+    },
+    {
+      "name": "Play candidate channel",
+      "status": "complete",
+      "reason": "The verified package must disable sample ads and preview transactions."
+    }
+  ],
+  "optionalMonetization": {
+    "requiredForFreeLaunch": false,
+    "status": "disabled",
+    "reason": "No live ads, real purchases or sample transactions in the Play test candidate. Paid monetization requires a separate verified integration."
+  }
+}

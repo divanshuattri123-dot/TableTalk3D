@@ -48,5 +48,10 @@
     "file": "TableTalk3D-0.8.4-test.apk",
     "bytes": 48073702,
     "sha256": "640fac8b7de5c47ec13bc96fe249ba1d050df633e5b63c607cb16f57235a6209"
+  },
+  {
+    "file": "TableTalk3D-0.8.5-test.apk",
+    "bytes": 47878329,
+    "sha256": "81d45b3cde1078bfef87a61d99e78c0c094babe691b0fc72f95e0770245d57a0"
   }
 ]

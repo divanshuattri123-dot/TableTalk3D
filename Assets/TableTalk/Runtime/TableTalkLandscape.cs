@@ -38,7 +38,7 @@ namespace TableTalk
                 LandscapeBox("Board-edge promenade", p, horizontal ? new Vector3(roadEdge * 2 + .25f, .035f, .2f) : new Vector3(.2f, .035f, roadEdge * 2 + .25f), path);
             }
 
-            var bark = Material(ColorOf("#76634b"), 0, .08f);
+            var bark = Material(ColorOf("#64513c"), 0, .08f);
             bark.SetTexture("_BaseMap", BarkTexture());
             bark.SetTextureScale("_BaseMap", new Vector2(3, 4));
             var branchMesh = new LandscapeMesh();
@@ -72,11 +72,23 @@ namespace TableTalk
                     float angle = limb * 2.39996f + i * .7f;
                     float reach = width * (.6f + Hash(i * 3 + limb) * .5f);
                     var end = top + new Vector3(Mathf.Cos(angle) * reach, (limb / 7f - .25f) * height * .5f, Mathf.Sin(angle) * reach);
-                    branchMesh.Branch(Vector3.Lerp(root, top, .55f + limb * .05f), end, .032f, .009f);
+                    var joint = Vector3.Lerp(root, top, .55f + limb * .05f);
+                    branchMesh.Branch(joint, end, .043f, .012f);
                     float silhouette = .88f + Hash(i*13+limb*3)*.22f;
-                    crowns[(i + limb / 2) % 4].Crown(end, new Vector3(width * .78f * silhouette, height * .26f, width * .74f / silhouette), i * 31 + limb);
+                    var crown = crowns[(i + limb / 2) % 4];
+                    // Open the canopy around the forks; the old overlapping shells concealed every limb.
+                    crown.Crown(end + Vector3.up * height * .045f, new Vector3(width * .5f * silhouette, height * .17f, width * .49f / silhouette), i * 31 + limb);
+                    var outward = new Vector3(Mathf.Cos(angle), .25f, Mathf.Sin(angle)).normalized;
+                    crown.LeafSpray(end, outward, width * .25f, i * 31 + limb);
+                    for (int fork = 0; fork < 2; fork++)
+                    {
+                        var direction = Quaternion.AngleAxis(fork == 0 ? -32 : 32, Vector3.up) * outward;
+                        var twig = end + direction * width * .4f + Vector3.up * height * .05f;
+                        branchMesh.Branch(Vector3.Lerp(joint, end, .7f), twig, .018f, .005f);
+                        crown.LeafSpray(twig, direction, width * .23f, i * 79 + limb * 3 + fork);
+                    }
                 }
-                crowns[i % 4].Crown(top + Vector3.up * height * .25f, new Vector3(width * .74f, height * .29f, width * .8f), i + 211);
+                crowns[i % 4].Crown(top + Vector3.up * height * .25f, new Vector3(width * .58f, height * .22f, width * .6f), i + 211);
             }
             AddLandscapeMesh("Branching hardwood trunks", branchMesh, bark);
             for (int i = 0; i < crowns.Length; i++)
@@ -103,7 +115,7 @@ namespace TableTalk
                 if (p.x < -half - 4.5f || p.x > RiverBankX(half,p.z) - .5f || Mathf.Abs(p.x-HighwayX(half,p.z,false))<1.3f || Mathf.Abs(p.x-HighwayX(half,p.z,true))<1.3f) continue;
                 shrubs.Crown(p + Vector3.down * .2f, new Vector3(.25f, .2f, .32f), i);
             }
-            AddLandscapeMesh("Low garden planting", shrubs, Material(ColorOf("#839858"), 0, .1f));
+            AddLandscapeMesh("Low garden planting", shrubs, foliageInstances.Count > 1 ? foliageInstances[1] : Material(ColorOf("#839858"), 0, .1f));
             BuildLivingLandscape(half);
             StaticBatchingUtility.Combine(landscape.gameObject);
         }
@@ -178,6 +190,10 @@ namespace TableTalk
 
         sealed class LandscapeMesh
         {
+            static readonly Vector2[] LeafOutline = {
+                new Vector2(0,-.55f),new Vector2(-.36f,-.3f),new Vector2(-.5f,.15f),new Vector2(-.34f,.65f),
+                new Vector2(0,1),new Vector2(.34f,.65f),new Vector2(.5f,.15f),new Vector2(.36f,-.3f)
+            };
             readonly List<Vector3> vertices = new List<Vector3>();
             readonly List<Vector2> uvs = new List<Vector2>();
             readonly List<int> triangles = new List<int>();
@@ -216,7 +232,7 @@ namespace TableTalk
 
             public void Crown(Vector3 centre, Vector3 scale, int seed)
             {
-                const int rings = 6, sides = 10;
+                const int rings = 4, sides = 8;
                 int start = vertices.Count;
                 for (int row = 0; row <= rings; row++) for (int side = 0; side <= sides; side++)
                 {
@@ -231,6 +247,30 @@ namespace TableTalk
                 {
                     int i = start + row * (sides + 1) + side;
                     Quad(i, i + 1, i + sides + 2, i + sides + 1);
+                }
+            }
+
+            public void LeafSpray(Vector3 centre, Vector3 direction, float size, int seed)
+            {
+                var along = (direction + Vector3.up * .35f).normalized;
+                var side = Vector3.Cross(along, Vector3.up).normalized;
+                for (int blade = 0; blade < 2; blade++)
+                {
+                    var across = Quaternion.AngleAxis(blade * 75 + seed % 29, along) * side;
+                    var normal = Vector3.Cross(along, across).normalized;
+                    int start = vertices.Count;
+                    float u = (seed + blade) % 4 * .25f, v = (seed / 4) % 4 * .25f;
+                    foreach (var point in LeafOutline)
+                    {
+                        vertices.Add(centre + (across * point.x + along * point.y) * size);
+                        uvs.Add(new Vector2(u + (point.x + .5f) * .25f, v + (point.y + .55f) / 1.55f * .25f));
+                    }
+                    vertices.Add(centre + (normal * .1f + along * .15f) * size);
+                    uvs.Add(new Vector2(u + .125f, v + .125f));
+                    for (int edge = 0; edge < LeafOutline.Length; edge++)
+                    {
+                        triangles.Add(start + edge); triangles.Add(start + (edge + 1) % LeafOutline.Length); triangles.Add(start + LeafOutline.Length);
+                    }
                 }
             }
 

@@ -1,0 +1,56 @@
+{
+  "layouts": [
+    {
+      "boardSize": 40,
+      "canopyBatches": 4,
+      "triangles": 55600,
+      "barkTriangles": 13200,
+      "leafTriangles": 42400
+    },
+    {
+      "boardSize": 48,
+      "canopyBatches": 4,
+      "triangles": 62272,
+      "barkTriangles": 14784,
+      "leafTriangles": 47488
+    },
+    {
+      "boardSize": 56,
+      "canopyBatches": 4,
+      "triangles": 68944,
+      "barkTriangles": 16368,
+      "leafTriangles": 52576
+    },
+    {
+      "boardSize": 64,
+      "canopyBatches": 4,
+      "triangles": 75616,
+      "barkTriangles": 17952,
+      "leafTriangles": 57664
+    }
+  ],
+  "qualityChecks": [
+    {
+      "quality": "auto",
+      "materials": 4,
+      "texture": "RoadsideLeaves",
+      "width": 1024
+    },
+    {
+      "quality": "low",
+      "materials": 4,
+      "texture": "RoadsideLeaves",
+      "width": 1024
+    },
+    {
+      "quality": "high",
+      "materials": 4,
+      "texture": "RoadsideLeaves",
+      "width": 1024
+    }
+  ],
+  "shrubsTextured": true,
+  "windAndTraffic": "PASS: 2594 traffic triangles preserved in paint/glass/tyre/trim groups [2133,996,3744,909]; one shared traffic mesh; four foliage batches; reduced-motion wind disabled and restored.",
+  "physicalDevice": false,
+  "frame": 5573
+}

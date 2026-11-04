@@ -1,0 +1,24 @@
+{
+  "version": "0.8.5",
+  "versionCode": 11,
+  "apkBytes": 47878329,
+  "sha256": "81d45b3cde1078bfef87a61d99e78c0c094babe691b0fc72f95e0770245d57a0",
+  "unity": {
+    "loaderUrl": "Build/7864c4435559/AppsWeb.loader.js",
+    "dataUrl": "Build/7864c4435559/AppsWeb.data",
+    "frameworkUrl": "Build/7864c4435559/AppsWeb.framework.js",
+    "codeUrl": "Build/7864c4435559/AppsWeb.wasm",
+    "productVersion": "0.8.5"
+  },
+  "build": {
+    "version": "0.8.5",
+    "channel": "play-test",
+    "unityPlayerVersion": "0.8.5",
+    "liveAds": false,
+    "realPurchases": false
+  },
+  "webFilesCompared": 47,
+  "mismatches": [],
+  "unexpectedPublicAssets": [],
+  "allPackagedAssetsMatch": true
+}

@@ -7,6 +7,12 @@ version, graphics setting and application version for each result.
 This caught missing randomUUID and unsupported viewport units; those fixes have
 their own evidence. Emulator results do not replace any physical-phone row below.
 
+0.8.5 foliage was inspected in a running Unity preview at 844 x 390 and in a
+close-up. Geometry, texture binding and wind checks passed across 40/48/56/64
+spaces and three quality presets. This is renderer evidence, not an Android GPU
+or sustained-frame-rate result. The current in-app browser cannot initialize
+WebGL, so it did not provide a packaged 3D acceptance result.
+
 | Scenario | Required evidence | Result |
 |---|---|---|
 | Launch/update | Update over the prior APK; profile and saved seat remain | Pending |
@@ -22,6 +28,7 @@ their own evidence. Emulator results do not replace any physical-phone row below
 | Low resources | Battery saver and busy phone; no stuck animation/blocked decisions | Pending |
 | Android matrix | Android 12 baseline and current versions; at least two GPU families | Pending |
 | Audio | Volume/off, background pause, resume and Bluetooth output | Pending |
+| Trees | Leaves and branch forks visible in 3D on auto/low/high; wind respects reduced motion | Pending |
 | Accessibility | Readable labels, contrast, touch targets, reduced motion | Pending |
 
 Do not replace pending rows with browser, unit-test or build results. Capture
