@@ -1,0 +1,64 @@
+{
+  "version": "0.8.3",
+  "checkedAt": "2026-11-04T13:01:23.916Z",
+  "testArtifact": {
+    "file": "TableTalk3D-0.8.3-test.apk",
+    "bytes": 47873021,
+    "sha256": "e5a2184111a6b7b977c0385f80d26fffd33a93ce681c6d067b759e698de6abc9",
+    "packageVerificationMatches": true
+  },
+  "preparedUnsignedBundleBytes": 45172328,
+  "publishingDocuments": [
+    "RELEASE_HANDOFF.md",
+    "DEVICE_QA.md",
+    "LAUNCH_PLAN.md",
+    "STORE_LISTING_DRAFT.md",
+    "AD_COPY_DRAFT.csv"
+  ],
+  "playReady": false,
+  "paidAdsReady": false,
+  "adSpendINR": 0,
+  "adBudgetCeilingINR": 5000,
+  "externalGates": [
+    {
+      "name": "Play Console account",
+      "status": "pending",
+      "reason": "Owner confirmed no account on 3 November 2026."
+    },
+    {
+      "name": "Production upload signing",
+      "status": "pending",
+      "reason": "The prepared release AAB is unsigned; test APK uses Android Debug."
+    },
+    {
+      "name": "Physical device and long-session QA",
+      "status": "pending",
+      "reason": "No physical Android phone was connected for this release."
+    },
+    {
+      "name": "Commercial asset rights review",
+      "status": "pending",
+      "reason": "Evidence for supplied APK-derived models, images and audio still needs review."
+    },
+    {
+      "name": "Public support and privacy details",
+      "status": "pending",
+      "reason": "Real publisher contact and hosted policy are not configured."
+    },
+    {
+      "name": "Play content declarations and test track",
+      "status": "pending",
+      "reason": "Complete in Play Console; applicable new personal-account closed testing is pending."
+    },
+    {
+      "name": "Production monetization",
+      "status": "pending",
+      "reason": "Real billing and Families-compliant live ads are not connected."
+    },
+    {
+      "name": "Advertising account and approved campaign",
+      "status": "pending",
+      "reason": "No ad account; keep the INR 5,000 plan paused until a usable release and final review."
+    }
+  ]
+}

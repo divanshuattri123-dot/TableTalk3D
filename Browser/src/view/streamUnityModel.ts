@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { GameAsset } from "../assets";
 import { disposeObject, loadModel } from "./scene";
 
-export const BUNDLED_MODELS = new Set(["m-a9fe918d9d51ea81", "m-a5227642e7a2a22a", "m-95c1d6b8d2ed8206", "m-f569c1bbee9360a9", "m-05389ace23b75c90", "m-4745c4f13ae753e5", "m-9cfe58fa91f94226", "m-3a5e96b4afdc8b72", "m-4b0af65406ffcde1", "m-dfc1c1718a2a1115"]);
+export {BUNDLED_MODELS} from './modelStreams';
 
 export async function streamUnityModel(asset: GameAsset): Promise<string> {
   const model = await loadModel(asset);

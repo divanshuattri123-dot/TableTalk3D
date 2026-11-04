@@ -199,7 +199,13 @@ class Table {
     p.bankrupt=true; p.cash=0; p.inJail=false; p.getOutOfJailCards=0; p.jailCardDecks=[];
     this.s.debts=this.s.debts?.filter(d=>d.playerId!==id); this.s.pendingTrade=undefined;
     this.event(`${p.name} is bankrupt. Their assets go to ${creditor?.name ?? "the bank"}.`,"money",{playerId:id});
-    if (this.s.activePlayerId===id) { this.nextTurn(id); this.s.debtResumePhase="awaitingRoll"; if (this.s.mortgageResumePhase) this.s.mortgageResumePhase="awaitingRoll"; }
+    if (this.s.activePlayerId===id) {
+      const finishAuctionFirst=this.s.debtResumePhase==="awaitingAuction" && Boolean(this.s.auction);
+      this.nextTurn(id); this.s.debtResumePhase=finishAuctionFirst?"awaitingAuction":"awaitingRoll";
+      if (finishAuctionFirst) this.s.phase="awaitingDebt";
+      if (finishAuctionFirst && !this.s.suspendedAuction) this.s.auctionResumePhase="awaitingRoll";
+      if (this.s.mortgageResumePhase) this.s.mortgageResumePhase=finishAuctionFirst?"awaitingAuction":"awaitingRoll";
+    }
   }
   auction(propertyId: number, kind: AuctionState["kind"] = "property", targets?: Record<string,number[]>) {
     this.s.auction={ propertyId, kind, currentBid:0, landingPlayerId:this.s.activePlayerId!, eligiblePlayerIds:targets?Object.keys(targets):live(this.s).map(p=>p.id), passedPlayerIds:[], buildTargets:targets };
@@ -218,7 +224,7 @@ class Table {
       } else this.s.properties[id]!.ownerId=winner;
       this.event(`${this.player(winner).name} won ${a.kind==="house"||a.kind==="hotel"?a.kind+" on ":""}${tile.name} for ${money(a.currentBid)}.`,"money",{playerId:winner,position:id,amount:a.currentBid});
     } else { this.s.auction=undefined; this.event("No bids; the item stays with the bank."); }
-    this.s.phase=this.s.auctionResumePhase ?? "awaitingEndTurn"; this.s.auctionResumePhase=undefined;
+    this.s.phase=this.s.auctionResumePhase ?? (a.landingPlayerId===this.s.activePlayerId?"awaitingEndTurn":"awaitingRoll"); this.s.auctionResumePhase=undefined;
     if (this.s.suspendedAuction) { this.s.auction=this.s.suspendedAuction; this.s.suspendedAuction=undefined; this.s.phase="awaitingAuction"; }
   }
   bid(action: Extract<GameAction,{type:"AUCTION_BID"}>) {
@@ -342,7 +348,26 @@ class Table {
     for (const id of action.redeemPropertyIds) this.s.properties[id]!.mortgaged=false;
     this.s.mortgageTransfers!.shift(); this.pay(action.playerId,"bank",cost,"for received mortgage interest and redemption");
   }
+  reconcileAuctions() {
+    for (const a of [this.s.auction,this.s.suspendedAuction]) {
+      if (!a) continue;
+      const winner=a.highestBidderId;
+      const unavailableSite=winner && a.buildTargets && !buildable(this.s,winner,a.winningTarget??a.propertyId,a.kind==="hotel");
+      if (winner && (owner(this.s,winner)?.bankrupt || classicSpendableCash(this.s,winner)<0 || unavailableSite)) {
+        // Compulsory payments take priority; a stale bid must not lock the debtor's only assets.
+        a.highestBidderId=undefined; a.currentBid=0; a.winningTarget=undefined; a.passedPlayerIds=[];
+        this.event("A winning bid was released because its cash or building site is no longer available. The auction reopens.");
+      }
+      a.eligiblePlayerIds=a.eligiblePlayerIds.filter(id=>!owner(this.s,id)?.bankrupt);
+      if (a.buildTargets) {
+        for (const id of a.eligiblePlayerIds) a.buildTargets[id]=a.buildTargets[id]!.filter(target=>buildable(this.s,id,target,a.kind==="hotel"));
+        a.eligiblePlayerIds=a.eligiblePlayerIds.filter(id=>a.buildTargets![id]!.length>0);
+      }
+      a.passedPlayerIds=a.passedPlayerIds.filter(id=>a.eligiblePlayerIds.includes(id));
+    }
+  }
   settle() {
+    this.reconcileAuctions();
     this.s.debts=this.s.debts?.filter(d=>(d.amount??0)>0 && !owner(this.s,d.playerId)?.bankrupt);
     if (!this.s.debts?.length) { this.s.debts=undefined; if (this.s.phase==="awaitingDebt") this.s.phase=this.s.debtResumePhase??"awaitingEndTurn"; this.s.debtResumePhase=undefined; }
     else if (this.s.phase!=="awaitingDebt" && this.s.phase!=="awaitingTradeResponse") { this.s.debtResumePhase=this.s.phase as DebtResumePhase; this.s.phase="awaitingDebt"; }
@@ -358,6 +383,8 @@ class Table {
     }
     this.s.mortgageTransfers=undefined;
     if (this.s.phase==="awaitingMortgageDecision") { this.s.phase=this.s.mortgageResumePhase??"awaitingEndTurn"; this.s.mortgageResumePhase=undefined; }
+    const auction=this.s.auction;
+    if (this.s.phase==="awaitingAuction" && auction && auction.eligiblePlayerIds.filter(id=>id!==auction.highestBidderId).every(id=>auction.passedPlayerIds.includes(id))) this.finishAuction();
     if (!this.s.auction && this.s.bankAuctionQueue?.length) {
       const id=this.s.bankAuctionQueue.shift()!; this.s.auctionResumePhase=this.s.phase as DebtResumePhase;
       if (!this.s.bankAuctionQueue.length) this.s.bankAuctionQueue=undefined;
@@ -434,7 +461,19 @@ export function startClassic(state: GameState, action: Extract<GameAction,{type:
 const classicReject = (state: GameState, message: string) => {
   const next=structuredClone(state); next.notice=message; new Table(next).event(message,"error"); return next;
 };
+export function recoverClassicAuction(state: GameState): GameState {
+  if (state.auction && normalPhases.includes(state.phase) && state.phase!=="awaitingAuction") {
+    // Earlier saves could advance a bankrupt bidder's turn with an unfinished auction still attached.
+    const baseline=structuredClone(state);
+    baseline.notice=undefined;
+    if (!baseline.suspendedAuction) baseline.auctionResumePhase=state.phase as DebtResumePhase;
+    baseline.phase="awaitingAuction"; new Table(baseline).settle();
+    return baseline;
+  }
+  return state;
+}
 export function reduceClassic(state: GameState, action: GameAction): GameState {
-  try { const table=new Table(structuredClone(state)); table.s.notice=undefined; table.apply(action); return table.s; }
-  catch (error) { if (!(error instanceof RuleViolation)) throw error; return classicReject(state,error.message); }
+  const baseline=recoverClassicAuction(state);
+  try { const table=new Table(structuredClone(baseline)); table.s.notice=undefined; table.apply(action); return table.s; }
+  catch (error) { if (!(error instanceof RuleViolation)) throw error; return classicReject(baseline,error.message); }
 }

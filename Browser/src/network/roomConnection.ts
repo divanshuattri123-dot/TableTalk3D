@@ -24,7 +24,10 @@ export class RoomConnection {
   constructor(private socket: Socket, private callbacks: Callbacks, private player: PlayerInput | undefined,
     private clientId: string, private now = Date.now) { this.lastHeard = now(); }
 
-  open() { this.ready = false; this.lastHeard = this.now(); this.snapshotRequestedAt=this.now(); this.callbacks.status(this.offline?"offline":"connecting"); }
+  open() {
+    // A completed socket handshake proves connectivity even if the online event preceded it.
+    this.offline=false;this.ready=false;this.lastHeard=this.now();this.snapshotRequestedAt=this.now();this.callbacks.status('connecting');
+  }
   disconnected(offline = false) { this.ready = false; this.offline=offline; this.snapshotRequestedAt=undefined; this.callbacks.status(offline ? "offline" : "reconnecting"); }
   receive(raw: string) {
     this.lastHeard = this.now();

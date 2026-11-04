@@ -26,6 +26,7 @@ function client(id,color){
   }
   open();
   return {link,sent,errors,acks,get state(){return state;},get status(){return status;},get reconnects(){return reconnects;},
+    onlineWhileConnecting(){link.disconnected(true);socket.close();open();assert.equal(socket.readyState,0);link.resume();},
     get queued(){return buffer.length;},hold(){hold=true;},discard(){buffer=[];},release(){hold=false;for(const raw of buffer.splice(0))deliver(raw);},close(){socket?.close();}};
 }
 const a=client('resume-a','#ed6266');let b;
@@ -61,4 +62,7 @@ try{
   assert.equal(a.status,'connected');
   assert.deepEqual(a.state,settled);assert.deepEqual(b.state,settled);
   console.log('PASS lost acknowledgement: same receipt resent after reconnect; end turn and economy applied exactly once.');
+  a.onlineWhileConnecting();await until(()=>a.status==='connected','online event before replacement socket open');
+  assert.deepEqual(a.state,settled);assert.deepEqual(b.state,settled);
+  console.log('PASS offline race: online event during CONNECTING recovers automatically with the saved table unchanged.');
 }finally{a.close();b?.close();}

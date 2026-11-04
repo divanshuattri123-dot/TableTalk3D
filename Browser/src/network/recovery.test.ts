@@ -5,6 +5,20 @@ import type { GameAction, GameState } from "../engine/types";
 import { RoomConnection } from "./roomConnection";
 import { readSeat, writeSeat } from "./seats";
 
+it('checkpoints an older orphaned auction before broadcasting or scheduling AI, preserving receipts and money',async()=>{
+  const storage=memoryStorage(),state=createInitialState('OLD');state.mode='classic';state.phase='awaitingRoll';state.activePlayerId='b';
+  state.players=[{...player,id:'a',cash:0,position:3,inJail:false,jailTurns:0,getOutOfJailCards:0,bankrupt:true},{...other,id:'b',cash:1500,position:6,inJail:false,jailTurns:0,getOutOfJailCards:0,bankrupt:false,bot:true},{...other,id:'c',cash:900,position:0,inJail:false,jailTurns:0,getOutOfJailCards:0,bankrupt:false}];
+  for(const id of [1,3,6,8,9])state.properties[id]!.ownerId='b';
+  state.auction={kind:'house',propertyId:6,winningTarget:6,currentBid:80,highestBidderId:'a',landingPlayerId:'a',eligiblePlayerIds:['a','b'],passedPlayerIds:[],buildTargets:{a:[6],b:[1,3]}};
+  await storage.put(CHECKPOINT_KEY,{version:1,state,receipts:['saved-receipt']});
+  const room=new SavedRoom(storage,'OLD');await room.load();
+  expect(room.state.phase).toBe('awaitingAuction');expect(room.state.auction?.highestBidderId).toBeUndefined();
+  expect(room.state.players).toEqual(state.players);expect(room.state.properties).toEqual(state.properties);
+  const recovered=structuredClone(room.state);await room.apply({type:'ROLL',playerId:'b',dice:[6,6]},'saved-receipt');expect(room.state).toEqual(recovered);
+  const restarted=new SavedRoom(storage,'OLD');await restarted.load();expect(restarted.state).toEqual(recovered);
+  expect(storage.put).toHaveBeenCalledTimes(2);
+});
+
 const player = { id: "p1", name: "QA Asha", color: "red" };
 const other = { id: "p2", name: "QA Bryn", color: "blue" };
 const action = (type: "END_TURN" | "MOVE_RESULT" | "BUY", payload = {}) => ({ type, playerId: "p1", ...payload }) as GameAction;
@@ -125,6 +139,16 @@ function channel() {
   const snapshot = (ackId?: string) => link.receive(JSON.stringify({ type: "state", state, ackId }));
   return { socket, callbacks, link, snapshot, state, advance: (ms: number) => { now += ms; } };
 }
+
+it('recovers when the browser comes online while its replacement socket is still connecting',()=>{
+  const c=channel();c.link.open();c.snapshot();c.link.sendAction(action('END_TURN'));
+  const receipt=JSON.parse(c.socket.send.mock.lastCall![0]).id;
+  c.link.disconnected(true);c.socket.readyState=0;c.link.resume();
+  c.socket.readyState=1;c.link.open();c.snapshot();
+  expect(c.callbacks.status).toHaveBeenLastCalledWith('connected');
+  expect(JSON.parse(c.socket.send.mock.lastCall![0]).id).toBe(receipt);
+  c.snapshot(receipt);expect(c.link.sendAction(action('END_TURN'))).toBe(true);
+});
 describe("automatic room recovery", () => {
   it('acknowledges duplicate snapshots without repainting the board, while retaining real appearance changes',()=>{
     const c=channel();c.link.open();c.snapshot();c.link.sendAction(action('END_TURN'));c.snapshot('client:1');

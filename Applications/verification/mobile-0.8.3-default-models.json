@@ -1,0 +1,10 @@
+{
+  "requests": 18,
+  "optionalModelConverter": [],
+  "nativePlayer": [
+    "http://127.0.0.1:5199/unity/Build/6e5932dc9583/AppsWeb.loader.js",
+    "http://127.0.0.1:5199/unity/Build/6e5932dc9583/AppsWeb.framework.js",
+    "http://127.0.0.1:5199/unity/Build/6e5932dc9583/AppsWeb.wasm",
+    "http://127.0.0.1:5199/unity/Build/6e5932dc9583/AppsWeb.data"
+  ]
+}

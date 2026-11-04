@@ -1,3 +1,18 @@
+# 0.8.3 — Reconnect, auction recovery and reliable custom models
+
+- Fix a permanent-offline race when the phone comes online before the replacement
+  WebSocket opens. Pending moves retain their original receipt during retry.
+
+- Compulsory rent cannot strand an unaffordable winning bid or lock the debtor's
+  only mortgageable district. The auction reopens and debt can be resolved.
+- Bankrupt bidders leave the auction; the pending lot finishes before the next
+  movement turn. Older affected saves are repaired without resetting the match.
+- Custom model downloads survive ordinary room updates and register once.
+- Bundled pieces skip the optional Three.js model-conversion download.
+- A late custom dice model replaces idle default dice without interrupting an
+  active throw, and is used on the next throw.
+- Sustained match, saved-room and native renderer regressions added.
+
 # 0.8.2 — Clear mobile rolls and interrupted-animation recovery
 
 - Tap a real Unity 3D dice pair on the board to throw; its touch target follows

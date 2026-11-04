@@ -1,0 +1,12 @@
+{
+  "before": {
+    "balances": "◆Riya · you₹1,300AAI Mira₹1,410",
+    "phase": "awaitingRoll"
+  },
+  "after": {
+    "balances": "◆Riya · you₹1,300AAI Mira₹1,410",
+    "extraRoll": false,
+    "phase": "awaitingRoll"
+  },
+  "unchanged": true
+}

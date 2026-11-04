@@ -1,0 +1,54 @@
+[
+  {
+    "center": "unity-canvas",
+    "kind": "dice"
+  },
+  {
+    "center": "unity-canvas",
+    "kind": "dice"
+  },
+  {
+    "center": "unity-canvas",
+    "kind": "dice"
+  },
+  {
+    "center": "unity-canvas",
+    "kind": "dice"
+  },
+  {
+    "center": "unity-canvas",
+    "kind": "dice"
+  },
+  {
+    "center": "unity-canvas",
+    "kind": "dice"
+  },
+  {
+    "center": "unity-canvas",
+    "kind": "dice"
+  },
+  {
+    "center": "unity-canvas",
+    "kind": "other"
+  },
+  {
+    "center": "unity-canvas",
+    "kind": "move"
+  },
+  {
+    "center": "unity-canvas",
+    "kind": "move"
+  },
+  {
+    "center": "unity-canvas",
+    "kind": "move"
+  },
+  {
+    "center": "unity-canvas",
+    "kind": "move"
+  },
+  {
+    "center": "deed-symbol",
+    "kind": "purchase"
+  }
+]

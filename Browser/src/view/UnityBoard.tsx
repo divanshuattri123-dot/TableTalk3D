@@ -7,6 +7,7 @@ import { unitySnapshot } from "../presentation/snapshot";
 import { boardRenderSize } from "./readability";
 import ScreenBoardLabels from "./ScreenBoardLabels";
 import { watchGraphicsLoss } from './graphicsRecovery';
+import {ModelStreams} from './modelStreams';
 
 interface UnityInstance { SendMessage: (object: string, method: string, value?: string) => void; Quit: () => Promise<void> }
 interface Release { loaderUrl: string; dataUrl: string; frameworkUrl: string; codeUrl: string; productVersion: string }
@@ -30,7 +31,7 @@ export default function UnityBoard({ game, target, settings, frame, syncVersion,
   const [ready, setReady] = useState(false);
   const [mobile, setMobile] = useState(() => window.matchMedia("(pointer: coarse), (max-width: 700px)").matches);
   const { byId } = useAssets();
-  const registered = useRef(new Set<string>());
+  const streams=useRef<ModelStreams|undefined>(undefined);
   const syncedVersion = useRef(-1);
   const [assetError, setAssetError] = useState("");
   const [diceTarget,setDiceTarget]=useState<{x:number;y:number;width:number;height:number}>();
@@ -84,12 +85,16 @@ export default function UnityBoard({ game, target, settings, frame, syncVersion,
       }, value => { if (!dead) setProgress(value); });
       if (dead||graphicsLost) { await player.Quit(); return; }
       instance.current = player;
+      streams.current=new ModelStreams(async asset=>(await import('./streamUnityModel')).streamUnityModel(asset),
+        json=>{player.SendMessage('GamePresentation','RegisterModel',json);setAssetError('');},
+        asset=>setAssetError(`${asset.label} could not load. Reopen the collection to try another piece.`));
       player.SendMessage("GamePresentation", "ResetSnapshot", JSON.stringify(unitySnapshot(latest.current.game)));
       setReady(true); latest.current.onReady(true);
     }
     start().catch(error => { if (!dead) { setFailure(String(error instanceof Error ? error.message : error).split("\n")[0].slice(0, 240)); latest.current.onReady(false); } });
     return () => {
       dead = true; stopWatching();latest.current.onReady(false); window.removeEventListener("tabletalk-unity", receive);
+      streams.current?.dispose();streams.current=undefined;
       const player = instance.current; instance.current = undefined;
       if (player) void player.Quit().catch(()=>undefined);
     };
@@ -112,20 +117,7 @@ export default function UnityBoard({ game, target, settings, frame, syncVersion,
   useEffect(() => {
     if (!ready) return;
     const ids = new Set(game.players.flatMap(p => [p.tokenId, p.diceId]).filter((id): id is string => Boolean(id)));
-    let cancelled = false;
-    void import("./streamUnityModel").then(async ({ BUNDLED_MODELS, streamUnityModel }) => {
-      for (const id of ids) {
-        const asset = byId.get(id);
-        if (cancelled || !asset || BUNDLED_MODELS.has(id) || registered.current.has(id)) continue;
-        registered.current.add(id);
-        try {
-          const json = await streamUnityModel(asset);
-          if (!cancelled) instance.current?.SendMessage("GamePresentation", "RegisterModel", json);
-          else registered.current.delete(id);
-        } catch { registered.current.delete(id); if (!cancelled) setAssetError(`${asset.label} could not load. Reopen the collection to try another piece.`); }
-      }
-    });
-    return () => { cancelled = true; };
+    for(const id of ids){const asset=byId.get(id);if(asset)void streams.current?.ensure(asset);}
   }, [ready, game.players, byId]);
   return <div className="unity-board-shell" data-renderer={ready ? "unity-ready" : "unity-loading"}>
     <canvas id="unity-canvas" ref={canvas} className="unity-canvas" draggable={false} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()} tabIndex={0} aria-label="Interactive 3D city board. Drag to pan, pinch or use buttons to zoom." />

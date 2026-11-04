@@ -1,4 +1,5 @@
 import { createInitialState, reduceGame } from "../src/engine/reducer";
+import {recoverClassicAuction} from '../src/engine/classic';
 import type { GameAction, GameState } from "../src/engine/types";
 
 export const CHECKPOINT_KEY = "table-talk-checkpoint-v1";
@@ -21,6 +22,13 @@ export class SavedRoom {
       // An incompatible save must fail visibly, never silently become a fresh lobby.
       if (saved.version !== 1 || saved.state.roomCode !== this.state.roomCode) throw new Error("Unsupported room save.");
       this.checkpoint = saved;
+      if (saved.state.mode==='classic') {
+        const state=recoverClassicAuction(saved.state);
+        if (state!==saved.state) {
+          const repaired={...saved,state};
+          await this.storage.put(CHECKPOINT_KEY,repaired);this.checkpoint=repaired;
+        }
+      }
     }
   }
   apply(input: GameAction | ((state:GameState)=>GameAction|undefined), id?: string): Promise<GameState> {

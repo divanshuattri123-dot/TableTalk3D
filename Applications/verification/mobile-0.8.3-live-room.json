@@ -1,0 +1,8 @@
+{
+  "room": "PTPY",
+  "beforeSha256": "92dc2a3512460c26c0191d6d4d1b12958a9a32e0c062f8efcc6f263000a3889d",
+  "afterSha256": "92dc2a3512460c26c0191d6d4d1b12958a9a32e0c062f8efcc6f263000a3889d",
+  "unchanged": true,
+  "phase": "awaitingRoll",
+  "workerVersion": "1fe355e7-b6e6-4664-97fa-c8587b143e43"
+}

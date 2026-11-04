@@ -344,6 +344,13 @@ namespace TableTalk
             prefab.GetComponent<MeshFilter>().sharedMesh = mesh; prefab.GetComponent<MeshRenderer>().sharedMaterial = cityMaterial;
             prefab.SetActive(false); streamedMeshes.Add(mesh); streamedModels.Add(prefab);
             tokens = tokens.Concat(new[] { new TokenAsset { id = data.id, label = data.id, prefab = prefab } }).ToArray();
+            if (currentDiceId == data.id)
+            {
+                currentDiceId = null;
+                // Keep a running throw intact; refresh resting dice as soon as their download finishes.
+                if (diceInputEnabled && webMotion == null)
+                    SetDiceInput(JsonUtility.ToJson(new DiceInput { enabled = true, diceId = data.id }));
+            }
             if (shown != null) foreach (var player in shown.players.Where(p => p.tokenId == data.id))
                 if (pieces.TryGetValue(player.id, out var piece)) UpdateTokenModel(piece, player);
         }
