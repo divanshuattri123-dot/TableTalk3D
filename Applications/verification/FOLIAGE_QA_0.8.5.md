@@ -22,6 +22,13 @@ uses textured foliage on shrubs.
   `trees-0.8.5-phone.png` is the 844 x 390 board render.
 - APK and signed AAB each contain all 47 matching final web assets, including the
   new renderer. Package and signing reports record the exact hashes.
+- GitHub Pages run 41887345811 passed all 413 tests in 44 files, frontend/Worker
+  TypeScript checks and deployment. The packaged 844 x 390 Home, test-store and
+  privacy-menu flows were inspected. Public APK/AAB downloads match local bytes.
+- Worker version 988a384d-789d-48a4-9fa9-0167c2761175 retains all five Unity data
+  streams. Live compressed size/hash, encoding and CORS checks pass for every
+  stream. QA room PTPY is byte-for-byte unchanged across deployment; no actions
+  were sent to it. Existing user rooms were not reset.
 
 The geometry check is reproducible through Unity's `eval_file` command with
 `Applications/scripts/verify-foliage.cs` in the isolated STUDIO Play preview. It

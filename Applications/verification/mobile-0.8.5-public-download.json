@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-11-04T18:28:18.672Z",
+  "reports": [
+    {
+      "file": "TableTalk3D-0.8.5-test.apk",
+      "url": "https://github.com/divanshuattri123-dot/TableTalk3D/releases/download/v0.8.5-test/TableTalk3D-0.8.5-test.apk",
+      "bytes": 47878329,
+      "sha256": "81d45b3cde1078bfef87a61d99e78c0c094babe691b0fc72f95e0770245d57a0",
+      "matches": true
+    },
+    {
+      "file": "TableTalk3D-0.8.5-play-upload.aab",
+      "url": "https://github.com/divanshuattri123-dot/TableTalk3D/releases/download/v0.8.5-test/TableTalk3D-0.8.5-play-upload.aab",
+      "bytes": 45210185,
+      "sha256": "6700210131be7639794804db07823241c146b078a9cf7b09c91b9afa8cd0c9ae",
+      "matches": true
+    }
+  ]
+}
