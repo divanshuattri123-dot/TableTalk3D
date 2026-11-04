@@ -1,0 +1,16 @@
+{
+  "version": "0.8.4",
+  "file": "TableTalk3D-0.8.4-play-upload.aab",
+  "bytes": 45207660,
+  "sha256": "8fde39991aefe19a5d286bcc7bfad7cda46725b61558be524181dca7c6cf96da",
+  "verified": true,
+  "certificateMatches": true,
+  "certificateSHA256": "39ce13dd43aeefc4b568f259c933b2981db484eee73b945568e9e26773ba0a94",
+  "subject": "CN=Da Publications, OU=Game Publishing, O=Da Publications, C=IN",
+  "certificateExpires": "2054-03-22T13:19:53.0000000Z",
+  "webFilesCompared": 47,
+  "allPackagedAssetsMatch": true,
+  "nativeLibraries": [],
+  "nativePageAlignment": "No native Android libraries; Unity is WebAssembly in the WebView.",
+  "checkedAt": "2026-11-04T13:55:20.6637929Z"
+}

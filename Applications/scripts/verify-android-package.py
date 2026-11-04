@@ -30,6 +30,7 @@ report = {
     'version': version, 'versionCode': version_code, 'apkBytes': len(raw),
     'sha256': hashlib.sha256(raw).hexdigest(),
     'unity': json.loads((root / 'web/unity/release.json').read_text()),
+    'build': json.loads((root / 'web/build-info.json').read_text()) if (root / 'web/build-info.json').exists() else None,
     'webFilesCompared': count, 'mismatches': mismatches,
     'unexpectedPublicAssets': unexpected,
     'allPackagedAssetsMatch': not mismatches and not unexpected,

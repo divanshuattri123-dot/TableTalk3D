@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useViewSettings } from "../assets";
 import type { ViewSettings } from "../assets";
+import {usePublisher} from '../publisher/PublisherShell';
 
 type MenuActions = { onCustomize: (category: "token" | "dice") => void; onClose: () => void };
 
@@ -12,6 +13,7 @@ export default function WelcomeMenu(actions: MenuActions) {
 export function WelcomeMenuPanel({ settings, onUpdate, onCustomize, onClose }: MenuActions & {
   settings: ViewSettings; onUpdate: (patch: Partial<ViewSettings>) => void;
 }) {
+  const publisher=usePublisher();
   useEffect(() => {
     const escape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", escape);
@@ -28,6 +30,7 @@ export function WelcomeMenuPanel({ settings, onUpdate, onCustomize, onClose }: M
       </fieldset>
       <div className="welcome-menu-appearance"><button type="button" onClick={() => onCustomize("token")}>Change token</button><button type="button" onClick={() => onCustomize("dice")}>Change dice</button></div>
       <p>Your settings apply when you enter a table. They do not change anyone else’s view.</p>
+      <button type="button" className="publisher-link" onClick={publisher.openPrivacy}>Privacy &amp; support</button>
     </section>
   </div>;
 }

@@ -3,6 +3,7 @@ import { canCompleteFrame, planPresentation } from "./plan";
 import type { PresentationFrame } from "./plan";
 
 interface Batch { target: GameState; frames: PresentationFrame[] }
+const last=<T>(items:readonly T[])=>items[items.length-1];
 const restoredCard = (game: GameState): PresentationFrame | undefined => {
   const card = game.card;
   if (!card || card.playerId !== game.activePlayerId || !["awaitingBuy", "awaitingEndTurn", "awaitingDebt", "awaitingTradeResponse", "awaitingAuction", "awaitingUtilityRoll", "awaitingMortgageDecision"].includes(game.phase)) return;
@@ -23,7 +24,7 @@ export class PresentationTimeline {
     plannedEventId: this.planned?.nextEventId, plannedRoom: this.planned?.roomCode,
     busy: Boolean(this.frame) || Boolean(this.planned && this.shown && this.planned.nextEventId !== this.shown.nextEventId) }; }
   private unreadCard() {
-    return [this.frame, ...(this.playing?.frames ?? []), ...this.queue.flatMap(batch => batch.frames)].filter(frame => frame?.kind === "card").at(-1);
+    return last([this.frame, ...(this.playing?.frames ?? []), ...this.queue.flatMap(batch => batch.frames)].filter(frame => frame?.kind === "card"));
   }
   private reset(game: GameState, card?: PresentationFrame) {
     this.queue = []; this.playing = undefined; this.frame = card;
@@ -41,12 +42,12 @@ export class PresentationTimeline {
       this.queue.every(batch => batch.frames.every(sameLiveBid))) {
       // The journal preserves every bid; decorative hammer motion must not trail the live price.
       this.queue = []; this.playing = { target: game, frames: [] };
-      this.frame = frames.at(-1); this.target = game; return;
+      this.frame = last(frames); this.target = game; return;
     }
     const buffered = this.queue.reduce((n, batch) => n + batch.frames.length, this.playing?.frames.length ?? 0);
     // Unseen history is not a new live move; resume the saved table, not minutes of old animations.
     if (!this.visible || game.nextEventId - previous.nextEventId > 60 || buffered > 48) {
-      this.reset(game, frames.filter(frame => frame.kind === "card").at(-1) ?? this.unreadCard()); return;
+      this.reset(game, last(frames.filter(frame => frame.kind === "card")) ?? this.unreadCard()); return;
     }
     const batch = { target: game, frames };
     if (!batch.frames.length && this.queue.length && !this.queue[this.queue.length - 1]!.frames.length) this.queue[this.queue.length - 1] = batch;

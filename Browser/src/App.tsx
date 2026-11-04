@@ -49,6 +49,7 @@ import {isCityId} from './engine/cities';
 import type {CityId} from './engine/cities';
 import {usePublisher} from './publisher/PublisherShell';
 import {STORE_PRODUCTS} from './publisher/catalog';
+import {playerId as randomId} from './compat';
 import useMobileInterface from "./view/useMobileInterface";
 import { nativeMobileShell, roomShareUrl } from "./platform";
 import { enterGameFullscreen, exitGameFullscreen, fullscreenActive, releaseGameOrientation } from "./view/fullscreen";
@@ -79,11 +80,6 @@ const randomCode = (): string => {
   const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
   return Array.from({ length: 4 }, () => letters[Math.floor(Math.random() * letters.length)]).join("");
 };
-
-const randomId = (): string =>
-  typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID()
-    : `player-${Math.random().toString(36).slice(2, 10)}`;
 
 const formatMoney = formatRupees;
 
@@ -273,6 +269,7 @@ function App() {
 }
 
 function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: Session; onLeave: () => void; onChooseColor: (color: string) => void;preferredMap:{world:WorldId;city:CityId} }) {
+  const publisher=usePublisher();
   const mobile = useMobileInterface();
   const [lobbyStudio,setLobbyStudio] = useState<"token" | "dice">();
   const { game, connection, error, sendAction, reconnect } = useGameRoom(session);
@@ -401,7 +398,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
         </aside>}
       </section>
 
-{drawer && !(mobileLobby && drawer === "menu") && <div className="hud-drawer-backdrop" onClick={() => setDrawer(undefined)}><section className={`hud-drawer${drawer === "menu" ? " game-menu-drawer" : ""}`} role="dialog" aria-modal="true" aria-labelledby="hud-drawer-title" onClick={event => event.stopPropagation()}><header><h2 id="hud-drawer-title">{drawer === "menu" ? "Game menu" : drawer === "players" ? "At the table" : "Table chatter"}</h2><button type="button" autoFocus onClick={() => setDrawer(undefined)} aria-label="Close panel">×</button></header>{drawer === "menu" ? <GameMenu roomCode={session.roomCode} copied={copied} fullscreen={fullscreen} showFullscreen={!nativeMobileShell()} onPanel={panel => { setDrawer(undefined); setTablePanel(panel); }} onPlayers={() => setDrawer("players")} onHistory={() => setDrawer("log")} onCopy={copyRoomLink} onFullscreen={toggleFullscreen} onLeave={onLeave} /> : drawer === "players" ? <PlayerRoster game={game} localId={session.player.id} /> : <EventLog game={game} />}</section></div>}
+{drawer && !(mobileLobby && drawer === "menu") && <div className="hud-drawer-backdrop" onClick={() => setDrawer(undefined)}><section className={`hud-drawer${drawer === "menu" ? " game-menu-drawer" : ""}`} role="dialog" aria-modal="true" aria-labelledby="hud-drawer-title" onClick={event => event.stopPropagation()}><header><h2 id="hud-drawer-title">{drawer === "menu" ? "Game menu" : drawer === "players" ? "At the table" : "Table chatter"}</h2><button type="button" autoFocus onClick={() => setDrawer(undefined)} aria-label="Close panel">×</button></header>{drawer === "menu" ? <GameMenu roomCode={session.roomCode} copied={copied} fullscreen={fullscreen} showFullscreen={!nativeMobileShell()} onPanel={panel => { setDrawer(undefined); setTablePanel(panel); }} onPlayers={() => setDrawer("players")} onHistory={() => setDrawer("log")} onCopy={copyRoomLink} onFullscreen={toggleFullscreen} onLeave={onLeave} onPrivacy={publisher.openPrivacy} /> : drawer === "players" ? <PlayerRoster game={game} localId={session.player.id} /> : <EventLog game={game} />}</section></div>}
 
       <EventStage game={game} frame={motion.frame} busy={connection !== "connected" || presentationInteractionBusy(game, motion) || !sceneUsable} localId={session.player.id} sendAction={sendAction} onCardRead={motion.acknowledgeCard} counterTools={me && game.pendingTrade ? () => <TradeComposer key={game.pendingTrade!.id} game={game} local={me} sendAction={sendAction} counterTrade={game.pendingTrade!} /> : undefined} financeTools={me && <ClassicFinanceMenu game={game} local={me} available={connection === "connected" && !motion.busy && sceneUsable} sendAction={sendAction} />} />
       <LandscapeGate onLeave={onLeave} />
@@ -682,7 +679,7 @@ function PropertyTools({
         const canSell = !locked && clearSet && property.houses > 0 && property.houses === Math.max(...levels) && (property.houses < 5 || game.bankHouses >= 4);
         const canMortgage = !locked && (property.mortgaged ? game.phase !== "awaitingDebt" && cash >= tile.mortgageValue + Math.ceil(tile.mortgageValue / 10) : !levels.some(level => level > 0));
         const buildReason=tile.kind!=="property"?"":locked?"This district is reserved by an active auction.":game.auction?.kind==="house"||game.auction?.kind==="hotel"?"Finish the building auction first.":!district.every(member=>game.properties[member.position]?.ownerId===player.id)?"Own every deed in this colour set to build.":!clearSet?"Unmortgage the whole colour set first.":game.phase==="awaitingDebt"?"Settle the debt before buying buildings.":property.houses>=5?"Hotel complete.":property.houses!==Math.min(...levels)?"Build evenly: improve the less developed deeds first.":cash<tile.houseCost?"You need more available cash to build.":property.houses===4&&game.bankHotels===0?"The bank has no hotels left.":property.houses<4&&game.bankHouses===0?"The bank has no houses left.":"";
-        const refund = tile.kind === "property" ? classic && property.buildingCosts?.length ? property.buildingCosts.at(-1)!/2 : Math.floor(tile.houseCost/2) : 0;
+        const refund = tile.kind === "property" ? classic && property.buildingCosts?.length ? property.buildingCosts[property.buildingCosts.length-1]!/2 : Math.floor(tile.houseCost/2) : 0;
         return (
           <div className="deed-row" key={tile.position}>
             <div><b>{tile.name}</b><small>{propertyLabel(property) || "Unimproved"}</small>{tile.kind==="property"&&<small className="deed-rule-note" id={`deed-build-${tile.position}`}>{buildReason||`${property.houses===4?"Hotel":"House"} costs ${formatMoney(tile.houseCost)}`}</small>}</div>

@@ -3,6 +3,10 @@
 Status: NOT RUN on a physical phone. Record model, Android version, WebView
 version, graphics setting and application version for each result.
 
+0.8.4 also has Android 12/API 31 emulator checks on the original WebView 91.
+This caught missing randomUUID and unsupported viewport units; those fixes have
+their own evidence. Emulator results do not replace any physical-phone row below.
+
 | Scenario | Required evidence | Result |
 |---|---|---|
 | Launch/update | Update over the prior APK; profile and saved seat remain | Pending |

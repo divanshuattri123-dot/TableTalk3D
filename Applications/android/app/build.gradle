@@ -1,5 +1,11 @@
 apply plugin: 'com.android.application'
 
+def uploadStore = System.getenv('TABLETALK_UPLOAD_STORE')
+def uploadPassword = System.getenv('TABLETALK_UPLOAD_PASSWORD')
+def uploadAlias = System.getenv('TABLETALK_UPLOAD_ALIAS')
+def uploadKeyPassword = System.getenv('TABLETALK_UPLOAD_KEY_PASSWORD')
+def hasUploadSigning = [uploadStore, uploadPassword, uploadAlias, uploadKeyPassword].every { it }
+
 android {
     namespace = "com.tabletalk.game"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +13,8 @@ android {
         applicationId "com.tabletalk.game"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 9
-        versionName "0.8.3"
+        versionCode 10
+        versionName "0.8.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +22,19 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasUploadSigning) {
+            upload {
+                storeFile file(uploadStore)
+                storePassword uploadPassword
+                keyAlias uploadAlias
+                keyPassword uploadKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasUploadSigning) signingConfig signingConfigs.upload
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

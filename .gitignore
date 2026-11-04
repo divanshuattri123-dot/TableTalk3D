@@ -24,6 +24,11 @@ Recordings/
 *.log
 .DS_Store
 .env*
+*.jks
+*.keystore
+*.p12
+*.pfx
+*signing-secrets*
 tmp/
 Applications/node_modules/
 Applications/web/

@@ -1,4 +1,10 @@
 :root { --publisher-navy:#112b3b;--publisher-gold:#e9c181;--publisher-teal:#177d88; }
+.privacy-sheet { width:min(760px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:0;border:1px solid #bbc9c3;border-radius:18px;background:#fffdf5;color:#173b4c;box-shadow:0 20px 80px #061e3980;font:14px/1.6 "Segoe UI",sans-serif; }
+.privacy-sheet::backdrop { background:#071d2ddd; }
+.privacy-sheet > header { position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 22px;background:#fffdf5;border-bottom:1px solid #d7dfd9;z-index:1; }
+.privacy-sheet h1 { margin:0;font-size:24px; }.privacy-sheet h2 { font-size:17px;margin:22px 0 5px; }.privacy-sheet p { margin:5px 0 14px; }
+.privacy-sheet > header button { min-width:48px;min-height:48px;border:0;border-radius:50%;background:#e8eee6;color:#173b4c;font-size:28px;cursor:pointer; }
+.privacy-copy { padding:0 24px 24px; }.privacy-preview { background:#fff0c8;padding:12px;border-radius:8px; }.privacy-sheet a { color:#086d70;text-decoration:underline;display:inline-block;min-height:44px;line-height:44px; }
 .publisher-intro { position:fixed;inset:0;z-index:200;display:grid;place-items:center;overflow:hidden;color:#efcf95;background:radial-gradient(ellipse at 50% 60%,#234e5b,#0e2534 50%,#081820);font-family:"Trebuchet MS","Segoe UI",sans-serif; }
 .publisher-intro::before,.publisher-intro::after { content:"";position:absolute;width:65vmin;height:65vmin;border:1px solid #eac68a16;transform:rotate(45deg); }
 .publisher-intro::after { width:90vmin;height:90vmin; }
@@ -90,12 +96,15 @@
 @media (max-width:700px) and (orientation:portrait) { .publisher-login { padding:20px; }.login-card { justify-self:center;padding:27px; }.login-scenery { opacity:.35; }.publisher-login > header > span { font-size:19px; }.publisher-login > footer { font-size:8px; }.publisher-store { padding:18px 14px 8px; }.publisher-store > header { gap:10px; }.store-preview-badge { max-width:100px;font-size:8px;text-align:center; }.store-products { grid-template-columns:1fr 1fr;gap:10px; }.store-product { min-height:310px; }.store-product-art { min-height:135px;padding:12px; }.store-product-art img { width:100px;height:100px; }.store-product-copy { padding:13px; }.store-product-copy .publisher-primary { font-size:10px;padding:10px;gap:7px; }.publisher-store > footer { grid-template-columns:1fr; }.publisher-store > footer > div { justify-content:space-between;gap:5px; }.publisher-store > footer .publisher-link { font-size:10px; }.menu-side-panels { grid-template-columns:1fr 1fr;grid-template-rows:1fr;gap:12px; }.menu-side-panels .menu-join-panel { display:flex;min-height:160px;padding:10px; }.menu-side-panels .menu-join-panel .menu-pill,.menu-store-panel .menu-pill { font-size:15px;min-height:42px;padding:8px; }.menu-side-panels .menu-panel-kicker { font-size:8px;text-align:center; }.menu-store-panel > svg { display:none; }.menu-store-panel > small { font-size:9px;text-align:center; }.menu-side-panels .menu-join-panel > small { display:none; } }
 @media (prefers-reduced-motion:reduce) { .publisher-signature,.publisher-mark *,.publisher-signature h1,.publisher-signature p,.publisher-light,.login-scenery i,.store-product,.login-card { animation:none; }.publisher-orbit { stroke-dashoffset:0; } }
 @media (orientation:landscape) and (max-height:450px) {
+  .publisher-login { height:100vh;height:100dvh;min-height:0;padding:8px 16px;gap:5px;grid-template-rows:auto minmax(0,1fr) auto; }
+  .publisher-login > header > span { font-size:16px; }.publisher-login > header small { padding:3px 8px;font-size:8px; }
   .login-card { padding:16px 22px;margin:8px 0; }
-  .login-card h1 { font-size:32px;margin:9px 0; }
+  .login-card { align-self:stretch;min-height:0;overflow:auto;padding:10px 18px;margin:0;width:min(540px,100%); }
+  .login-card h1 { font-size:28px;margin:6px 0; }.login-card h1 br { display:none; }
   .login-card > p:not(.login-privacy):not(.login-information) { display:none; }
   .login-card form { grid-template-columns:minmax(0,1fr) auto;gap:7px 9px;margin-top:12px; }
   .login-card form label { grid-column:1/-1; }
-  .login-card input { min-width:0;font-size:12px; }
+  .login-card input { min-width:0;font-size:16px; }
   .login-card .publisher-primary { min-width:135px;padding:10px;font-size:10px; }
   .login-card .login-privacy { margin-top:7px;font-size:9px;line-height:1.4; }
   .login-information { max-height:65px;overflow:auto; }

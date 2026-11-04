@@ -1,0 +1,36 @@
+{
+  "version": "0.8.4",
+  "environment": "Android Emulator",
+  "physicalDevice": false,
+  "android": "12",
+  "api": 31,
+  "webView": "91.0.4472.114",
+  "display": {
+    "width": 720,
+    "height": 1280,
+    "density": 320,
+    "orientation": "landscape"
+  },
+  "renderer": "2D fallback on original WebView; update WebView for Unity 3D",
+  "room": "RWSW",
+  "guestStartup": true,
+  "roomCreate": true,
+  "addAI": true,
+  "dice": [
+    5,
+    5
+  ],
+  "moveTo": 10,
+  "phase": "awaitingEndTurn",
+  "cash": 1500,
+  "apkUpdatePreservedProfile": true,
+  "returnRestoredExactSnapshot": true,
+  "snapshotSha256": "a5ff7b285edddd12b89f4a268cb6141cb2fa6912c46f6ae8781c493fb2476897",
+  "notes": [
+    "Old randomUUID startup failure reproduced and fixed.",
+    "Viewport fallback and compact guest form verified.",
+    "Current Unity WebAssembly requires a newer WebView; original WebView 91 can continue the same match in 2D.",
+    "Capacitor emits early pre-document safe-area injection warnings; these are separate from the corrected guest error.",
+    "No physical performance, battery or thermal certification."
+  ]
+}

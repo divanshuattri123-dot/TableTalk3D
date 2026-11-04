@@ -1,3 +1,17 @@
+# 0.8.4 — Play test preparation and Android 12 compatibility
+
+- Fix guest startup on Android 12's original WebView when randomUUID is absent.
+- Replace Array.at in presentation and finance paths for older WebViews.
+- Supply viewport-unit fallbacks and a compact scrollable landscape guest screen.
+- Add privacy/support access before guest entry and in the game menus.
+- Play test candidate disables sample ads and local preview transactions; core
+  play remains free. Browser preview remains explicitly labelled.
+- Configure a local upload key outside Git and verify the signed AAB against its
+  public certificate. Keep the direct APK's prior debug signing identity.
+- Add a complete asset-rights inventory, Data Safety worksheet and Play handoff.
+- Production submission still needs the owner account/contact, asset review,
+  recoverable key backup, physical-device QA and applicable Play testing.
+
 # 0.8.3 — Reconnect, auction recovery and reliable custom models
 
 - Fix a permanent-offline race when the phone comes online before the replacement

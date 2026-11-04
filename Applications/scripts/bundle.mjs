@@ -10,7 +10,8 @@ const appVersion=JSON.parse(await readFile(path.join(root,'package.json'),'utf8'
 const assets = process.env.TABLETALK_ASSET_SOURCE;
 if (!assets) throw new Error('Set TABLETALK_ASSET_SOURCE to the prepared public folder containing unity/release.json.');
 const web = path.join(root, 'web');
-execFileSync(process.execPath, [path.join(browser, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', web, '--emptyOutDir'], { cwd: browser, stdio: 'inherit', env: { ...process.env, PAGES_BASE_PATH: './', VITE_PACKAGED_APP: 'true', VITE_APP_VERSION:appVersion, VITE_PARTYKIT_HOST: 'wss://table-talk-realtime.divanshuattri123.workers.dev', VITE_ASSET_HOST: 'https://table-talk-realtime.divanshuattri123.workers.dev' } });
+execFileSync(process.execPath,[path.join(root,'scripts/generate-privacy.mjs')],{stdio:'inherit'});
+execFileSync(process.execPath, [path.join(browser, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', web, '--emptyOutDir'], { cwd: browser, stdio: 'inherit', env: { ...process.env, PAGES_BASE_PATH: './', VITE_PACKAGED_APP: 'true', VITE_STORE_CANDIDATE:process.argv.includes('--play-test')?'true':'false', VITE_APP_VERSION:appVersion, VITE_PARTYKIT_HOST: 'wss://table-talk-realtime.divanshuattri123.workers.dev', VITE_ASSET_HOST: 'https://table-talk-realtime.divanshuattri123.workers.dev' } });
 const unity = path.join(web, 'unity');
 // Vite may copy the browser's gzip player; Android treats .gz and plain assets as duplicates.
 if (path.resolve(unity) !== path.join(root, 'web', 'unity')) throw new Error('Unexpected generated Unity folder');
@@ -27,6 +28,7 @@ for (const field of ['loaderUrl', 'dataUrl', 'frameworkUrl', 'codeUrl']) {
   release[field] = uncompressed;
 }
 await writeFile(path.join(unity, 'release.json'), JSON.stringify(release, null, 2));
+await writeFile(path.join(web,'build-info.json'),JSON.stringify({version:appVersion,channel:process.argv.includes('--play-test')?'play-test':'preview',unityPlayerVersion:release.productVersion,liveAds:false,realPurchases:false},null,2));
 const desktopWeb = path.resolve(root, 'desktop/app/web');
 if (desktopWeb !== path.join(root,'desktop','app','web')) throw new Error('Unexpected generated desktop folder');
 await rm(desktopWeb, {recursive:true,force:true});

@@ -1,0 +1,8 @@
+{
+  "accountVerified": false,
+  "uploadKeyRecoveryVerified": false,
+  "appContentComplete": false,
+  "requiredTestingComplete": false,
+  "productionAccessGranted": false,
+  "note": "Owner last confirmed no Play account. Update only with evidence from the actual Play Console; local builds cannot establish these statuses."
+}

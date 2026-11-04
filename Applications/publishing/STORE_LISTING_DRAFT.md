@@ -24,9 +24,9 @@ The mobile game is designed for landscape play, with touch controls and game
 preferences in Menu. Confirmed moves are kept in the room so a returning player
 can reconnect to their saved seat on the same installation.
 
-Core multiplayer is free. Cosmetic options do not change dice results, rent or
-starting cash. The test version contains explicitly labelled free preview unlocks;
-real purchases and live ads are not connected in that version.
+Core multiplayer is free. This Play test candidate has no live ads or purchases.
+All boards and the core game are available. Cosmetic purchases are unavailable;
+browser preview unlocks are separate from any future paid ownership.
 
 Use a nickname, not personal contact details. Other people with the room code can
 see player nicknames and game actions. Children should play with people they know.

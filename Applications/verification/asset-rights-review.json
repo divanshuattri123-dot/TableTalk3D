@@ -1,0 +1,14 @@
+{
+  "checkedAt": "2026-11-04T13:26:22.767Z",
+  "catalogAssets": 6430,
+  "counts": {
+    "model": 1044,
+    "image": 5046,
+    "audio": 179,
+    "data": 161
+  },
+  "reviewed": 0,
+  "pending": 6430,
+  "ownerClaim": "Owner states supplied assets are their own; file-specific evidence pending.",
+  "scope": "Every downloadable catalog asset. Embedded Unity imports, project art and package licences also need the release review described in ASSET_RIGHTS_REVIEW.md."
+}

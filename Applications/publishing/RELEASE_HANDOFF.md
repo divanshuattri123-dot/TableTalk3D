@@ -1,17 +1,22 @@
-# Release handoff — 3 November 2026
+# Release handoff — 4 November 2026
 
 Current outcome: test release preparation. The owner reconfirmed that no Google
 Play or advertising accounts exist. There has been no paid advertising spend.
 
 ## Prepared
 
-- Android test APK update and an unsigned release-variant AAB build target.
+- Android 0.8.4 Play test candidate and a signed upload AAB, with certificate/hash verification.
+- Upload key stays outside Git; see UPLOAD_SIGNING.md. Independent credential backup remains pending.
+- Privacy/support notice is available in the app and as privacy.html; owner confirmed no public support email yet.
+- Complete catalog inventory with SHA-256 and a Data Safety worksheet.
+- Android 12 emulator compatibility checks supplement the browser checks; physical-device results remain separate.
 - Eleven worlds, six city editions, human/AI rooms and persistent saved games.
 - Updated listing text and a paused INR 5,000 campaign plan in LAUNCH_PLAN.md.
 - Roll-overlay fix and targeted graphics/network/presentation regression checks.
 
-An unsigned AAB is a build input, not an upload-ready release. The owner must
-choose and protect an upload key and enroll in Play App Signing.
+The local upload AAB is signed. The owner must protect and back up its upload
+key and enroll in Play App Signing. A signed bundle does not establish Play
+account access, content approval or release readiness.
 [Android signing requirements](https://developer.android.com/studio/publish/app-signing).
 
 ## Owner/account items still needed
@@ -36,8 +41,10 @@ choose and protect an upload key and enroll in Play App Signing.
 
 ## Monetization and family audience
 
-The current Store uses free local test unlocks. It cannot charge money or serve
-live ads. Production purchases need real Play products, server verification,
+The browser preview Store uses free local test unlocks. The Play test candidate
+disables these transactions and sample ads; its Store explains that purchases
+are unavailable. A free launch does not require ads or purchases. Future
+production purchases need real Play products, server verification,
 pending/refund handling and cross-install restoration. Ads for the declared
 child/adult audience require the Families-compliant implementation and SDK
 versions; the existing grown-up Store gate is not proof of parental consent.

@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { enterGameFullscreen } from './fullscreen';
 import {usePublisher} from '../publisher/PublisherShell';
 import {owns} from '../publisher/catalog';
+import {storeCandidate} from '../publisher/release';
 
 type Page = 'home' | 'rooms' | 'create' | 'join' | 'profile';
 export function MenuDice({ value = 5 }: { value?: number }) {
@@ -62,7 +63,7 @@ export default function MobileWelcome({ name, color, roomCode, onName, onRoomCod
         <span className="menu-panel-kicker">ALREADY HAVE A CODE?</span><MenuGlyph kind="join"/><div className="menu-code-art" aria-hidden="true">{['A','B','C','D'].map(c=><span key={c}>{c}</span>)}</div><span className="menu-pill">JOIN ROOM <span aria-hidden="true">›</span></span><small>Four letters. One table.</small>
       </button>
       <button className="menu-maps-panel menu-tile" type="button" aria-label="Choose maps" onClick={onMaps}><span aria-hidden="true">◇</span><b>MAPS</b><small>11 worlds · 6 city editions</small></button>
-      <button className="menu-store-panel menu-tile" type="button" aria-label="Open store" onClick={publisher.openStore}><span className="menu-panel-kicker">MAKE THE TABLE YOURS</span><svg viewBox="0 0 100 80" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true"><path d="m12 23 20-15h36l20 15-38 48L12 23Zm0 0h76M32 8l-9 15 27 48 27-48-9-15M50 8v63"/></svg><span className="menu-pill">STORE <span aria-hidden="true">›</span></span><small>Skins & Remove Ads</small></button>
+      <button className="menu-store-panel menu-tile" type="button" aria-label="Open store" onClick={publisher.openStore}><span className="menu-panel-kicker">MAKE THE TABLE YOURS</span><svg viewBox="0 0 100 80" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true"><path d="m12 23 20-15h36l20 15-38 48L12 23Zm0 0h76M32 8l-9 15 27 48 27-48-9-15M50 8v63"/></svg><span className="menu-pill">STORE <span aria-hidden="true">›</span></span><small>{storeCandidate ? "Purchases unavailable" : "Skins & Remove Ads"}</small></button>
       <button className="menu-settings-panel menu-tile" type="button" aria-label="Open settings" onClick={onMenu}><span aria-hidden="true">⚙</span><b>SETTINGS</b><small>Graphics · sound · pieces</small></button></div>
     </section> : page === 'rooms' ? <section className="mobile-room-choices" aria-label="Choose how to play">
       {(['create','join'] as const).map(kind=><button key={kind} className={`menu-mode-card menu-tile menu-mode-${kind}`} type="button" onClick={()=>navigate(kind)}><MenuGlyph kind={kind}/><h2>{kind === 'create' ? 'Host game night' : 'Meet your friends'}</h2><p>{kind === 'create' ? 'Make a room and share its code.' : 'Enter the code your friend sent.'}</p><span className="menu-pill">{kind === 'create' ? 'CREATE ROOM' : 'JOIN ROOM'} <span aria-hidden="true">›</span></span></button>)}
@@ -77,7 +78,7 @@ export default function MobileWelcome({ name, color, roomCode, onName, onRoomCod
       </section>
     </form>}
     {error && <div className="mobile-menu-error" role="status">{error}</div>}
-    <footer className="mobile-front-footer"><button className="menu-guest-link" type="button" onClick={publisher.openAccount}>Guest profile</button>{page==='home' && resumeCode && <button type="button" className="menu-resume" onClick={onResume}>Return to {resumeCode} <span aria-hidden="true">↗</span></button>}<span>Phone + PC · Same table{import.meta.env.VITE_APP_VERSION && ` · Preview ${import.meta.env.VITE_APP_VERSION}`}</span></footer>
-    {page==='home'&&!owns(publisher.wallet,'remove_ads')&&<div className="sample-ad-placement" aria-label="Sample ad placement">AD PLACEMENT PREVIEW <span>No live ads in this test build</span></div>}
+    <footer className="mobile-front-footer"><button className="menu-guest-link" type="button" onClick={publisher.openAccount}>Guest profile</button>{page==='home' && resumeCode && <button type="button" className="menu-resume" onClick={onResume}>Return to {resumeCode} <span aria-hidden="true">↗</span></button>}<span>Phone + PC · Same table{import.meta.env.VITE_APP_VERSION && ` · ${storeCandidate ? "Play test" : "Preview"} ${import.meta.env.VITE_APP_VERSION}`}</span></footer>
+    {!storeCandidate&&page==='home'&&!owns(publisher.wallet,'remove_ads')&&<div className="sample-ad-placement" aria-label="Sample ad placement">AD PLACEMENT PREVIEW <span>No live ads in this test build</span></div>}
   </main>;
 }
