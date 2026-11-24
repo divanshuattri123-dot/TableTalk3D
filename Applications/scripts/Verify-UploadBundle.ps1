@@ -3,7 +3,8 @@ $appRoot=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $version=(Get-Content (Join-Path $appRoot 'package.json') -Raw | ConvertFrom-Json).version
 $file="TableTalk3D-$version-play-upload.aab"
 $bundle=Join-Path $appRoot "downloads/$file"
-$javaRoot=(Get-ChildItem (Join-Path $env:LOCALAPPDATA 'TableTalkBuildTools/java') -Directory | Select-Object -First 1).FullName
+$toolsRoot=if($env:TABLETALK_BUILD_TOOLS_ROOT){$env:TABLETALK_BUILD_TOOLS_ROOT}else{Join-Path $env:LOCALAPPDATA 'TableTalkBuildTools'}
+$javaRoot=(Get-ChildItem (Join-Path $toolsRoot 'java') -Directory | Select-Object -First 1).FullName
 $verification=& (Join-Path $javaRoot 'bin/jarsigner.exe') -verify $bundle 2>&1 | Out-String
 if($LASTEXITCODE -ne 0 -or $verification -notmatch 'jar verified\.'){throw 'AAB signature verification failed or the bundle is unsigned.'}
 $certificate=& (Join-Path $javaRoot 'bin/keytool.exe') -printcert -jarfile $bundle 2>&1 | Out-String

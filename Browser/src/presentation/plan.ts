@@ -27,6 +27,8 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
   const add = (kind: MotionKind, text: string, duration: number, data: Partial<PresentationFrame> = {}) =>
     frames.push({ id: `${next.roomCode}:${next.nextEventId}:${frames.length}`, kind, text, duration, ...data });
   const board = getBoard(next.boardSize, next.city), active = next.players.find(p => p.id === previous.activePlayerId);
+  const namedPlayers = [...next.players].sort((a,b)=>b.name.length-a.name.length);
+  const namedTiles = [...board].sort((a,b)=>b.name.length-a.name.length);
   const positions = new Map(previous.players.map(p => [p.id, p.position]));
   const destinations = new Map<string, number>();
   if (previous.phase === "awaitingMove" && previous.pendingRoll) {
@@ -45,7 +47,9 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
   }
   for (const event of events) {
     if (event.kind === "error") continue;
-    const player = next.players.find(p => event.playerId ? p.id === event.playerId : event.text.startsWith(`${p.name} `));
+    const player = event.playerId ? next.players.find(p=>p.id===event.playerId) : namedPlayers.find(p=>event.text.startsWith(`${p.name} `));
+    // Each journal entry identifies its own site, even when a snapshot includes several upgrades.
+    const eventTile = event.position ?? namedTiles.find(t=>event.text.slice(player?.name.length ?? 0).includes(t.name))?.position;
     const playerId = player?.id;
     const hint = event.position ?? (player && destinations.get(player.id));
     const moved = player && board.find(t => (hint === undefined || t.position === hint) && event.text === `${player.name} moved to ${t.name}.`);
@@ -83,10 +87,10 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
       add(previous.auction ? "sold" : "purchase", event.text, 1800, { playerId, tileId, auction: previous.auction }); continue;
     }
     if (event.text.includes("improved ") || event.text.includes("sold one improvement") || event.text.includes("sold all district buildings")) {
-      add("build", event.text, 1300, { playerId, tileId: board.find(t => previous.properties[t.position]?.houses !== next.properties[t.position]?.houses)?.position }); continue;
+      add("build", event.text, 1300, { playerId, tileId: eventTile ?? board.find(t => previous.properties[t.position]?.houses !== next.properties[t.position]?.houses)?.position }); continue;
     }
     if (event.text.includes("mortgaged ")) {
-      add("mortgage", event.text, 1400, { playerId, tileId: board.find(t => previous.properties[t.position]?.mortgaged !== next.properties[t.position]?.mortgaged)?.position }); continue;
+      add("mortgage", event.text, 1400, { playerId, tileId: eventTile ?? board.find(t => previous.properties[t.position]?.mortgaged !== next.properties[t.position]?.mortgaged)?.position }); continue;
     }
     if (event.text.includes("accepted the trade") || event.text.includes("declined the trade") || event.text.includes("withdrew the trade")) { add("trade", event.text, 1500, { playerId }); continue; }
     if (event.text.includes("bankrupt")) { add("bankrupt", event.text, 2200, { playerId }); continue; }

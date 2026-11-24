@@ -12,6 +12,28 @@ const start = () => [
 const at = (state: GameState, position: number) => ({ ...state, players: state.players.map(p => p.id === "a" ? { ...p, position } : p) });
 
 describe("pure presentation planning", () => {
+  it('keeps mortgage animation on the longer matching player name',()=>{
+    const state=start();state.players[0]!.name='Sam';state.players[1]!.name='Sam Singh';
+    state.activePlayerId='b';state.properties[3]!.ownerId='b';
+    const bought=reduceGame(state,{type:'MORTGAGE',playerId:'b',propertyId:3,mortgage:true});
+    expect(planPresentation(state,bought).find(f=>f.kind==='mortgage')?.playerId).toBe('b');
+  });
+  it.each(['classic','expanding'] as const)('animates each %s building site when multiple improvements arrive together',mode=>{
+    const state={...start(),mode};
+    for(const id of [1,3])state.properties[id]!.ownerId='a';
+    const one=reduceGame(state,{type:'BUILD',playerId:'a',propertyId:1,operation:'build'});
+    const two=reduceGame(one,{type:'BUILD',playerId:'a',propertyId:3,operation:'build'});
+    expect(two.notice).toBeUndefined();
+    expect(planPresentation(state,two).filter(f=>f.kind==='build').map(f=>f.tileId)).toEqual([1,3]);
+  });
+  it.each(['classic','expanding'] as const)('animates each %s mortgage site when updates arrive together',mode=>{
+    const state={...start(),mode};
+    for(const id of [1,3])state.properties[id]!.ownerId='a';
+    const one=reduceGame(state,{type:'MORTGAGE',playerId:'a',propertyId:1,mortgage:true});
+    const two=reduceGame(one,{type:'MORTGAGE',playerId:'a',propertyId:3,mortgage:true});
+    expect(two.notice).toBeUndefined();
+    expect(planPresentation(state,two).filter(f=>f.kind==='mortgage').map(f=>f.tileId)).toEqual([1,3]);
+  });
   it("celebrates a newly completed set after purchase without inventing dice or replaying it", () => {
     let state = at(start(), 3);
     state = { ...state, phase: "awaitingBuy", pendingPurchase: { playerId: "a", propertyId: 3 }, properties: { ...state.properties, 1: { ownerId: "a", houses: 0, mortgaged: false } } };

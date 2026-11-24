@@ -1,6 +1,7 @@
 param([switch]$PrepareReleaseBundle,[switch]$SignRelease)
 $ErrorActionPreference='Stop'
 $toolsRoot=Join-Path $env:LOCALAPPDATA 'TableTalkBuildTools'
+if($env:TABLETALK_BUILD_TOOLS_ROOT){$toolsRoot=$env:TABLETALK_BUILD_TOOLS_ROOT}
 $env:JAVA_HOME=(Get-ChildItem "$toolsRoot/java" -Directory | Select-Object -First 1).FullName
 $env:ANDROID_HOME="$toolsRoot/sdk"
 $signingNames=@('TABLETALK_UPLOAD_STORE','TABLETALK_UPLOAD_PASSWORD','TABLETALK_UPLOAD_ALIAS','TABLETALK_UPLOAD_KEY_PASSWORD')
@@ -8,6 +9,7 @@ $previousSigning=@{}
 foreach($name in $signingNames){$previousSigning[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
 if($SignRelease){
     $privateRoot=Join-Path $env:LOCALAPPDATA 'TableTalkSigning'
+    if($env:TABLETALK_SIGNING_ROOT){$privateRoot=$env:TABLETALK_SIGNING_ROOT}
     $secretPath=Join-Path $privateRoot 'signing-secrets.xml'
     $keyPath=Join-Path $privateRoot 'tabletalk-upload.p12'
     if(!(Test-Path -LiteralPath $secretPath) -or !(Test-Path -LiteralPath $keyPath)){throw 'Run Initialize-UploadKey.ps1 before a signed release build.'}
