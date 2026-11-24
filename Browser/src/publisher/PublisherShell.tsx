@@ -1,4 +1,4 @@
-import {createContext,useContext,useEffect,useState} from 'react';
+import {createContext,useCallback,useContext,useEffect,useRef,useState} from 'react';
 import type {CSSProperties,ReactNode} from 'react';
 import {assetUrl,useAssets} from '../assets';
 import {emptyWallet,owns,readPreviewWallet,reducePreviewWallet,STORE_PRODUCTS} from './catalog';
@@ -6,10 +6,11 @@ import type {PreviewWallet,ProductId,WalletAction} from './catalog';
 import {storeCandidate} from './release';
 import PrivacySheet from './PrivacySheet';
 import {playerId} from '../compat';
+import {isPackagedHome} from '../platform';
 
 type Guest={id:string;name:string};
-type PublisherState={guest?:Guest;wallet:PreviewWallet;openStore:()=>void;openAccount:()=>void;openPrivacy:()=>void};
-const PublisherContext=createContext<PublisherState>({wallet:emptyWallet(),openStore:()=>{},openAccount:()=>{},openPrivacy:()=>{}});
+type PublisherState={guest?:Guest;wallet:PreviewWallet;openStore:()=>void;openAccount:()=>void;openPrivacy:()=>void;syncGuestName:(name:string)=>void};
+const PublisherContext=createContext<PublisherState>({wallet:emptyWallet(),openStore:()=>{},openAccount:()=>{},openPrivacy:()=>{},syncGuestName:()=>{}});
 export const usePublisher=()=>useContext(PublisherContext);
 const GUEST_KEY='da-publications-guest-v1',walletKey=(id:string)=>`da-publications-preview-wallet-v1:${id}`;
 function savedGuest():Guest|undefined {try{const g=JSON.parse(localStorage.getItem(GUEST_KEY)??'null');return g&&typeof g.id==='string'&&typeof g.name==='string'?g:undefined;}catch{return;}}
@@ -17,19 +18,44 @@ function loadWallet(id?:string){try{return id?readPreviewWallet(localStorage.get
 function PublisherMark(){return <svg className="publisher-mark" viewBox="0 0 160 150" fill="none" aria-hidden="true"><path className="publisher-monogram" d="M36 112V35h28c46 0 46 77 0 77H36Zm20-20h8c20 0 20-37 0-37h-8v37ZM93 113V35h25c37 0 37 49 0 49h-5v29H93Zm20-49h5c10 0 10-10 0-10h-5v10Z" fill="currentColor"/><path className="publisher-orbit" d="m80 7 66 38v61l-66 37-66-37V45L80 7Z" stroke="currentColor" strokeWidth="2"/><circle cx="143" cy="42" r="5" fill="currentColor"/></svg>;}
 
 export default function PublisherShell({children}:{children:ReactNode}){
-  const [guest,setGuest]=useState(savedGuest),[intro,setIntro]=useState(true),[account,setAccount]=useState(false),[store,setStore]=useState(false),[wallet,setWallet]=useState(()=>loadWallet(guest?.id));
+  const packaged=isPackagedHome();
+  const [guest,setGuest]=useState(savedGuest),[intro,setIntro]=useState(()=>packaged),[account,setAccount]=useState(false),[store,setStore]=useState(false),[wallet,setWallet]=useState(()=>loadWallet(guest?.id));
   const [privacy,setPrivacy]=useState(false);
-  useEffect(()=>{const timer=window.setTimeout(()=>setIntro(false),3800);return()=>clearTimeout(timer);},[]);
-  const signIn=(name:string)=>{const next={...(guest??{id:playerId()}),name};try{localStorage.setItem(GUEST_KEY,JSON.stringify(next));const profile=JSON.parse(localStorage.getItem('table-talk-profile')??'{}');localStorage.setItem('table-talk-profile',JSON.stringify({...profile,name}));}catch{/* A guest can still play without persistent storage. */}setGuest(next);setWallet(loadWallet(next.id));setAccount(false);};
+  const opener=useRef<HTMLElement|null>(null);
+  const rememberOpener=()=>{if(typeof document!=='undefined'&&document.activeElement instanceof HTMLElement)opener.current=document.activeElement;};
+  const restoreOpener=useCallback(()=>{const node=opener.current;opener.current=null;if(node&&node.isConnected)window.requestAnimationFrame(()=>node.focus());},[]);
+  useEffect(()=>{if(!intro)return;const timer=window.setTimeout(()=>setIntro(false),3800);return()=>clearTimeout(timer);},[intro]);
+  const syncGuestName=useCallback((rawName:string)=>{
+    const trimmed=rawName.trim().slice(0,24);if(!trimmed)return;
+    setGuest(prev=>{
+      if(prev?.name===trimmed)return prev;
+      const next={id:prev?.id??playerId(),name:trimmed};
+      try{localStorage.setItem(GUEST_KEY,JSON.stringify(next));const profile=JSON.parse(localStorage.getItem('table-talk-profile')??'{}');localStorage.setItem('table-talk-profile',JSON.stringify({...profile,name:trimmed}));}catch{/* A guest can still play without persistent storage. */}
+      if(!prev)setWallet(loadWallet(next.id));
+      return next;
+    });
+  },[]);
+  const signIn=(name:string)=>{syncGuestName(name);try{window.dispatchEvent(new CustomEvent('tabletalk-guest-name',{detail:name.trim().slice(0,24)}));}catch{}setAccount(false);restoreOpener();};
+  const openStore=()=>{
+    rememberOpener();
+    if(!guest){const next={id:playerId(),name:''};setGuest(next);try{localStorage.setItem(GUEST_KEY,JSON.stringify(next));}catch{}}
+    setStore(true);
+  };
+  const openAccount=()=>{rememberOpener();setAccount(true);};
+  const openPrivacy=()=>{rememberOpener();setPrivacy(true);};
+  const closeStore=()=>{setStore(false);restoreOpener();};
+  const closeAccount=()=>{setAccount(false);restoreOpener();};
+  const closePrivacy=()=>{setPrivacy(false);restoreOpener();};
   const dispatch=(action:WalletAction)=>setWallet(previous=>reducePreviewWallet(previous,action));
   useEffect(()=>{try{if(guest)localStorage.setItem(walletKey(guest.id),JSON.stringify(wallet));}catch{/* Preview ownership remains usable for this session. */}},[wallet,guest]);
   if(intro)return <PublisherIntro onContinue={()=>setIntro(false)}/>;
-  if(!guest||account)return <><GuestSignIn guest={guest} onContinue={signIn} onPrivacy={()=>setPrivacy(true)} onCancel={guest?()=>setAccount(false):undefined}/>{privacy&&<PrivacySheet onClose={()=>setPrivacy(false)}/>}</>;
-  return <PublisherContext.Provider value={{guest,wallet,openStore:()=>setStore(true),openAccount:()=>setAccount(true),openPrivacy:()=>setPrivacy(true)}}>{children}{store&&(storeCandidate?<StoreUnavailable onClose={()=>setStore(false)}/>:<FamilyStore wallet={wallet} dispatch={dispatch} onClose={()=>setStore(false)}/>)}{privacy&&<PrivacySheet onClose={()=>setPrivacy(false)}/>}</PublisherContext.Provider>;
+  if(account||(packaged&&!guest))return <><GuestSignIn guest={guest} onContinue={signIn} onPrivacy={()=>setPrivacy(true)} onCancel={(!packaged||guest)?closeAccount:undefined}/>{privacy&&<PrivacySheet onClose={()=>setPrivacy(false)}/>}</>;
+  return <PublisherContext.Provider value={{guest,wallet,openStore,openAccount,openPrivacy,syncGuestName}}>{children}{store&&(storeCandidate?<StoreUnavailable onClose={closeStore}/>:<FamilyStore wallet={wallet} dispatch={dispatch} onClose={closeStore}/>)}{privacy&&<PrivacySheet onClose={closePrivacy}/>}</PublisherContext.Provider>;
 }
 
 function StoreUnavailable({onClose}:{onClose:()=>void}){
-  return <div className="publisher-overlay"><section className="grownup-gate" role="dialog" aria-modal="true" aria-labelledby="store-unavailable-title"><button className="publisher-close" type="button" aria-label="Close store" autoFocus onClick={onClose}>×</button><span className="publisher-kicker">PLAY TEST BUILD</span><h1 id="store-unavailable-title">The table is free.</h1><p>Cosmetic purchases are not available in this build. There are no live ads and nothing to pay for. All boards and core gameplay are available.</p><button type="button" className="publisher-primary" onClick={onClose}>BACK TO PLAY</button></section></div>;
+  useEffect(()=>{const escape=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose();};window.addEventListener('keydown',escape);return()=>window.removeEventListener('keydown',escape);},[onClose]);
+  return <div className="publisher-overlay" onClick={onClose}><section className="grownup-gate" role="dialog" aria-modal="true" aria-labelledby="store-unavailable-title" onClick={e=>e.stopPropagation()}><button className="publisher-close" type="button" aria-label="Close store" autoFocus onClick={onClose}>×</button><span className="publisher-kicker">PLAY TEST BUILD</span><h1 id="store-unavailable-title">The table is free.</h1><p>Cosmetic purchases are not available in this build. There are no live ads and nothing to pay for. All boards and core gameplay are available.</p><button type="button" className="publisher-primary" onClick={onClose}>BACK TO PLAY</button></section></div>;
 }
 
 export function PublisherIntro({onContinue}:{onContinue:()=>void}) {
@@ -38,7 +64,8 @@ export function PublisherIntro({onContinue}:{onContinue:()=>void}) {
 
 function GuestSignIn({guest,onContinue,onCancel,onPrivacy}:{guest?:Guest;onContinue:(name:string)=>void;onCancel?:()=>void;onPrivacy:()=>void}){
   const [name,setName]=useState(guest?.name??''),[info,setInfo]=useState(false);
-  return <main className="publisher-login"><div className="login-scenery" aria-hidden="true"><i/><i/><i/><i/><i/><i/><i/></div><header><span>Da Publications</span><small>FAMILY PREVIEW</small></header><section className="login-card"><span className="publisher-kicker">WELCOME TO YOUR NEXT GAME NIGHT</span><h1>A seat for <br/>everyone.</h1><p>Sign in as a guest to play with your people.</p><form onSubmit={e=>{e.preventDefault();if(name.trim())onContinue(name.trim().slice(0,24));}}><label htmlFor="guest-alias">Choose a nickname</label><input id="guest-alias" value={name} onChange={e=>setName(e.target.value)} maxLength={24} required autoComplete="off" placeholder="A nickname, not your full name"/><button className="publisher-primary" type="submit" disabled={!name.trim()}>{guest?'CONTINUE AS GUEST':'PLAY AS GUEST'} <span aria-hidden="true">→</span></button></form><button className="cloud-signin" type="button" onClick={()=>setInfo(!info)}>About account sign-in <span aria-hidden="true">＋</span></button>{info&&<p className="login-information" role="status">Your guest profile stays on this device. No cloud account, email or password is needed to play. Room information is shared with the people at your table.</p>}<button className="publisher-link" type="button" onClick={onPrivacy}>Privacy &amp; support</button><p className="login-privacy">Use a nickname. Friends in your room can see it.<br/>Ask a grown-up before opening the store.</p>{onCancel&&<button className="publisher-link" type="button" onClick={onCancel}>Back to the menu</button>}</section><footer>TABLE TALK 3D <span>Free multiplayer · Phone + PC</span></footer></main>;
+  useEffect(()=>{if(!onCancel)return;const escape=(e:KeyboardEvent)=>{if(e.key==='Escape')onCancel();};window.addEventListener('keydown',escape);return()=>window.removeEventListener('keydown',escape);},[onCancel]);
+  return <main className="publisher-login"><div className="login-scenery" aria-hidden="true"><i/><i/><i/><i/><i/><i/><i/></div><header><span>Da Publications</span><small>FAMILY PREVIEW</small></header><section className="login-card"><span className="publisher-kicker">WELCOME TO YOUR NEXT GAME NIGHT</span><h1>A seat for <br/>everyone.</h1><p>Sign in as a guest to play with your people.</p><form onSubmit={e=>{e.preventDefault();if(name.trim())onContinue(name.trim().slice(0,24));}}><label htmlFor="guest-alias">Choose a nickname</label><input id="guest-alias" autoFocus value={name} onChange={e=>setName(e.target.value)} maxLength={24} required autoComplete="off" placeholder="A nickname, not your full name"/><button className="publisher-primary" type="submit" disabled={!name.trim()}>{guest?.name?'SAVE GUEST PROFILE':'PLAY AS GUEST'} <span aria-hidden="true">→</span></button></form><button className="cloud-signin" type="button" onClick={()=>setInfo(!info)}>About account sign-in <span aria-hidden="true">＋</span></button>{info&&<p className="login-information" role="status">Your guest profile stays on this device. No cloud account, email or password is needed to play. Room information is shared with the people at your table.</p>}<button className="publisher-link" type="button" onClick={onPrivacy}>Privacy &amp; support</button><p className="login-privacy">Use a nickname. Friends in your room can see it.<br/>Ask a grown-up before opening the store.</p>{onCancel&&<button className="publisher-link" type="button" onClick={onCancel}>Back to the menu</button>}</section><footer>TABLE TALK 3D <span>Free multiplayer · Phone + PC</span></footer></main>;
 }
 
 function FamilyStore({wallet,dispatch,onClose}:{wallet:PreviewWallet;dispatch:(action:WalletAction)=>void;onClose:()=>void}){

@@ -9,3 +9,6 @@ export function nativeMobileShell() {
   const bridge = (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
   return bridge?.isNativePlatform?.() === true;
 }
+export function isPackagedHome(packaged = import.meta.env.VITE_PACKAGED_APP === 'true', nativeShell = nativeMobileShell()) {
+  return packaged || nativeShell;
+}

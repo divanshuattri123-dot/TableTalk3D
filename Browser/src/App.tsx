@@ -39,6 +39,7 @@ import BoardStage from "./view/BoardStage";
 import GameMenu from "./view/GameMenu";
 import type { TablePanel } from "./view/GameMenu";
 import WelcomeMenu from "./view/WelcomeMenu";
+import BrowserHome, { BrowserMenuDialog } from "./view/BrowserHome";
 import MobileWelcome from "./view/MobileWelcome";
 import MobileLobby from "./view/MobileLobby";
 import CityPicker from './view/CityPicker';
@@ -51,14 +52,13 @@ import {usePublisher} from './publisher/PublisherShell';
 import {STORE_PRODUCTS} from './publisher/catalog';
 import {playerId as randomId} from './compat';
 import useMobileInterface from "./view/useMobileInterface";
-import { nativeMobileShell, roomShareUrl } from "./platform";
+import { isPackagedHome, nativeMobileShell, roomShareUrl } from "./platform";
 import { enterGameFullscreen, exitGameFullscreen, fullscreenActive, releaseGameOrientation } from "./view/fullscreen";
 import LandscapeGate from "./view/LandscapeGate";
 import { useGameRoom } from "./network/useGameRoom";
 import type { Session } from "./network/useGameRoom";
 import { readSeat, writeSeat } from "./network/seats";
 const AssetStudio = lazy(() => import("./view/AssetStudio"));
-const ModelPreview = lazy(() => import("./view/ModelPreview"));
 
 const seatStores = (): Storage[] => {
   const stores: Storage[] = [];
@@ -129,8 +129,10 @@ function TokenColorPicker({ color, players = [], localId, onChoose }: { color: s
 
 function App() {
   const publisher=usePublisher();
+  const packagedHome = isPackagedHome();
   const equippedToken=STORE_PRODUCTS.find(p=>p.id===publisher.wallet.equipped)?.assetId;
-  const [name, setName] = useState(() => { try { return String(JSON.parse(localStorage.getItem('table-talk-profile') ?? '{}').name ?? '').slice(0,24); } catch { return ''; } });
+  const [name, setName] = useState(() => { try { return String(JSON.parse(localStorage.getItem('table-talk-profile') ?? '{}').name || publisher.guest?.name || '').slice(0,24); } catch { return publisher.guest?.name ?? ''; } });
+  const [initialInvite] = useState(() => packagedApp ? '' : roomFromUrl());
   const [roomInput, setRoomInput] = useState(()=>packagedApp?'':roomFromUrl());
   const [color, setColor] = useState(() => { try { return playerColorKey(JSON.parse(localStorage.getItem('table-talk-profile') ?? '{}').color ?? '') || COLORS[0]; } catch { return COLORS[0]; } });
   const [session, setSession] = useState<Session | undefined>(()=>packagedApp?undefined:savedSession());
@@ -144,24 +146,48 @@ function App() {
   const joinReady = preview.game && !taken && (returning || preview.game.phase === "lobby" && preview.game.players.length < 6);
   const { catalog, byId, error, reload } = useAssets();
   const { update } = useViewSettings();
-  const mobile = useMobileInterface();
   const [welcomeMenu, setWelcomeMenu] = useState(false);
   const [tokenId, setTokenId] = useState<string|undefined>(equippedToken);
   useEffect(()=>setTokenId(equippedToken),[equippedToken]);
+  useEffect(() => {
+    const syncGuest = (event: Event) => {
+      const next = String((event as CustomEvent<string>).detail ?? '').trim().slice(0, 24);
+      if (next) setName(next);
+    };
+    window.addEventListener('tabletalk-guest-name', syncGuest);
+    return () => window.removeEventListener('tabletalk-guest-name', syncGuest);
+  }, []);
   const [diceId, setDiceId] = useState<string>();
   const [studio, setStudio] = useState<string>();
+  const dialogOpener = useRef<HTMLElement | null>(null);
+  const openWithReturnFocus = (open: () => void) => {
+    if (!welcomeMenu && !mapsOpen && !studio && document.activeElement instanceof HTMLElement) {
+      dialogOpener.current = document.activeElement;
+    }
+    open();
+  };
+  const closeWithReturnFocus = (close: () => void) => {
+    close();
+    const target = dialogOpener.current;
+    dialogOpener.current = null;
+    if (target?.isConnected) window.requestAnimationFrame(() => target.focus());
+  };
   const [recentRoom,setRecentRoom]=useState(()=>{try{return localStorage.getItem('table-talk-recent-room')??'';}catch{return '';}});
   useEffect(() => { if (session) { writeSeat(session, seatStores()); setRecentRoom(session.roomCode); try { localStorage.setItem('table-talk-recent-room',session.roomCode); } catch { /* The existing per-room seat is still usable. */ } } }, [session]);
   const token = byId.get(tokenId ?? catalog?.featured.tokens[0] ?? "");
   const die = byId.get(diceId ?? catalog?.featured.dice[0] ?? "");
-  const saveProfile = () => { try { localStorage.setItem('table-talk-profile',JSON.stringify({name:name.trim().slice(0,24),color})); } catch { /* A player can still join with blocked storage. */ } };
+  const saveProfile = () => {
+    const trimmed = name.trim().slice(0, 24);
+    try { localStorage.setItem('table-talk-profile',JSON.stringify({name:trimmed,color})); } catch { /* A player can still join with blocked storage. */ }
+    if (trimmed) publisher.syncGuestName(trimmed);
+  };
   const chooseAsset = (asset: GameAsset, use: AssetUse) => {
     if (use === "token") setTokenId(asset.id);
     else if (use === "dice") setDiceId(asset.id);
     else if (use === "city") update({ cityId: asset.id });
     else if (use === "art") update({ tableArtId: asset.id });
     else update({ musicId: asset.id });
-    setStudio(undefined);
+    closeWithReturnFocus(() => setStudio(undefined));
   };
 
   const begin = (roomCode: string) => {
@@ -194,10 +220,27 @@ function App() {
     }} />;
   }
 
-  if (mobile || import.meta.env.VITE_PACKAGED_APP === 'true') return <>
+  const roomStatusText = previewCode
+    ? !preview.game
+      ? preview.error || (preview.connection === "offline" ? "Could not check this room. Try again when online." : "Checking available seats…")
+      : !returning && preview.game.phase !== "lobby"
+        ? "This game has already started."
+        : !returning && preview.game.players.length >= 6
+          ? "This room is full."
+          : taken
+            ? "That colour is taken. Choose another colour."
+            : returning
+              ? `Your saved seat in ${previewCode} is ready.`
+              : `${preview.game.players.length} / 6 players · Your colour is available.`
+    : undefined;
+  const roomStatusTone: "ready" | "warn" | "neutral" = !previewCode || !preview.game
+    ? (preview.connection === "offline" || Boolean(preview.error) ? "warn" : "neutral")
+    : joinReady ? "ready" : "warn";
+
+  if (packagedHome) return <>
     <MobileWelcome name={name} color={color} roomCode={roomInput} onName={setName} onRoomCode={setRoomInput} resumeCode={recentRoom && savedSession(recentRoom) ? recentRoom : undefined} onResume={()=>begin(recentRoom)}
       colorPicker={<TokenColorPicker color={color} players={preview.game?.players} localId={returningId} onChoose={setColor}/>}
-      joinReady={Boolean(joinReady)} roomStatus={previewCode ? !preview.game ? preview.error || (preview.connection === 'offline' ? 'Could not check this room. Try again when online.' : 'Checking available seats…') : !returning && preview.game.phase !== 'lobby' ? 'This game has already started.' : !returning && preview.game.players.length >= 6 ? 'This room is full.' : taken ? 'That colour is taken. Choose another colour.' : `${preview.game.players.length} / 6 players · Your colour is available.` : undefined}
+      joinReady={Boolean(joinReady)} roomStatus={roomStatusText}
       error={error && <>{error} <button type="button" onClick={reload}>Retry</button></>} onCreate={()=>begin(randomCode())} onJoin={()=>begin(roomInput)} onMenu={()=>setWelcomeMenu(true)} onMaps={()=>setMapsOpen(true)} onSaveProfile={saveProfile}/>
     {mapsOpen&&<MapPicker world={mapChoice.world} city={mapChoice.city} onWorld={world=>chooseMap({world})} onCity={city=>chooseMap({city})} onClose={()=>setMapsOpen(false)}/>}
     {welcomeMenu && <WelcomeMenu onCustomize={category=>{setWelcomeMenu(false);setStudio(category);}} onClose={()=>setWelcomeMenu(false)}/>}
@@ -205,66 +248,64 @@ function App() {
   </>;
 
   return (
-    <main className={`welcome-shell${import.meta.env.VITE_PACKAGED_APP === "true" ? " packaged-welcome" : ""}`}>
-<header className="welcome-nav"><span className="wordmark">TABLE <i>TALK</i><sup>3D</sup></span><span className="welcome-status"><i className="live-dot" /> Free multiplayer</span><button className="publisher-link" type="button" onClick={publisher.openStore}>Store</button><button className="publisher-link" type="button" onClick={publisher.openAccount}>Guest profile</button>{(mobile || import.meta.env.VITE_PACKAGED_APP === "true") && <button className="mobile-menu-trigger" type="button" aria-label="Open game menu" aria-haspopup="dialog" aria-expanded={welcomeMenu} onClick={() => setWelcomeMenu(true)}><span aria-hidden="true">☰</span> Menu</button>}</header>
-      <div className="welcome-layout">
-      {!mobile && <section className="welcome-showcase" aria-label="Your 3D game piece">
-        <p className="eyebrow">Big deals. Your people. One table.</p>
-        <h2>The city is<br />up for <em>grabs.</em></h2>
-        <p>Pick your piece. Call your friends.<br />Build a little empire together.</p>
-        {import.meta.env.VITE_PACKAGED_APP !== "true" && <Suspense fallback={<div className="showcase-loading">Opening the 3D collection…</div>}><ModelPreview asset={token} color={color} className="hero-model" /></Suspense>}
-        <div className="showcase-footer"><span>YOUR 3D PIECE</span><button type="button" onClick={() => setStudio("token")}>Explore {catalog?.counts.model.toLocaleString() ?? "1,044"} models ↗</button></div>
-        <div className="board-scale"><span>More friends.<br /><b>Bigger neighbourhood.</b></span><div>{[["2–3",40],["4",48],["5",56],["6",64]].map(([count, size]) => <span key={count}><b>{size}</b><small>{count} players</small></span>)}</div></div>
-      </section>}
-      <section className="welcome-card" aria-labelledby="welcome-title">
-        <p className="eyebrow">Your next game night starts here</p>
-        <h1 id="welcome-title">Take a seat.</h1>
-        <p className="welcome-copy">
-          Make a room, share four letters, and let the negotiations begin. 2–6 friends. Any phone or PC.
-        </p>
-        <label className="field-label" htmlFor="player-name">Your table name</label>
-        <input
-          id="player-name"
-          className="text-input"
-          value={name}
-          maxLength={24}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="What should we call you?"
-          autoComplete="nickname"
+    <>
+      <BrowserHome
+        name={name}
+        color={color}
+        roomCode={roomInput}
+        inviteCode={initialInvite || undefined}
+        onName={setName}
+        onRoomCode={setRoomInput}
+        colorPicker={<TokenColorPicker color={color} players={preview.game?.players} localId={returningId} onChoose={setColor} />}
+        joinReady={Boolean(joinReady)}
+        roomStatus={roomStatusText}
+        roomStatusTone={roomStatusTone}
+        error={error && <>{error} <button type="button" onClick={reload}>Retry</button></>}
+        resumeCode={recentRoom && savedSession(recentRoom) ? recentRoom : undefined}
+        onResume={() => begin(recentRoom)}
+        onCreate={() => begin(randomCode())}
+        onJoin={() => begin(roomInput)}
+        world={mapChoice.world}
+        city={mapChoice.city}
+        tokenLabel={token?.label ?? "Sports car"}
+        diceLabel={die?.label ?? "Paris dice"}
+        menuOpen={welcomeMenu}
+        onOpenMenu={() => openWithReturnFocus(() => setWelcomeMenu(true))}
+        onOpenMaps={() => openWithReturnFocus(() => setMapsOpen(true))}
+        onOpenStudio={category => openWithReturnFocus(() => setStudio(category))}
+      />
+      {mapsOpen && (
+        <MapPicker
+          world={mapChoice.world}
+          city={mapChoice.city}
+          onWorld={world => chooseMap({ world })}
+          onCity={city => chooseMap({ city })}
+          onClose={() => closeWithReturnFocus(() => setMapsOpen(false))}
         />
-        <TokenColorPicker color={color} players={preview.game?.players} localId={returningId} onChoose={setColor} />
-        {previewCode && <p className="colour-room-status" role="status">{!preview.game ? preview.error || (preview.connection === "offline" ? "Could not check this table. Reload to try again." : "Checking available colours…") : !returning && preview.game.phase !== "lobby" ? "This game has already started." : !returning && preview.game.players.length >= 6 ? "This table is full." : taken ? "That colour is taken. Choose an available colour to join." : `${preview.game.players.length} / 6 seats · A different colour for every player.`}</p>}
-        {!mobile && <div className="appearance-picker"><button type="button" onClick={() => setStudio("token")}><span>YOUR PIECE</span><b>{token?.label ?? "Sports car"}</b><i>Change ↗</i></button><button type="button" onClick={() => setStudio("dice")}><span>YOUR DICE</span><b>{die?.label ?? "Paris dice"}</b><i>Change ↗</i></button></div>}
-        <div className="welcome-actions">
-          <button className="primary-button" disabled={!name.trim()} onClick={() => begin(randomCode())} type="button">
-            Create a table <span>↗</span>
-          </button>
-          <div className="join-box">
-            <label className="field-label" htmlFor="room-code">Join with a code</label>
-            <div className="join-row">
-              <input
-                id="room-code"
-                className="text-input room-input"
-                value={roomInput}
-                maxLength={4}
-                onChange={(event) => setRoomInput(event.target.value.toUpperCase())}
-                placeholder="ABCD"
-                spellCheck={false}
-              />
-              <button className="secondary-button" disabled={!name.trim() || !joinReady} onClick={() => begin(roomInput)} type="button">
-                Join
-              </button>
-            </div>
-          </div>
-        </div>
-        {error && <p className="inline-error">{error} <button type="button" onClick={reload}>Retry</button></p>}
-        <p className="welcome-note">{import.meta.env.VITE_PACKAGED_APP === "true" ? "Your city is ready. Internet connects your friends." : "No install. No sign-up. Just a link."}<br />Saved rooms · Automatic reconnect · Touch-friendly 3D</p>
-      </section>
-      </div>
-      {!mobile && <footer className="welcome-bottom"><span>A property trading game for your own crew.</span><button type="button" onClick={() => setStudio("all")}>Browse all {catalog ? catalog.assets.length.toLocaleString() : "6,430"} assets ↗</button></footer>}
-      {welcomeMenu && <WelcomeMenu onCustomize={category => { setWelcomeMenu(false); setStudio(category); }} onClose={() => setWelcomeMenu(false)} />}
-      {studio && <Suspense fallback={<p className="asset-notice">Opening collection…</p>}><AssetStudio initialCategory={studio} selectedId={studio === "dice" ? die?.id : token?.id} color={color} onClose={() => setStudio(undefined)} onChoose={chooseAsset} /></Suspense>}
-    </main>
+      )}
+      {welcomeMenu && (
+        <BrowserMenuDialog
+          world={mapChoice.world}
+          city={mapChoice.city}
+          tokenLabel={token?.label ?? "Sports car"}
+          diceLabel={die?.label ?? "Paris dice"}
+          onClose={() => closeWithReturnFocus(() => setWelcomeMenu(false))}
+          onOpenMaps={() => { setWelcomeMenu(false); setMapsOpen(true); }}
+          onOpenStudio={category => { setWelcomeMenu(false); setStudio(category); }}
+        />
+      )}
+      {studio && (
+        <Suspense fallback={<p className="asset-notice">Opening collection…</p>}>
+          <AssetStudio
+            initialCategory={studio}
+            selectedId={studio === "dice" ? die?.id : token?.id}
+            color={color}
+            onClose={() => closeWithReturnFocus(() => setStudio(undefined))}
+            onChoose={chooseAsset}
+          />
+        </Suspense>
+      )}
+    </>
   );
 }
 
