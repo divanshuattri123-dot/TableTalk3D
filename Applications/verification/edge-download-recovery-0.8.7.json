@@ -1,0 +1,18 @@
+{
+  "version": "0.8.7",
+  "checkedAt": "2026-11-24T10:09:44.764Z",
+  "browser": "User Microsoft Edge tab",
+  "renderer": "unity-ready",
+  "newErrors": [],
+  "download": {
+    "oldCachedBytes": 14765791,
+    "expectedDecompressedBytes": 42434900,
+    "compressedContentLength": 30946821,
+    "status": 200,
+    "cacheBypassed": true,
+    "query": "download=length-checked-v1"
+  },
+  "existingRoomAndSeatRestored": true,
+  "gameplayActionsSent": 0,
+  "physicalAndroid": false
+}
