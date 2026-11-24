@@ -1,12 +1,13 @@
 interface Assets {fetch(request:Request):Promise<Response>}
-interface PartFile {parts:string[];bytes:number}
+interface PartFile {parts:string[];bytes:number;sha256?:string}
+type FixedStreamConstructor = new (bytes:number)=>TransformStream<Uint8Array,Uint8Array>;
 
 export async function serveUnityChunks(request:Request,assets:Assets):Promise<Response|undefined> {
   const index=await assets.fetch(new Request(new URL('/unity/data-parts.json',request.url)));
   if(!index.ok||!index.headers.get('Content-Type')?.includes('application/json'))return;
   const manifest=await index.json() as Record<string,PartFile>;
   const file=manifest[new URL(request.url).pathname];if(!file)return;
-  const headers={'Content-Type':'application/gzip','Content-Encoding':'gzip','Cache-Control':'public, max-age=31536000, immutable','Access-Control-Allow-Origin':'*'};
+  const headers={'Content-Type':'application/gzip','Content-Encoding':'gzip','Content-Length':String(file.bytes),'Cache-Control':'public, max-age=31536000, immutable','Access-Control-Allow-Origin':'*','Access-Control-Expose-Headers':'Content-Length, ETag',...(file.sha256?{'ETag':`"${file.sha256}"`}:{})};
   if(request.method==='HEAD'){
     const options={headers:{...headers,'Content-Length':String(file.bytes)},encodeBody:'manual' as const};
     return new Response(null,options);
@@ -28,6 +29,10 @@ export async function serveUnityChunks(request:Request,assets:Assets):Promise<Re
     },
     async cancel(reason){await Promise.allSettled([reader.cancel(reason),...parts.slice(position+1).map(part=>part.body!.cancel(reason))]);}
   });
+  // Workers ignores a manually set length on ordinary streams. This also rejects an early EOF.
+  const FixedStream=(globalThis as typeof globalThis & {FixedLengthStream:FixedStreamConstructor}).FixedLengthStream;
+  const fixed=new FixedStream(file.bytes);
+  void body.pipeTo(fixed.writable).catch(()=>undefined);
   const options={headers,encodeBody:'manual' as const};
-  return new Response(body,options);
+  return new Response(fixed.readable,options);
 }

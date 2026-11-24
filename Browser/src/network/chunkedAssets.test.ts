@@ -1,4 +1,4 @@
-import {describe,it,expect,vi} from 'vitest';
+import {describe,it,expect,vi,beforeEach,afterEach} from 'vitest';
 import {serveUnityChunks} from '../../party/chunkedAssets';
 const url='https://example.com/unity/Build/hash/AppsWeb.data.gz';
 function source(missing=false){return {fetch:vi.fn(async(request:Request)=>{
@@ -8,11 +8,17 @@ function source(missing=false){return {fetch:vi.fn(async(request:Request)=>{
   return missing?new Response('missing',{status:404}):new Response(new Uint8Array([4,5,6]));
 })};}
 describe('large Unity download streaming',()=>{
+  beforeEach(()=>vi.stubGlobal('FixedLengthStream',class extends TransformStream<Uint8Array,Uint8Array>{
+    constructor(expected:number){let bytes=0;super({transform(chunk,controller){bytes+=chunk.byteLength;if(bytes>expected)throw new Error('Too many bytes');controller.enqueue(chunk);},flush(){if(bytes!==expected)throw new Error('Too few bytes');}});}
+  }));
+  afterEach(()=>vi.unstubAllGlobals());
   it('reassembles every compressed byte in order without changing encoding',async()=>{
     const response=await serveUnityChunks(new Request(url),source());
     expect([...new Uint8Array(await response!.arrayBuffer())]).toEqual([1,2,3,4,5,6]);
     expect(response!.headers.get('Content-Encoding')).toBe('gzip');
     expect(response!.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(response!.headers.get('Content-Length')).toBe('6');
+    expect(response!.headers.get('Access-Control-Expose-Headers')).toContain('Content-Length');
   });
   it('handles HEAD without downloading the data parts',async()=>{
     const assets=source(),response=await serveUnityChunks(new Request(url,{method:'HEAD'}),assets);
@@ -24,5 +30,10 @@ describe('large Unity download streaming',()=>{
   it('keeps older unsplit player URLs on the normal asset route',async()=>{
     expect(await serveUnityChunks(new Request(url.replace('hash','older')),source())).toBeUndefined();
     expect(await serveUnityChunks(new Request(url),{fetch:async()=>new Response('<html>',{headers:{'Content-Type':'text/html'}})})).toBeUndefined();
+  });
+  it.each([2,4])('rejects a part delivering %i bytes when the full file length differs',async size=>{
+    const assets=source(),fetch=assets.fetch;
+    const response=await serveUnityChunks(new Request(url),{fetch:async request=>new URL(request.url).pathname==='/two'?new Response(new Uint8Array(size)):fetch(request)});
+    await expect(response!.arrayBuffer()).rejects.toThrow(/bytes/);
   });
 });
