@@ -1,0 +1,45 @@
+{
+  "host": "https://table-talk-realtime.divanshuattri123.workers.dev",
+  "streams": [
+    {
+      "url": "/unity/Build/54ab18f662cd/AppsWeb.data.gz",
+      "status": 200,
+      "bytes": 30940644,
+      "sha256": "bda4c95fa993b9b5168ee133b2796e6201d7584c83c72aa2fa59443c04e7f3dd",
+      "encoding": "gzip",
+      "cors": "*"
+    },
+    {
+      "url": "/unity/Build/6e5932dc9583/AppsWeb.data.gz",
+      "status": 200,
+      "bytes": 30940644,
+      "sha256": "2fea88fbf5f5418eadfb09591bd94837d9c65de73c9020ae50d3fed9570d276e",
+      "encoding": "gzip",
+      "cors": "*"
+    },
+    {
+      "url": "/unity/Build/7864c4435559/AppsWeb.data.gz",
+      "status": 200,
+      "bytes": 30946821,
+      "sha256": "d08ab0a23b10a75bd4aa14f19fc4b548ba02ee4c3c294be628b1439450d74c98",
+      "encoding": "gzip",
+      "cors": "*"
+    },
+    {
+      "url": "/unity/Build/9940c0c2cc60/AppsWeb.data.gz",
+      "status": 200,
+      "bytes": 30941182,
+      "sha256": "225164b66f5c1fb04502e1598fe158a7a277306ef0f6874f77d2db711f9e780c",
+      "encoding": "gzip",
+      "cors": "*"
+    },
+    {
+      "url": "/unity/Build/d06dbcdc6206/AppsWeb.data.gz",
+      "status": 200,
+      "bytes": 30945795,
+      "sha256": "e9676775ed7cc5f04d0668899e0478cc256337a5e529dc3e5a6f320e5c468bee",
+      "encoding": "gzip",
+      "cors": "*"
+    }
+  ]
+}

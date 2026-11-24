@@ -39,6 +39,26 @@ The build scripts also accept explicit tool/signing directory overrides because
 the desktop app runtime changed and the previously installed SDK/key remained
 in its older application cache. Private signing files remain outside Git.
 
+## Public acceptance — 24 November 2026
+
+- GitHub Pages run 45369284535 passed all 418 tests, both TypeScript targets and
+  deployment for commit ac05749b852014dd58d86cc65ebe2e3588356df2.
+- The browser loaded that run's `index-BzH_UCGw.js` and reported `unity-ready`.
+  At 844 x 390 with touch emulation, it showed the compact Menu and turn controls.
+  The saved Sector 17 deed remained after reload; mortgage redemption charged
+  55 and left cash 1395. Opening Trade showed the offer form without a dice roll.
+  Browser errors were empty during the final check. This is browser emulation,
+  not physical-phone QA. See `mobile-0.8.6-landscape.json` and its JPEG capture.
+- The live two-client resume script passed delayed snapshots, lost-ack receipt
+  retries and the online-during-CONNECTING race in its own disposable room.
+- All five retained compressed Unity streams matched staged size and SHA-256
+  with gzip encoding and CORS. Public APK and AAB bytes/hashes match the local
+  verified artifacts; see their public-download and live-player JSON reports.
+
+Earlier desktop warm-up emitted nonfatal shader precision and missing download
+Content-Length warnings; do not interpret the final error-free check as a claim
+that every console warning is eliminated.
+
 This evidence establishes the listed fixes and checks. Physical Android graphics,
 frame rate and two-hour device sessions remain pending. Play production and paid
 advertising remain pending in the release-readiness report.

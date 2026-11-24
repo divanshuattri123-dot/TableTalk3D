@@ -1,0 +1,23 @@
+{
+  "version": "0.8.6",
+  "checkedAt": "2026-11-24T09:56:40.782Z",
+  "room": "XXUU",
+  "physicalDevice": false,
+  "height": 390,
+  "renderer": "unity-ready",
+  "scripts": [
+    "/TableTalk3D/assets/index-BzH_UCGw.js",
+    "https://table-talk-realtime.divanshuattri123.workers.dev/unity/Build/7864c4435559/AppsWeb.loader.js",
+    "https://table-talk-realtime.divanshuattri123.workers.dev/unity/Build/7864c4435559/AppsWeb.framework.js.gz"
+  ],
+  "width": 844,
+  "savedSeatRestored": true,
+  "purchaseRetained": true,
+  "mortgageRedemption": {
+    "property": "Sector 17",
+    "cost": 55,
+    "cashAfter": 1395
+  },
+  "tradePanelOpenedWithoutDice": true,
+  "errors": []
+}

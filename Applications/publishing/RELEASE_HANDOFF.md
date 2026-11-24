@@ -5,7 +5,7 @@ Play or advertising accounts exist. There has been no paid advertising spend.
 
 ## Prepared
 
-- Android 0.8.5 Play test candidate and a signed upload AAB, with certificate/hash verification.
+- Android 0.8.6 Play test candidate and a signed upload AAB, with certificate/hash verification.
 - Upload key stays outside Git; see UPLOAD_SIGNING.md. Independent credential backup remains pending.
 - Privacy/support notice is available in the app and as privacy.html; owner confirmed no public support email yet.
 - Complete catalog inventory with SHA-256 and a Data Safety worksheet.

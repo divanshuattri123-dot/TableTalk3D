@@ -10,8 +10,13 @@ their own evidence. Emulator results do not replace any physical-phone row below
 0.8.5 foliage was inspected in a running Unity preview at 844 x 390 and in a
 close-up. Geometry, texture binding and wind checks passed across 40/48/56/64
 spaces and three quality presets. This is renderer evidence, not an Android GPU
-or sustained-frame-rate result. The current in-app browser cannot initialize
-WebGL, so it did not provide a packaged 3D acceptance result.
+or sustained-frame-rate result. At that time the in-app browser could not
+initialize WebGL, so it did not provide a packaged 3D acceptance result.
+
+On 24 November, 0.8.6 public browser checks reached `unity-ready`, exercised
+board dice, movement and purchase, restored the saved seat/deed/cash on reload,
+and checked mortgage redemption and Trade at 844 x 390 with touch emulation.
+These are browser results; physical-phone rows remain pending.
 
 | Scenario | Required evidence | Result |
 |---|---|---|
