@@ -8,6 +8,7 @@ import type { GameState } from "../engine/types";
 import { useAssets } from "../assets";
 import type { ViewSettings } from "../assets";
 import { createRenderer, disposeObject, lightScene, loadModel, prefersStill, tilePoint } from "./scene";
+import { createFortWheel } from "./fortWheelProp";
 import { boardFrustum, boardSpan, tileLayout } from "./layout";
 import { createBoardLabels } from "./boardLabels";
 import { createCity } from "./city";
@@ -38,13 +39,14 @@ function geometryFromModel(object: THREE.Group): THREE.BufferGeometry {
   return result;
 }
 
-export default function ThreeBoard({ game, settings, onSelect, onFallback, onCamera }: {
-  game: GameState; settings: ViewSettings; onSelect: (position: number) => void; onFallback: () => void; onCamera: () => void;
+export default function ThreeBoard({ game, settings, onSelect, onFallback, onCamera, mayorWheel, onWheel }: {
+  game: GameState; mayorWheel?: boolean; onWheel?: () => void; settings: ViewSettings; onSelect: (position: number) => void; onFallback: () => void; onCamera: () => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const handle = useRef<BoardHandle | null>(null);
   const snapshot = useRef(game); snapshot.current = game;
   const selected = useRef(onSelect); selected.current = onSelect;
+  const wheelClick = useRef(onWheel); wheelClick.current = onWheel;
   const [loaded, setLoaded] = useState(0);
   const [failure, setFailure] = useState("");
   const { catalog, byId } = useAssets();
@@ -97,6 +99,9 @@ export default function ThreeBoard({ game, settings, onSelect, onFallback, onCam
     let lastPhase = "", lastActive = "";
     const ready = () => { if (alive) setLoaded(++loadedCount); };
     const city = createCity(game.boardSize, catalog, byId, settings, ready); scene.add(city.group);
+    const wheel = mayorWheel ? createFortWheel(game.boardSize) : undefined;
+    if (wheel) scene.add(wheel.group);
+    let spinId = snapshot.current.mayor?.wheelResult?.id, spinTime = -2200;
     controls.addEventListener("start", () => { interaction = performance.now(); });
     controls.addEventListener("change", () => { interaction = performance.now(); });
     function clearDecorations() {
@@ -235,7 +240,9 @@ export default function ThreeBoard({ game, settings, onSelect, onFallback, onCam
       if (Math.hypot(event.clientX - downX, event.clientY - downY) > 7) return;
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1);
-      ray.setFromCamera(pointer, camera); const hit = ray.intersectObject(tiles)[0];
+      ray.setFromCamera(pointer, camera);
+      if (wheel && wheelClick.current && ray.intersectObject(wheel.group, true).length) { wheelClick.current(); return; }
+      const hit = ray.intersectObject(tiles)[0];
       if (hit?.instanceId !== undefined) selected.current(hit.instanceId);
     };
     renderer.domElement.addEventListener("pointerdown", down);
@@ -249,7 +256,10 @@ export default function ThreeBoard({ game, settings, onSelect, onFallback, onCam
       const state = snapshot.current;
       const moving = [...tokens.values()].some((view) => time - view.start < view.duration + 60);
       const rolling = state.phase === "awaitingMove";
-      const active = moving || rolling || time - interaction < 1400;
+      const result = state.mayor?.wheelResult;
+      if (wheel && result && result.id !== spinId) { spinId = result.id; spinTime = time; }
+      const spinning = wheel && result?.section !== undefined && time - spinTime < 1900;
+      const active = moving || rolling || spinning || time - interaction < 1400;
       if (time - lastFrame < (active ? (low ? 32 : 16) : 66)) return;
       lastFrame = time; controls.update();
       for (const view of tokens.values()) {
@@ -261,6 +271,10 @@ export default function ThreeBoard({ game, settings, onSelect, onFallback, onCam
         if (moving && to.distanceToSquared(from) > .001) view.root.rotation.y = Math.atan2(to.x - from.x, to.z - from.z);
       }
       city.animate(time, still);
+      if (wheel && result?.section !== undefined) {
+        const progress = still ? 1 : THREE.MathUtils.clamp((time - spinTime) / 1900, 0, 1);
+        wheel.disc.rotation.y = (Math.PI * 8 - result.section * Math.PI / 3) * (1 - (1 - progress) ** 4);
+      }
       activeRing.scale.setScalar(still ? 1 : 1 + Math.sin(time * .004) * .06);
       diceRoot.visible = rolling;
       diceRoot.children.forEach((die, index) => {
@@ -276,7 +290,7 @@ export default function ThreeBoard({ game, settings, onSelect, onFallback, onCam
       renderer.domElement.removeEventListener("pointerdown", down); renderer.domElement.removeEventListener("pointerup", up);
       disposeObject(scene); houseGeometry?.dispose(); hotelGeometry?.dispose(); cleanupLight(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();
     };
-  }, [game.boardSize, settings.quality, settings.theme, settings.cityId, settings.tableArtId, catalog, byId]);
+  }, [game.boardSize, game.city, mayorWheel, settings.quality, settings.theme, settings.cityId, settings.tableArtId, catalog, byId]);
 
   useEffect(() => { handle.current?.sync(game); }, [game]);
   useEffect(() => { handle.current?.top(settings.camera === "top"); }, [settings.camera]);

@@ -6,24 +6,27 @@ import type { PresentationFrame } from "../presentation/plan";
 import { unitySnapshot } from "../presentation/snapshot";
 import { boardRenderSize } from "./readability";
 import ScreenBoardLabels from "./ScreenBoardLabels";
+import { fortPosition } from "../engine/mayor";
 import { watchGraphicsLoss } from './graphicsRecovery';
 import {ModelStreams} from './modelStreams';
 import {unityDataUrl,unityFailureMessage} from './unityLoading';
+import {prepareSplitUnityData} from './splitUnityData';
+import type {UnityDataLease} from './splitUnityData';
 
 interface UnityInstance { SendMessage: (object: string, method: string, value?: string) => void; Quit: () => Promise<void> }
 interface Release { loaderUrl: string; dataUrl: string; frameworkUrl: string; codeUrl: string; productVersion: string }
 declare global { interface Window { createUnityInstance?: (canvas: HTMLCanvasElement, options: object, progress: (value: number) => void) => Promise<UnityInstance> } }
 let loader: Promise<void> | undefined;
 
-export default function UnityBoard({ game, target, settings, frame, syncVersion, onSelect, onComplete, onReady, onFallback, onReadPrices, onRetry, diceEnabled, diceId, onThrow }: {
+export default function UnityBoard({ game, target, settings, frame, syncVersion, onSelect, onComplete, onReady, onFallback, onLite3D, onReadPrices, onRetry, diceEnabled, diceId, onThrow, mode, onWheel }: {
   game: GameState; target: GameState; frame?: PresentationFrame;
   syncVersion: number;
   settings: ViewSettings;
   onSelect: (position: number) => void; onComplete: (id: string) => void;
-  onReady: (ready: boolean) => void; onFallback: () => void;
+  onReady: (ready: boolean) => void; onFallback: () => void; onLite3D: () => void;
   onReadPrices: () => void;
   onRetry: () => void;
-  diceEnabled: boolean; diceId?: string; onThrow: () => void;
+  diceEnabled: boolean; diceId?: string; onThrow: () => void; mode?: GameState["mode"]; onWheel?: () => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null), instance = useRef<UnityInstance | undefined>(undefined);
   const latest = useRef({ game, target, frame, onSelect, onComplete, onReady, onFallback });
@@ -54,7 +57,23 @@ export default function UnityBoard({ game, target, settings, frame, syncVersion,
     return () => { observer.disconnect(); window.removeEventListener("resize", resize); };
   }, [settings.quality, ready]);
   useEffect(() => {
-    let dead = false,graphicsLost=false;
+    let dead = false, graphicsLost = false, lastProgress = -1;
+    let watchdog: number | undefined;
+    let dataLease: UnityDataLease | undefined;
+    const download = new AbortController();
+    const armWatchdog = () => {
+      window.clearTimeout(watchdog);
+      watchdog = window.setTimeout(() => {
+        if (!dead && !instance.current) setFailure("The Unity startup stopped making progress. Try lighter 3D or continue in 2D.");
+      }, 30000);
+    };
+    const report = (progress: number) => {
+      if (dead || progress <= lastProgress) return;
+      lastProgress = progress;
+      setProgress(progress);
+      armWatchdog();
+    };
+    armWatchdog();
     const element=canvas.current;
     const stopWatching=element?watchGraphicsLoss(element,()=>{
       graphicsLost=true;
@@ -69,7 +88,7 @@ export default function UnityBoard({ game, target, settings, frame, syncVersion,
     };
     window.addEventListener("tabletalk-unity", receive);
     async function start() {
-      const response = await fetch(assetUrl("unity/release.json"), { cache: "no-store" });
+      const response = await fetch(assetUrl("unity/release.json"), { cache: "no-store", signal: download.signal });
       if (!response.ok || !response.headers.get("Content-Type")?.includes("application/json")) throw new Error("The Unity player is not available on this server yet.");
       const release = await response.json() as Release;
       if (!loader) loader = new Promise<void>((resolve, reject) => {
@@ -77,25 +96,33 @@ export default function UnityBoard({ game, target, settings, frame, syncVersion,
         script.onload = () => resolve(); script.onerror = () => { loader = undefined; reject(new Error("The 3D player could not download. Try 2D or reload.")); };
         document.head.appendChild(script);
       });
-      await loader;
-      if (dead || !canvas.current) return;
+      const path = `unity/${release.dataUrl}`;
+      const prepared = import.meta.env.VITE_PACKAGED_APP !== "true"
+        ? prepareSplitUnityData(path, assetUrl, report, download.signal).catch(() => undefined)
+        : Promise.resolve(undefined);
+      const [, loadedData] = await Promise.all([loader, prepared]);
+      dataLease = loadedData;
+      if (dead || !canvas.current) { dataLease?.release(); return; }
       const player = await window.createUnityInstance!(canvas.current, {
-        dataUrl: unityDataUrl(assetUrl(`unity/${release.dataUrl}`)), frameworkUrl: assetUrl(`unity/${release.frameworkUrl}`), codeUrl: assetUrl(`unity/${release.codeUrl}`),
+        dataUrl: dataLease?.url ?? unityDataUrl(assetUrl(path)), frameworkUrl: assetUrl(`unity/${release.frameworkUrl}`), codeUrl: assetUrl(`unity/${release.codeUrl}`),
         cacheControl:()=> 'no-store',
         streamingAssetsUrl: assetUrl("unity/StreamingAssets"), companyName: "Table Talk", productName: "Table Talk 3D", productVersion: release.productVersion,
         matchWebGLToCanvasSize: false, showBanner: (text: string, type: string) => { if (type === "error" && !dead) setFailure(text); }
-      }, value => { if (!dead) setProgress(value); });
+      }, value => report(dataLease ? .7 + value * .3 : value));
+      dataLease?.release();
+      dataLease = undefined;
+      window.clearTimeout(watchdog);
       if (dead||graphicsLost) { await player.Quit(); return; }
       instance.current = player;
       streams.current=new ModelStreams(async asset=>(await import('./streamUnityModel')).streamUnityModel(asset),
         json=>{player.SendMessage('GamePresentation','RegisterModel',json);setAssetError('');},
         asset=>setAssetError(`${asset.label} could not load. Reopen the collection to try another piece.`));
       player.SendMessage("GamePresentation", "ResetSnapshot", JSON.stringify(unitySnapshot(latest.current.game)));
-      setReady(true); latest.current.onReady(true);
+      setFailure(""); setReady(true); latest.current.onReady(true);
     }
-    start().catch(error => { if (!dead) { setFailure(String(error instanceof Error ? error.message : error).split("\n")[0].slice(0, 240)); latest.current.onReady(false); } });
+    start().catch(error => { download.abort(); dataLease?.release(); window.clearTimeout(watchdog); if (!dead) { setFailure(String(error instanceof Error ? error.message : error).split("\n")[0].slice(0, 240)); latest.current.onReady(false); } });
     return () => {
-      dead = true; stopWatching();latest.current.onReady(false); window.removeEventListener("tabletalk-unity", receive);
+      dead = true; download.abort(); dataLease?.release(); window.clearTimeout(watchdog); stopWatching(); window.removeEventListener("tabletalk-unity", receive);
       streams.current?.dispose();streams.current=undefined;
       const player = instance.current; instance.current = undefined;
       if (player) void player.Quit().catch(()=>undefined);
@@ -124,10 +151,10 @@ export default function UnityBoard({ game, target, settings, frame, syncVersion,
   const failureMessage=unityFailureMessage(failure);
   return <div className="unity-board-shell" data-renderer={ready ? "unity-ready" : "unity-loading"}>
     <canvas id="unity-canvas" ref={canvas} className="unity-canvas" draggable={false} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()} tabIndex={0} aria-label="Interactive 3D city board. Drag to pan, pinch or use buttons to zoom." />
-    {ready && <ScreenBoardLabels size={game.boardSize} city={game.city} />}
+    {ready && <ScreenBoardLabels size={game.boardSize} city={game.city} wheelPosition={mode === "mayor" ? fortPosition(game) : undefined} onWheel={onWheel} />}
     {ready&&diceEnabled&&!frame&&diceTarget&&<button type="button" className="native-dice-touch" aria-label="Roll dice" title="Tap the 3D dice to throw" style={{left:`${diceTarget.x*100}%`,top:`${diceTarget.y*100}%`,width:`${diceTarget.width*100}%`,height:`${diceTarget.height*100}%`}} onClick={onThrow}><span>Tap the dice</span></button>}
-    {!ready && !failure && <div className="unity-loading"><span className="pulse-token" /><h2>Opening your city</h2><p>Loading the Unity 3D player · {Math.round(progress * 100)}%</p><progress max="1" value={progress} /><small>Only the active city and pieces are loaded, not the entire collection.</small></div>}
-    {failure && <div className="unity-loading" role="alert"><h2>{failureMessage.title}</h2><p>{failureMessage.message}</p><details><summary>Technical details</summary><p>{failure}</p></details>{failureMessage.retry&&<button type="button" onClick={async()=>{const player=instance.current;instance.current=undefined;latest.current.onReady(false);if(player)try{await Promise.race([player.Quit(),new Promise(resolve=>window.setTimeout(resolve,2000))]);}catch{}onRetry();}}>Restore 3D</button>}<button type="button" onClick={onFallback}>Continue in 2D</button></div>}
+    {!ready && !failure && <div className="unity-loading"><span className="pulse-token" /><h2>Opening your city</h2><p>Loading the Unity 3D player · {Math.round(progress * 100)}%</p><progress max="1" value={progress} /><div className="unity-loading-options"><button type="button" onClick={onLite3D}>Play in lighter 3D</button><button type="button" onClick={onFallback}>Continue in 2D</button></div></div>}
+    {failure && <div className="unity-loading" role="alert"><h2>{failureMessage.title}</h2><p>{failureMessage.message}</p><details><summary>Technical details</summary><p>{failure}</p></details>{failureMessage.retry&&<button type="button" onClick={async()=>{const player=instance.current;instance.current=undefined;latest.current.onReady(false);if(player)try{await Promise.race([player.Quit(),new Promise(resolve=>window.setTimeout(resolve,2000))]);}catch{}onRetry();}}>Restore 3D</button>}<button type="button" onClick={onLite3D}>Play in lighter 3D</button><button type="button" onClick={onFallback}>Continue in 2D</button></div>}
     {assetError && <p className="asset-notice">{assetError}</p>}
     {ready && <><div className="unity-camera-tools"><button type="button" onClick={() => instance.current?.SendMessage("GamePresentation", "WholeBoard")} aria-label="Show whole board">⌂</button><button type="button" onClick={() => instance.current?.SendMessage("GamePresentation", "FocusActive")} aria-label="Follow current player">◎</button><button type="button" onClick={onReadPrices} aria-label="Read property prices" title="Property prices">₹</button><button type="button" aria-label="Zoom in" onClick={() => instance.current?.SendMessage("GamePresentation", "ZoomIn")}>＋</button><button type="button" aria-label="Zoom out" onClick={() => instance.current?.SendMessage("GamePresentation", "ZoomOut")}>−</button></div><p className="touch-guide"><span className="touch-copy">Prices in ₹ · pinch to zoom · tap a property</span><span className="mouse-copy">Drag to pan · scroll to zoom · click a property</span></p></>}
   </div>;

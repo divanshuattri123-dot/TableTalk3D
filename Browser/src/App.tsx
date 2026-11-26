@@ -28,6 +28,8 @@ import TapDice from './view/TapDice';
 import {rollDice} from './network/random';
 import { isPlayerColorTaken, playerColorKey } from "./engine/playerColors";
 import { usePresentation } from "./presentation/usePresentation";
+import { CityHall, CityHeadline, FortWheel } from "./view/MayorDesk";
+import { fortPosition, trainOffer } from "./engine/mayor";
 import { presentationInteractionBusy } from "./presentation/timeline";
 import { shouldSendMove } from "./presentation/plan";
 import EventStage, { PlayerPortrait } from "./view/EventStage";
@@ -318,6 +320,8 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
   const [unityReady, setUnityReady] = useState(false);
   const [diceToolsOpen,setDiceToolsOpen]=useState(false);
   const [drawer, setDrawer] = useState<"menu" | "players" | "log">();
+  const [cityOpen, setCityOpen] = useState(false);
+  const [openWheelId, setOpenWheelId] = useState<number>();
   const [tablePanel, setTablePanel] = useState<TablePanel>();
   const [fullscreen, setFullscreen] = useState(fullscreenActive);
   const [screenNotice, setScreenNotice] = useState("");
@@ -394,6 +398,12 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
   const isHost = game.players[0]?.id === me?.id;
   const mobileLobby = mobile && game.phase === 'lobby';
   const shareText = copied ? "Link copied" : "Copy room link";
+  const cityAvailable = connection === "connected" && !motion.busy && sceneUsable && !diceToolsOpen;
+  const wheel = game.mayor?.wheel;
+  const wheelAvailable = cityAvailable && isCurrent && game.phase === "awaitingEndTurn" && wheel?.playerId === me?.id && !!wheel;
+  const openWheel = wheelAvailable ? () => { setCityOpen(false); setOpenWheelId(wheel!.id); } : undefined;
+  const wheelDialog = openWheelId === undefined ? undefined
+    : wheel?.id === openWheelId ? wheel : game.mayor?.wheelResult?.id === openWheelId ? game.mayor.wheelResult : undefined;
 
   return (
     <main className={`game-page immersive-game${mobileLobby ? ' mobile-lobby-mode' : ''}`} data-phase={game.phase}>
@@ -407,6 +417,8 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
           <button type="button" onClick={copyRoomLink}>{shareText}</button>
         </div>
         <div className={`connection-pill ${connection}`}><span />{connection}</div>
+        {game.mayor && <CityHall game={game} localId={session.player.id} available={cityAvailable}
+          open={cityOpen} onOpen={() => { setOpenWheelId(undefined); setCityOpen(true); }} onClose={() => setCityOpen(false)} sendAction={sendAction} />}
         <nav className="hud-navigation desktop-hud-navigation" aria-label="Game menu">
           <button type="button" onClick={() => setDrawer("players")} aria-label="Players and deeds" aria-haspopup="dialog">♙ <span>Players</span></button>
           <button type="button" onClick={() => setDrawer("log")} aria-label="Event log" aria-haspopup="dialog">≡ <span>Log</span></button>
@@ -422,15 +434,15 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
       {game.rentClaim && game.rentClaim.ownerId === me?.id && !me?.bankrupt && <div className="rent-claim" role="status"><span><b>{getTile(game.rentClaim.propertyId, game.boardSize, game.city).name}</b><small>Claim before the next movement roll</small></span><button type="button" disabled={connection !== "connected" || motion.busy || !sceneUsable || ["awaitingTradeResponse", "awaitingDebt", "awaitingMortgageDecision"].includes(game.phase)} onClick={() => sendAction({ type: "CLAIM_RENT", playerId: me!.id, claimId: game.rentClaim!.id })}>Claim {formatMoney(game.rentClaim.amount)}</button></div>}
 
       <section className="game-layout">
-        {mobileLobby ? <MobileLobby game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} onCopy={copyRoomLink} copied={copied} colorPicker={<TokenColorPicker color={me?.color ?? session.player.color} players={game.players} localId={session.player.id} onChoose={color=>sendAction({type:'SET_APPEARANCE',playerId:session.player.id,color})}/>}/> : <BoardStage diceEnabled={isCurrent&&game.phase==="awaitingRoll"&&!diceToolsOpen&&!drawer&&!tablePanel} onThrow={()=>{if(isCurrent&&me&&game.phase==="awaitingRoll")sendAction({type:"ROLL",playerId:me.id,dice:dice()});}} panel={tablePanel} onPanelChange={setTablePanel} game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />}
-        {game.phase !== "lobby" && <div className="live-seats" aria-label="Live player balances">{game.players.map(player => <button type="button" key={player.id} className={`${player.id === decisionPlayerId(game) ? "seat-active" : ""} ${player.bankrupt ? "seat-out" : ""}`} style={{ "--player-color": player.color } as CSSProperties} onClick={() => setDrawer("players")}><PlayerPortrait player={player} /><span><b>{player.name}{player.id === session.player.id ? " · you" : ""}</b><strong>{player.bankrupt ? "Out" : formatMoney(player.cash)}</strong>{player.inJail && <small>In jail</small>}</span></button>)}</div>}
+        {mobileLobby ? <MobileLobby game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} onCopy={copyRoomLink} copied={copied} colorPicker={<TokenColorPicker color={me?.color ?? session.player.color} players={game.players} localId={session.player.id} onChoose={color=>sendAction({type:'SET_APPEARANCE',playerId:session.player.id,color})}/>}/> : <BoardStage diceEnabled={isCurrent&&game.phase==="awaitingRoll"&&!diceToolsOpen&&!drawer&&!tablePanel&&!cityOpen&&!wheelDialog} onWheel={openWheel} onThrow={()=>{if(isCurrent&&me&&game.phase==="awaitingRoll")sendAction({type:"ROLL",playerId:me.id,dice:dice()});}} panel={tablePanel} onPanelChange={setTablePanel} game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />}
+        {game.phase !== "lobby" && <div className="live-seats" aria-label="Live player balances">{game.players.map(player => <button type="button" key={player.id} className={`${player.id === decisionPlayerId(game) ? "seat-active" : ""} ${player.bankrupt ? "seat-out" : ""}`} style={{ "--player-color": player.color } as CSSProperties} onClick={() => setDrawer("players")}><PlayerPortrait player={player} /><span><b>{player.name}{player.id === session.player.id ? " · you" : ""}</b><strong>{player.bankrupt ? "Out" : `${game.mayor && player.id !== session.player.id ? "≈" : ""}${formatMoney(player.cash)}`}</strong>{player.id === game.mayor?.mayorId && <small className="seat-mayor">Mayor</small>}{player.inJail && <small>In jail</small>}</span></button>)}</div>}
         {!mobileLobby && <aside className="side-rail" aria-label="Game controls and status">
           {game.phase === "lobby" ? (
             <Lobby game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} />
           ) : (
             <>
               {me ? (
-                <Controls nativeDice={unityReady} onToolsOpen={setDiceToolsOpen} game={game} local={me} isCurrent={isCurrent} available={connection === "connected" && !motion.busy && sceneUsable} presenting={motion.busy} sendAction={sendAction} />
+                <Controls onWheel={openWheel} nativeDice={unityReady} onToolsOpen={setDiceToolsOpen} game={game} local={me} isCurrent={isCurrent} available={connection === "connected" && !motion.busy && sceneUsable} presenting={motion.busy} sendAction={sendAction} />
               ) : (
                 <p className="spectator-note">Spectating only — this table had already started before you arrived.</p>
               )}
@@ -442,6 +454,9 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
 {drawer && !(mobileLobby && drawer === "menu") && <div className="hud-drawer-backdrop" onClick={() => setDrawer(undefined)}><section className={`hud-drawer${drawer === "menu" ? " game-menu-drawer" : ""}`} role="dialog" aria-modal="true" aria-labelledby="hud-drawer-title" onClick={event => event.stopPropagation()}><header><h2 id="hud-drawer-title">{drawer === "menu" ? "Game menu" : drawer === "players" ? "At the table" : "Table chatter"}</h2><button type="button" autoFocus onClick={() => setDrawer(undefined)} aria-label="Close panel">×</button></header>{drawer === "menu" ? <GameMenu roomCode={session.roomCode} copied={copied} fullscreen={fullscreen} showFullscreen={!nativeMobileShell()} onPanel={panel => { setDrawer(undefined); setTablePanel(panel); }} onPlayers={() => setDrawer("players")} onHistory={() => setDrawer("log")} onCopy={copyRoomLink} onFullscreen={toggleFullscreen} onLeave={onLeave} onPrivacy={publisher.openPrivacy} /> : drawer === "players" ? <PlayerRoster game={game} localId={session.player.id} /> : <EventLog game={game} />}</section></div>}
 
       <EventStage game={game} frame={motion.frame} busy={connection !== "connected" || presentationInteractionBusy(game, motion) || !sceneUsable} localId={session.player.id} sendAction={sendAction} onCardRead={motion.acknowledgeCard} counterTools={me && game.pendingTrade ? () => <TradeComposer key={game.pendingTrade!.id} game={game} local={me} sendAction={sendAction} counterTrade={game.pendingTrade!} /> : undefined} financeTools={me && <ClassicFinanceMenu game={game} local={me} available={connection === "connected" && !motion.busy && sceneUsable} sendAction={sendAction} />} />
+      {game.mode === "mayor" && <CityHeadline game={game} paused={cityOpen || !!wheelDialog || !!drawer} />}
+      {wheelDialog && <FortWheel key={wheelDialog.id} game={game} decision={wheelDialog} localId={session.player.id}
+        available={cityAvailable} onClose={() => setOpenWheelId(undefined)} sendAction={sendAction} />}
       <LandscapeGate onLeave={onLeave} />
       {mobileLobby && drawer === 'menu' && <WelcomeMenu onClose={()=>setDrawer(undefined)} onCustomize={category=>{setDrawer(undefined);setLobbyStudio(category);}}/>}
       {mobileLobby && lobbyStudio && <Suspense fallback={<p className="asset-notice">Opening collection…</p>}><AssetStudio initialCategory={lobbyStudio} selectedId={lobbyStudio==='token'?me?.tokenId:me?.diceId} color={me?.color ?? session.player.color} onClose={()=>setLobbyStudio(undefined)} onChoose={(asset,use)=>{sendAction({type:'SET_APPEARANCE',playerId:session.player.id,...(use==='dice'?{diceId:asset.id}:{tokenId:asset.id})});setLobbyStudio(undefined);}}/></Suspense>}
@@ -477,8 +492,8 @@ function Lobby({
       <button type="button" className="lobby-world-trigger" onClick={()=>setMaps(true)}>Choose 3D map</button>
       {maps&&<MapPicker world={game.world} city={game.city} disabled={!isHost} onWorld={world=>sendAction({type:'SET_WORLD',playerId:localId,world})} onCity={city=>sendAction({type:'SET_CITY',playerId:localId,city})} onClose={()=>setMaps(false)}/>}
       <CityPicker value={game.city} disabled={!isHost} onSelect={city=>sendAction({type:'SET_CITY',playerId:localId,city})}/>
-      <label className="field-label">Rules mode<select className="text-input" aria-label="Rules mode" value={game.rulesEdition === "hasbro-2025" ? "classic-2025" : game.mode ?? "expanding"} disabled={!isHost} onChange={e => sendAction({ type: "SET_MODE", playerId: localId, mode: e.target.value === "expanding" ? "expanding" : "classic", rulesEdition: e.target.value === "classic-2025" ? "hasbro-2025" : undefined })}><option value="classic-2025">Classic · Hasbro 2025 · claim rent</option><option value="expanding">Expanding India · larger with friends</option><option value="classic">Classic traditional · automatic rent</option></select></label>
-      <div className="map-size-note"><b>{game.boardSize} spaces</b><span>{game.mode === "classic" ? "Classic India" : "Expanding India"}</span><small>{game.mode === "classic" ? "40 spaces for 2–6 players. Shuffled 16-card decks, starting dice contest and off-turn finances." : "4 players → 48 · 5 → 56 · 6 → 64. Locks at start."}</small></div>
+      <label className="field-label">Rules mode<select className="text-input" aria-label="Rules mode" value={game.rulesEdition === "hasbro-2025" ? "classic-2025" : game.mode ?? "expanding"} disabled={!isHost} onChange={e => sendAction({ type: "SET_MODE", playerId: localId, mode: e.target.value === "expanding" ? "expanding" : e.target.value === "mayor" ? "mayor" : "classic", rulesEdition: e.target.value === "classic-2025" ? "hasbro-2025" : undefined })}><option value="classic-2025">Classic · Hasbro 2025 · claim rent</option><option value="expanding">Expanding India · larger with friends</option><option value="classic">Classic traditional · automatic rent</option><option value="mayor">Mayor · City Hall Stories</option></select></label>
+      <div className="map-size-note"><b>{game.boardSize} spaces</b><span>{game.mode === "classic" ? "Classic India" : game.mode === "mayor" ? "Mayor · City Hall Stories" : "Expanding India"}</span><small>{game.mode === "classic" ? "40 spaces for 2–6 players. Shuffled 16-card decks, starting dice contest and off-turn finances." : game.mode === "mayor" ? "Rotating Mayor, raids, city projects, Express Trains, and the Fort wheel." : "4 players → 48 · 5 → 56 · 6 → 64. Locks at start."}</small></div>
       <BotLobbyControls game={game} localId={localId} sendAction={sendAction}/><PlayerRoster game={game} localId={localId} />
       {local && <details className="lobby-colours"><summary>Your token colour</summary><TokenColorPicker color={local.color} players={game.players} localId={localId} onChoose={color => sendAction({ type: "SET_APPEARANCE", playerId: localId, color })} /></details>}
       {duplicateColours && <p className="inline-error" role="status">Every player needs a different colour. Open “Your token colour” to choose a free one.</p>}
@@ -526,6 +541,7 @@ function Board({ game, current, onSelect }: { game: GameState; current?: Player;
               {stripe && <span className="property-strip" />}
               <span className="tile-copy">
                 <span className="tile-name">{tile.boardLabel ?? tile.name}</span>
+                {game.mode === "mayor" && tile.position === fortPosition(game) && <span className="flat-wheel-pin" aria-label="Wheel location">✦</span>}
                 {tile.region && <small className="tile-region">{tile.region.split(" · ")[0]}</small>}
               </span>
               {isPurchasableTile(tile) && <span className="tile-price">{formatMoney(tile.price)}</span>}
@@ -595,7 +611,7 @@ function PlayerRoster({ game, localId }: { game: GameState; localId: string }) {
             <div><b>{player.name}{player.id === localId ? " (you)" : ""}</b><small>{properties.length} deed{properties.length === 1 ? "" : "s"}{player.inJail ? " · in Jail" : ""}</small><small>{byId.get(player.tokenId ?? catalog?.featured.tokens[game.players.indexOf(player) % (catalog?.featured.tokens.length || 1)] ?? "")?.label ?? "Token"} · {getTile(player.position, game.boardSize, game.city).name}</small>
               {properties.length > 0 && <details className="roster-deeds"><summary>View deeds</summary><ul>{properties.map((tile) => <li key={tile.position}>{tile.name}{propertyLabel(game.properties[tile.position]!) ? ` · ${propertyLabel(game.properties[tile.position]!)}` : ""}</li>)}</ul></details>}
             </div>
-            <strong>{player.bankrupt ? "Out" : formatMoney(player.cash)}</strong>
+            <strong>{player.bankrupt ? "Out" : `${game.mayor && player.id !== localId ? "≈" : ""}${formatMoney(player.cash)}`}</strong>
           </div>
         );
       })}
@@ -604,6 +620,7 @@ function PlayerRoster({ game, localId }: { game: GameState; localId: string }) {
 }
 
 function Controls({
+  onWheel,
   nativeDice,
   onToolsOpen,
   game,
@@ -613,6 +630,7 @@ function Controls({
   presenting,
   sendAction
 }: {
+  onWheel?: () => void;
   nativeDice:boolean;
   onToolsOpen:(open:boolean)=>void;
   game: GameState;
@@ -627,6 +645,7 @@ function Controls({
   useEffect(()=>{onToolsOpen(showBuild||showTrade);return()=>onToolsOpen(false);},[showBuild,showTrade,onToolsOpen]);
   const [confirmBankruptcy, setConfirmBankruptcy] = useState(false);
   const debt = game.debts?.[0], settling = debt?.playerId === local.id;
+  const train = trainOffer(game, local.id);
   const normalTurn = game.phase === "awaitingRoll" || game.phase === "awaitingEndTurn" || game.phase === "awaitingDebt" || game.phase === "awaitingJailPayment";
   const managing = available && !local.bankrupt && (game.mode === "classic" ? canClassicManage(game, local.id) : normalTurn && isCurrent);
   const canSurrender = game.mode !== "classic" || classicLiquidationValue(game, local.id) < 0;
@@ -658,6 +677,8 @@ function Controls({
             </div>
           )}
           {nativeDice?<p className="native-dice-note">Tap the dice on the board</p>:<TapDice disabled={showTrade||showBuild} onThrow={()=>sendAction({type:'ROLL',playerId:local.id,dice:dice()})}/>}
+          {train && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild || local.cash < train.fare}
+            onClick={() => sendAction({ type: "CITY_EXPRESS", playerId: local.id })}>Express to {getTile(train.to, game.boardSize, game.city).name} · {train.fare ? formatMoney(train.fare) : "Free"}</button>}
         </div>
       )}
 
@@ -671,6 +692,7 @@ function Controls({
         <div className="utility-actions">
           <button className="secondary-button" type="button" onClick={() => { setShowBuild((value) => !value); setShowTrade(false); }}>{settling ? "Sell / mortgage" : "Build / mortgage"}</button>
           <button className="secondary-button" type="button" onClick={() => { setShowTrade((value) => !value); setShowBuild(false); }}>Trade</button>
+          {onWheel && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={onWheel}>{game.mayor?.wheel?.section === 5 ? "Scratch your ticket" : "Fort wheel"}</button>}
           {game.phase === "awaitingEndTurn" && isCurrent && <button className="primary-button" type="button" disabled={showTrade || showBuild} onClick={() => sendAction({ type: "END_TURN", playerId: local.id })}>{game.lastRoll?.grantsExtraRoll && !local.inJail ? "Continue turn" : "End turn"}</button>}
           {settling && game.phase === "awaitingDebt" && <button className="bankrupt-button" disabled={!canSurrender} title={!canSurrender ? "Available building sales and mortgages can still clear your debt." : undefined} type="button" onClick={() => setConfirmBankruptcy(true)}>Declare bankruptcy</button>}
         </div>

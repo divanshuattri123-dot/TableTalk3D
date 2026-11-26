@@ -4,6 +4,7 @@ import type { CityId } from './cities';
 import type {
   CardDeck,
   BoardSize,
+  GameMode,
   ColorGroup,
   PurchasableTile,
   BaseTile,
@@ -207,5 +208,5 @@ export const getPurchasableTile = (position: number, size: BoardSize = 40, city?
 export const colorGroupTiles = (group: ColorGroup, size: BoardSize = 40): StreetTile[] =>
   getBoard(size).filter((tile): tile is StreetTile => isStreetTile(tile) && tile.group === group);
 
-export const cardAt = (deck: CardDeck, index: number, mode?: "classic" | "expanding"): GameCard | undefined =>
+export const cardAt = (deck: CardDeck, index: number, mode?: GameMode): GameCard | undefined =>
   (mode === "classic" ? CLASSIC_CARDS[deck] : deck === "chance" ? CHANCE_CARDS : COMMUNITY_CARDS)[index];

@@ -1,5 +1,6 @@
 import type { CityId } from './cities';
 import type {WorldId} from './worlds';
+import type { CityAction, CityDesk } from './mayor';
 export type Dice = readonly [number, number];
 
 export type ColorGroup =
@@ -16,7 +17,7 @@ export type ColorGroup =
   | "indigo" | "amber" | "lavender" | "turquoise";
 
 export type BoardSize = 40 | 48 | 56 | 64;
-export type GameMode = "expanding" | "classic";
+export type GameMode = "expanding" | "classic" | "mayor";
 export interface SetupRoll { playerId: string; dice: Dice }
 
 export type ImprovementLevel = 0 | 1 | 2 | 3 | 4 | 5;
@@ -146,7 +147,7 @@ export interface TradeOffer {
   resumePhase: Exclude<Phase, "lobby" | "gameOver" | "awaitingTradeResponse">;
 }
 
-export interface Debt { playerId: string; creditorId: string | "bank"; reason: string; amount?: number }
+export interface Debt { playerId: string; creditorId: string | "bank"; reason: string; amount?: number; city?: true; rent?: true }
 export type DebtResumePhase = Exclude<Phase, "lobby" | "gameOver" | "awaitingDebt" | "awaitingTradeResponse">;
 
 export interface CardDraw {
@@ -163,7 +164,9 @@ export interface CardReveal {
 
 export interface GameEvent {
   id: number;
-  kind: "info" | "error" | "money" | "card" | "turn";
+  kind: "info" | "error" | "money" | "card" | "turn" | "civic";
+  civic?: "office" | "raid" | "policy" | "wheel" | "investigation" | "express" | "auction";
+  privateTo?: string;
   text: string;
   playerId?: string;
   position?: number;
@@ -174,6 +177,7 @@ export interface GameEvent {
 }
 
 export interface GameState {
+  mayor?: CityDesk;
   world?: WorldId;
   city?: CityId;
   rulesEdition?: 'hasbro-2025';
@@ -215,6 +219,7 @@ export interface GameState {
 export type PayKind = "jailFine" | "jailCard";
 
 export type GameAction =
+  | CityAction
   | {type:'ADD_BOT';playerId:string}
   | {type:'REMOVE_BOT';playerId:string;botId:string}
   | {type:'SET_WORLD';playerId:string;world:WorldId}

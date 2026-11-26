@@ -1,11 +1,19 @@
 import { Server, routePartykitRequest } from "partyserver";
-import type { Connection } from "partyserver";
+import type { Connection, ConnectionContext } from "partyserver";
 import type { ClientMessage, ServerMessage } from "../src/network/protocol";
 import { SavedRoom } from "./roomStore";
 import {serveUnityChunks} from './chunkedAssets';
 import {hasBotDecision,chooseBotAction,botThinkDelay} from './botRunner';
 import {randomIndex} from '../src/network/random';
-import type {GameState} from '../src/engine/types';
+import type {GameAction, GameState} from '../src/engine/types';
+import {projectCityState, WHEEL_SECTIONS} from '../src/engine/mayor';
+
+interface SeatConnection { seat?: string }
+function withWheelDraw(action: GameAction | undefined): GameAction | undefined {
+  return action?.type === "CITY_SPIN"
+    ? { ...action, section: randomIndex(WHEEL_SECTIONS.length), prizeRoll: randomIndex(100) }
+    : action;
+}
 
 const asClientMessage = (raw: string): ClientMessage | undefined => {
   try {
@@ -32,8 +40,10 @@ export class GameRoom extends Server<Env> {
     await this.room.load();
   }
 
-  async onConnect(connection: Connection) {
-    this.send(connection, { type: "state", state: this.room.state });
+  async onConnect(connection: Connection<SeatConnection>, context: ConnectionContext) {
+    const seat = new URL(context.request.url).searchParams.get("seat") ?? undefined;
+    connection.setState({ seat });
+    this.sendState(connection, this.room.state);
     await this.scheduleBot();
   }
 
@@ -53,13 +63,13 @@ export class GameRoom extends Server<Env> {
   async onAlarm(){
     if(![...this.getConnections()].some(connection=>connection.readyState===1))return;
     const previous=this.room.state;
-    const state=await this.room.apply(chooseBotAction);
-    if(state!==previous)this.broadcast(JSON.stringify({type:'state',state} satisfies ServerMessage));
+    const state=await this.room.apply(current => withWheelDraw(chooseBotAction(current)));
+    if(state!==previous)this.publishState(state);
     if(state.notice){console.error('AI decision rejected',state.notice);return;}
     await this.scheduleBot(previous);
   }
 
-  async onMessage(sender: Connection, message: string | ArrayBuffer) {
+  async onMessage(sender: Connection<SeatConnection>, message: string | ArrayBuffer) {
     if (message === "ping") { sender.send("pong"); return; }
     if (typeof message !== "string") {
       this.send(sender, { type: "error", message: "Game actions must be JSON." });
@@ -71,16 +81,32 @@ export class GameRoom extends Server<Env> {
       return;
     }
 
-    if (incoming.type === "sync") { this.send(sender, { type: "state", state: this.room.state }); return; }
+    if (incoming.type === "sync") { this.sendState(sender, this.room.state); return; }
     try {
       const previous=this.room.state;
-      const state = await this.room.apply(incoming.action, incoming.id);
-      this.broadcast(JSON.stringify({ type: "state", state, ackId: incoming.id } satisfies ServerMessage));
+      const action = incoming.action;
+      const state = await this.room.apply(() => withWheelDraw(action), incoming.id);
+      if (action.type === "JOIN" && state.players.some(player => player.id === action.player.id)) sender.setState({ seat: action.player.id });
+      this.publishState(state, sender.id, incoming.id);
       await this.scheduleBot(previous);
     } catch (error) {
       console.error("Room checkpoint failed", error);
       this.send(sender, { type: "error", message: "Could not save this move yet. Reconnecting to retry safely.", id: incoming.id, retryable: true });
     }
+  }
+
+  private publishState(state: GameState, senderId?: string, ackId?: string) {
+    if (!state.mayor) {
+      this.broadcast(JSON.stringify({ type: "state", state, ackId } satisfies ServerMessage));
+      return;
+    }
+    for (const link of this.getConnections<SeatConnection>()) {
+      if (link.readyState === 1) this.sendState(link, state, link.id === senderId ? ackId : undefined);
+    }
+  }
+
+  private sendState(connection: Connection<SeatConnection>, state: GameState, ackId?: string) {
+    this.send(connection, { type: "state", state: projectCityState(state, connection.state?.seat), ackId });
   }
 
   private send(connection: Connection, message: ServerMessage) {

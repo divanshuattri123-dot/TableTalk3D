@@ -18,7 +18,8 @@ export function useGameRoom(session: Session | undefined, previewRoomCode = "") 
     setGame(undefined); setError(undefined); setConnection("connecting");
     const socket = new PartySocket({ ...roomAddress(import.meta.env.VITE_PARTYKIT_HOST, window.location, import.meta.env.DEV), room: roomCode, party: "main",
       maxRetries: Infinity, minReconnectionDelay: 750, maxReconnectionDelay: 8_000,
-      connectionTimeout: 10_000, maxEnqueuedMessages: 0 });
+      connectionTimeout: 10_000, maxEnqueuedMessages: 0,
+      query: session ? { seat: session.player.id } : {} });
     const clientId = globalThis.crypto?.randomUUID?.() ?? `seat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const link = new RoomConnection(socket, { state: setGame, status: setConnection, error: setError }, session?.player, clientId);
     linkRef.current = link;

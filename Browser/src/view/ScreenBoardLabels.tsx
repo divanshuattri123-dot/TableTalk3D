@@ -9,8 +9,9 @@ import type { ProjectedLabelLayout } from "./labelPaint";
 import type { LabelPacket } from "./readability";
 import { boardSymbol, printedBoardLabel } from "./boardSigns";
 
-export default memo(function ScreenBoardLabels({ size,city }: { size: BoardSize; city?:CityId }) {
+export default memo(function ScreenBoardLabels({ size,city,wheelPosition,onWheel }: { size: BoardSize; city?:CityId; wheelPosition?: number; onWheel?: () => void }) {
   const root = useRef<HTMLDivElement>(null), nodes = useRef(new Map<number, HTMLDivElement>());
+  const wheelPin = useRef<HTMLButtonElement>(null);
   const board = useMemo(() => getBoard(size,city), [size,city]);
   useEffect(() => {
     const element = root.current; if (!element) return;
@@ -26,6 +27,16 @@ export default memo(function ScreenBoardLabels({ size,city }: { size: BoardSize;
         const tile = board[anchor.id]!;
         const layout = pinnedLabelLayout(anchor, width, height, size, isPurchasableTile(tile), Boolean(boardSymbol(tile)));
         paintProjectedLabel(node, layout, painted.get(anchor.id));
+        const pin = wheelPin.current;
+        if (pin && anchor.id === wheelPosition) {
+          pin.hidden = !layout.visible;
+          const offset = 22;
+          const side = Math.floor(anchor.id / (size / 4));
+          const x = anchor.x * width + (side === 1 ? offset : side === 3 ? -offset : 0);
+          const y = anchor.y * height + (side === 2 ? offset : side === 0 ? -offset : 0);
+          pin.style.left = `${x.toFixed(1)}px`;
+          pin.style.top = `${y.toFixed(1)}px`;
+        }
         painted.set(anchor.id, layout);
         const key = `${Math.round(layout.nameWidth)}:${Math.round(layout.nameHeight)}:${layout.nameSize}`;
         if (!layout.visible || fitted.get(anchor.id) === key) continue;
@@ -66,11 +77,12 @@ export default memo(function ScreenBoardLabels({ size,city }: { size: BoardSize;
     observer.observe(element);
     void document.fonts.load("600 12px BarlowBoard").then(() => { if (!disposed) { textWidths.clear(); fitted.clear(); paint(); } }, () => {});
     return () => { disposed = true; window.removeEventListener("tabletalk-unity", receive); observer.disconnect(); };
-  }, [size, board]);
-  return <div className="screen-board-labels" ref={root} aria-hidden="true">
-    {board.map(tile => <div className={`screen-tile-label${isPurchasableTile(tile) ? " has-price" : ""}`} key={tile.position} hidden ref={node => { if (node) nodes.current.set(tile.position, node); else nodes.current.delete(tile.position); }}>
+  }, [size, board, wheelPosition]);
+  return <div className="screen-board-labels" ref={root}>
+    {board.map(tile => <div className={`screen-tile-label${isPurchasableTile(tile) ? " has-price" : ""}`} key={tile.position} hidden aria-hidden="true" ref={node => { if (node) nodes.current.set(tile.position, node); else nodes.current.delete(tile.position); }}>
       <svg className="screen-tile-name" aria-label={printedBoardLabel(tile)}>{boardSymbol(tile) && <image href={`${import.meta.env.BASE_URL}board-icons/${boardSymbol(tile)}.svg`} preserveAspectRatio="xMidYMid meet" />}{[0, 1, 2].map(line => <text key={line} x="50%" textAnchor="middle" dominantBaseline="central" lengthAdjust="spacingAndGlyphs" />)}</svg>
       {isPurchasableTile(tile) && <strong className="screen-tile-price"><i>₹</i>{tile.price}</strong>}
     </div>)}
+    {wheelPosition !== undefined && <button type="button" ref={wheelPin} className={`board-wheel-pin${onWheel ? " ready" : ""}`} aria-label="Open the Fort wheel" aria-hidden={!onWheel} disabled={!onWheel} hidden onClick={onWheel}>✦</button>}
   </div>;
 });
