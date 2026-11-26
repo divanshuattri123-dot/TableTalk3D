@@ -486,8 +486,10 @@ and rooms created through older clients keep their existing rules.
 - The Mayor can issue a ₹200 Emergency Loan to any solvent seat from City Funds.
   The seat repays ₹225 at the end of its second turn with the loan. A seat may
   receive another loan once its existing balance is repaid.
-- Transit Day and Express are unavailable. Connect the City completes when the
-  player holds two unmortgaged stations.
+- The ₹75 Express ride takes the active player from their station to the next
+  station before rolling, once per lap. Resolve the destination deed normally
+  and skip the GO salary if the train wraps around. Transit Day is unavailable.
+  Connect the City completes when the player holds two unmortgaged stations.
 - There is no audit quota. An audit with no deferred levy still costs the Mayor
   ₹25. Repeatable council projects have no term or match quota. A council project
   already awaiting a vote must finish before the next proposal can go on the ballot.

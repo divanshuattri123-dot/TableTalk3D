@@ -94,16 +94,31 @@ describe("Mayor office rules", () => {
     expect(step(game,{...order,playerId:"b",term:2}).notice).toBeUndefined();
   });
 
-  it("removes Transit Day and Express only in the office edition without breaking the station contract", () => {
+  it("charges ₹75 for the next station and resolves its deed while leaving Transit Day in legacy rooms", () => {
     const current = changePlayer(table(),"a",{position:5});
     const legacy = changePlayer(table(false),"a",{position:5});
     const transit = {type:"CITY_PROPOSE",playerId:"a",term:1,policy:"transit"} as const;
-    expect(trainOffer(current,"a")).toBeUndefined();
+    const ride = {type:"CITY_EXPRESS",playerId:"a"} as const;
+    expect(trainOffer(current,"a")).toEqual({to:15,fare:75});
     expect(step(current,transit).notice).toBeTruthy();
-    expect(step(current,{type:"CITY_EXPRESS",playerId:"a"}).notice).toBeTruthy();
+    expect(step(changePlayer(current,"a",{cash:74}),ride).notice).toBeTruthy();
+    const arrived = step(current,ride);
+    expect(player(arrived,"a")).toMatchObject({position:15,cash:1425});
+    expect(arrived.mayor?.treasury).toBe(400);
+    expect(arrived.pendingPurchase).toEqual({playerId:"a",propertyId:15});
     expect(trainOffer(legacy,"a")?.fare).toBe(75);
     expect(step(legacy,transit).notice).toBeUndefined();
     const station = {ownerId:"a",houses:0 as const,mortgaged:false};
     expect(cityContractReady({...current,properties:{...current.properties,5:station,15:station}},"a","transit")).toBe(true);
+  });
+
+  it("wraps to the first station for ₹75 without GO salary and charges the destination rent", () => {
+    const game = turn(changePlayer(table(),"b",{position:35}),"b");
+    const state = {...game,properties:{...game.properties,5:{ownerId:"a",houses:0 as const,mortgaged:false}}};
+    const arrived = step(state,{type:"CITY_EXPRESS",playerId:"b"});
+    expect(arrived.phase).toBe("awaitingEndTurn");
+    expect(player(arrived,"b")).toMatchObject({position:5,cash:1400});
+    expect(player(arrived,"a").cash).toBe(1525);
+    expect(trainOffer({...arrived,phase:"awaitingRoll"},"b")).toBeUndefined();
   });
 });

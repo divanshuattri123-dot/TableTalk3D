@@ -138,12 +138,12 @@ export function cityStable(state: GameState) {
 
 export function trainOffer(state: GameState, playerId: string) {
   const desk = state.mayor;
-  if (!desk || desk.office || state.phase !== "awaitingRoll" || state.activePlayerId !== playerId || state.consecutiveDoubles !== 0) return;
+  if (!desk || state.phase !== "awaitingRoll" || state.activePlayerId !== playerId || state.consecutiveDoubles !== 0) return;
   const player = state.players.find(candidate => candidate.id === playerId);
   const stations = railroadPositions(state.boardSize);
   if (!player || player.bankrupt || player.inJail || !stations.includes(player.position) || desk.seats[playerId]?.rodeExpress) return;
   const seat = desk.seats[playerId];
-  const free = desk.policy?.kind === "transit" && seat?.freeRideRound !== desk.round && desk.treasury >= TRAIN_FARE;
+  const free = !desk.office && desk.policy?.kind === "transit" && seat?.freeRideRound !== desk.round && desk.treasury >= TRAIN_FARE;
   return { to: stations.find(position => position > player.position) ?? stations[0]!, fare: free ? 0 : TRAIN_FARE };
 }
 
