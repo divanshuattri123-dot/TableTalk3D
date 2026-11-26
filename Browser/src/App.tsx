@@ -418,7 +418,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
     : wheel?.id === openWheelId ? wheel : game.mayor?.wheelResult?.id === openWheelId ? game.mayor.wheelResult : undefined;
 
   return (
-    <main className={`game-page immersive-game${mobileLobby ? ' mobile-lobby-mode' : ''}`} data-phase={game.phase}>
+    <main className={`game-page immersive-game${mobile ? ' touch-table' : ''}${mobileLobby ? ' mobile-lobby-mode' : ''}`} data-phase={game.phase}>
       <header className="game-header">
         {mobileLobby && <button className="mobile-lobby-back menu-round-back" type="button" aria-label="Back to main menu" onClick={onLeave}>‹</button>}
         <button className="wordmark" type="button" onClick={onLeave} aria-label="Leave this table">

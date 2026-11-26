@@ -44,39 +44,39 @@
   .welcome-shell .join-box { padding-top: 14px; border-color: #b8c9ac; }
   .welcome-shell .join-row > button { min-height: 44px; background: #edf1e2; color: #2e503b; box-shadow: none; }
   .welcome-shell .inline-error { color: #ac3546; }
-  /* The phone HUD is for decisions. Secondary tools belong behind its one menu. */
-  .immersive-game .desktop-hud-navigation, .immersive-game .game-header .wordmark,
-  .immersive-game .connection-pill, .immersive-game .table-toolbar,
-  .immersive-game .unity-camera-tools, .immersive-game .scene-tools, .immersive-game .flat-camera-tools,
-  .immersive-game .touch-guide, .immersive-game .landing-ribbon, .immersive-game .table-caption,
-  .immersive-game .my-piece-strip, .immersive-game .desktop-play-help { display: none; }
-  .immersive-game:not([data-phase="lobby"]) .room-ticket { display: none; }
-  .immersive-game .game-header { justify-content: flex-end; pointer-events: none; }
-  .immersive-game[data-phase="lobby"] .game-header { justify-content: space-between; }
-  .immersive-game .game-header > * { pointer-events: auto; }
-  .immersive-game .mobile-menu-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 82px; min-height: 44px; padding: 8px 12px; border: 1px solid #fffef0; border-radius: 12px; color: #294e38; background: #fffaf0f2; box-shadow: 0 3px 10px #2e4b3426; font: 800 13px "Trebuchet MS",sans-serif; }
-  .immersive-game .play-turn-banner { top: max(10px,env(safe-area-inset-top)); left: max(10px,env(safe-area-inset-left)); width: min(260px,calc(100% - 120px)); min-height: 44px; padding: 7px 10px; }
-  .immersive-game[data-phase="lobby"] .play-turn-banner { display: none; }
-  .immersive-game .lobby-panel .text-input { width: 100%; min-width: 0; padding: 8px; font-size: 16px; color: #2e503b; background: #f3f3e7; border-color: #b8c9ac; }
-  .immersive-game .lobby-panel .primary-button { position: static; }
-  .immersive-game .lobby-colours summary { min-height: 44px; }
-  .immersive-game .play-turn-banner strong { display: none; }
-  .immersive-game .play-turn-banner b { font-size: 11px; }
-  .immersive-game .play-turn-banner div > span { font-size: 10px; }
-  .immersive-game .live-seats { top: max(64px,calc(env(safe-area-inset-top) + 56px)); max-height: calc(100dvh - 235px); }
-  .immersive-game .side-rail > .controls-panel:not(:has(button)) { display: none; }
-  .immersive-game .controls-panel .roll-button, .immersive-game .controls-panel .utility-actions button { min-height: 44px; }
-  .immersive-game .hud-drawer-backdrop { padding: max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); }
-  .immersive-game .game-menu-drawer { width: min(480px,100%); padding: 16px; }
-  .immersive-game .hud-drawer > header button { min-height: 44px; min-width: 44px; }
-  .immersive-game .hud-drawer .event-log { display: block; }
-  .immersive-game .preferences-surface { display: grid; place-items: center; position: fixed; z-index: 75; inset: 0; padding: 12px; background: #253f3b88; backdrop-filter: blur(3px); }
-  .immersive-game .table-preferences { position: static; inset: auto; width: min(560px,100%); max-height: calc(100dvh - 24px); margin: 0; padding: 16px; }
-  .immersive-game .table-preferences select { font-size: 16px; }
-  .immersive-game .table-preferences .preferences-title button { min-height: 44px; min-width: 44px; }
-  .immersive-game .mobile-preference-option { display: block; }
-  .immersive-game .mobile-play-help { display: inline; }
 }
+/* The phone HUD is for decisions. Secondary tools belong behind its one menu. */
+.immersive-game.touch-table .desktop-hud-navigation, .immersive-game.touch-table .game-header .wordmark,
+.immersive-game.touch-table .connection-pill, .immersive-game.touch-table .table-toolbar,
+.immersive-game.touch-table .unity-camera-tools, .immersive-game.touch-table .scene-tools, .immersive-game.touch-table .flat-camera-tools,
+.immersive-game.touch-table .touch-guide, .immersive-game.touch-table .landing-ribbon, .immersive-game.touch-table .table-caption,
+.immersive-game.touch-table .my-piece-strip, .immersive-game.touch-table .desktop-play-help { display: none; }
+.immersive-game.touch-table:not([data-phase="lobby"]) .room-ticket { display: none; }
+.immersive-game.touch-table .game-header { justify-content: flex-end; pointer-events: none; }
+.immersive-game.touch-table[data-phase="lobby"] .game-header { justify-content: space-between; }
+.immersive-game.touch-table .game-header > * { pointer-events: auto; }
+.immersive-game.touch-table .mobile-menu-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 82px; min-height: 44px; padding: 8px 12px; border: 1px solid #fffef0; border-radius: 12px; color: #294e38; background: #fffaf0f2; box-shadow: 0 3px 10px #2e4b3426; font: 800 13px "Trebuchet MS",sans-serif; }
+.immersive-game.touch-table .play-turn-banner { top: max(10px,env(safe-area-inset-top)); left: max(10px,env(safe-area-inset-left)); width: min(260px,calc(100% - 120px)); min-height: 44px; padding: 7px 10px; }
+.immersive-game.touch-table[data-phase="lobby"] .play-turn-banner { display: none; }
+.immersive-game.touch-table .lobby-panel .text-input { width: 100%; min-width: 0; padding: 8px; font-size: 16px; color: #2e503b; background: #f3f3e7; border-color: #b8c9ac; }
+.immersive-game.touch-table .lobby-panel .primary-button { position: static; }
+.immersive-game.touch-table .lobby-colours summary { min-height: 44px; }
+.immersive-game.touch-table .play-turn-banner strong { display: none; }
+.immersive-game.touch-table .play-turn-banner b { font-size: 11px; }
+.immersive-game.touch-table .play-turn-banner div > span { font-size: 10px; }
+.immersive-game.touch-table .live-seats { top: max(64px,calc(env(safe-area-inset-top) + 56px)); max-height: calc(100dvh - 235px); }
+.immersive-game.touch-table .side-rail > .controls-panel:not(:has(button)) { display: none; }
+.immersive-game.touch-table .controls-panel .roll-button, .immersive-game.touch-table .controls-panel .utility-actions button { min-height: 44px; }
+.immersive-game.touch-table .hud-drawer-backdrop { padding: max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); }
+.immersive-game.touch-table .game-menu-drawer { width: min(480px,100%); padding: 16px; }
+.immersive-game.touch-table .hud-drawer > header button { min-height: 44px; min-width: 44px; }
+.immersive-game.touch-table .hud-drawer .event-log { display: block; }
+.immersive-game.touch-table .preferences-surface { display: grid; place-items: center; position: fixed; z-index: 75; inset: 0; padding: 12px; background: #253f3b88; backdrop-filter: blur(3px); }
+.immersive-game.touch-table .table-preferences { position: static; inset: auto; width: min(560px,100%); max-height: calc(100dvh - 24px); margin: 0; padding: 16px; }
+.immersive-game.touch-table .table-preferences select { font-size: 16px; }
+.immersive-game.touch-table .table-preferences .preferences-title button { min-height: 44px; min-width: 44px; }
+.immersive-game.touch-table .mobile-preference-option { display: block; }
+.immersive-game.touch-table .mobile-play-help { display: inline; }
 @media (pointer: coarse) and (orientation: landscape) and (min-width: 560px), (max-width: 700px) and (orientation: landscape) and (min-width: 560px) {
   .welcome-shell .welcome-card { display: grid; grid-template-columns: minmax(284px,1.1fr) minmax(175px,.9fr); column-gap: 18px; row-gap: 7px; }
   .welcome-shell .welcome-card h1 { grid-column: 1 / -1; grid-row: 1; margin-bottom: 4px; }
