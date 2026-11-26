@@ -121,3 +121,11 @@
 .unity-loading-options { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
 @keyframes scratch-prize-in { from { opacity: .2; transform: scale(.94); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .wheel-readout .scratch-prize { animation: none; } }
+.city-project-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+.city-project-picker label { flex: 1 1 175px; display: grid; gap: 4px; font-size: 12px; color: #ebd7a9; }
+.city-project-picker select {
+  width: 100%; min-width: 0; min-height: 44px; padding: 7px 10px;
+  border: 1px solid #d8b76e; border-radius: 8px; color: #fff3d5; background: #254b4c; font: 650 13px system-ui, sans-serif;
+}
+.live-seats .seat-speaker { color: #285f67; }
+.bid-credit { border-left: 3px solid #248172; color: #163f36; background: #e2f0e6; border-radius: 5px; padding: 5px 7px; font-size: .78rem; line-height: 1.35; }

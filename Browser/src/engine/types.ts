@@ -122,6 +122,7 @@ export interface PendingPurchase {
 }
 
 export interface AuctionState {
+  cityBacking?: { limit: number; playerIds: string[] };
   kind?: "property" | "house" | "hotel";
   buildTargets?: Record<string, number[]>;
   winningTarget?: number;
@@ -165,7 +166,7 @@ export interface CardReveal {
 export interface GameEvent {
   id: number;
   kind: "info" | "error" | "money" | "card" | "turn" | "civic";
-  civic?: "office" | "raid" | "policy" | "wheel" | "investigation" | "express" | "auction";
+  civic?: "office" | "raid" | "policy" | "wheel" | "investigation" | "express" | "auction" | "contract";
   privateTo?: string;
   text: string;
   playerId?: string;

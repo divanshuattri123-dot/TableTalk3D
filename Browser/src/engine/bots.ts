@@ -1,7 +1,7 @@
 import {colorGroupTiles,getBoard,getPurchasableTile,isPurchasableTile} from './board';
 import {classicSpendableCash} from './classic';
 import {calculateRent,canTradeProperty,decisionPlayerId,reduceGame} from './reducer';
-import {cityLoanAvailable,cityStable,trainOffer} from './mayor';
+import {auctionCredit,canChallengeCityProject,cityLoanAvailable,cityPolicyAvailable,cityStable,reserveLevy,trainOffer} from './mayor';
 import type {Dice,GameAction,GameState,Player,TradeOffer} from './types';
 
 const STYLES=[
@@ -46,19 +46,40 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
       }
     }
     if(mayor && active===mayor && !desk.proposalUsed && !desk.proposal && desk.round>=2){
-      const policy=s.players.filter(p=>!p.bankrupt&&p.id!==mayor.id&&p.cash<=400).length>=2?'loans':'transit';
-      return {type:'CITY_PROPOSE',playerId:mayor.id,term,policy};
+      const playerId=mayor.id;
+      const cashLeader=reserveLevy(s);
+      if(cashLeader && cashLeader.playerId!==playerId && cityPolicyAvailable(s,'wealth'))
+        return {type:'CITY_PROPOSE',playerId,term,policy:'wealth'};
+      const lowCash=s.players.filter(p=>!p.bankrupt&&p.cash<=400&&!desk.seats[p.id]?.borrowed);
+      if(lowCash.some(p=>p.id===playerId) && cityPolicyAvailable(s,'credit'))
+        return {type:'CITY_PROPOSE',playerId,term,policy:'credit'};
+      if(desk.council && s.phase==='awaitingRoll'){
+        const ahead=[5,6,7,8,9].map(n=>getPurchasableTile((mayor.position+n)%s.boardSize,s.boardSize));
+        const danger=ahead.find(tile=>tile?.kind==='property' && s.properties[tile.position]?.ownerId!==playerId &&
+          calculateRent(s,tile.position,7)>=Math.min(500,mayor.cash*.6));
+        if(danger?.kind==='property' && cityPolicyAvailable(s,'rent-relief',danger.group))
+          return {type:'CITY_PROPOSE',playerId,term,policy:'rent-relief',district:danger.group};
+      }
+      const policy=lowCash.filter(p=>p.id!==playerId).length>=2?'loans':'transit';
+      return {type:'CITY_PROPOSE',playerId,term,policy};
     }
     const proposal=desk.proposal;
-    if(active && proposal && proposal.sponsorId!==active.id && s.players.filter(p=>!p.bankrupt).length>2 &&
-      !proposal.votes.includes(active.id) && (!desk.voteUsed || proposal.votes.length > 0)) {
+    if(active && proposal && canChallengeCityProject(s,active.id)){
       const needsLoan=active.cash<=350 && !desk.seats[active.id]?.borrowed;
       const usesTrain=trainOffer(s,active.id)!==undefined;
-      if((needsLoan && proposal.kind==='transit') || (!needsLoan && usesTrain && proposal.kind==='loans'))
+      const targeted=proposal.kind==='wealth' && reserveLevy(s)?.playerId===active.id;
+      const portfolioAffected=proposal.district && colorGroupTiles(proposal.district,s.boardSize)
+        .some(tile=>s.properties[tile.position]?.ownerId===active.id);
+      if(targeted || portfolioAffected || (needsLoan && proposal.kind==='transit') ||
+        (!needsLoan && usesTrain && proposal.kind==='loans'))
         return {type:'CITY_VOTE',playerId:active.id,term:proposal.term};
     }
     if(active){
       const playerId=active.id,seat=desk.seats[playerId]!;
+      if(desk.council && desk.round<=2 && !seat.contract){
+        const transit=deeds(s,active).some(tile=>tile.kind==='railroad') || botStyle(active).name==='Opportunist';
+        return {type:'CITY_CONTRACT',playerId,contract:transit?'transit':'build'};
+      }
       const wheel=desk.wheel;
       if(wheel?.playerId===playerId&&s.phase==='awaitingEndTurn')return wheel.section===5
         ? {type:'CITY_SCRATCH',playerId,wheelId:wheel.id} : {type:'CITY_SPIN',playerId,wheelId:wheel.id};
@@ -97,7 +118,9 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
     const style=botStyle(p),tile=getPurchasableTile(a.propertyId,s.boardSize),building=a.kind==='house'||a.kind==='hotel';
     const target=building?a.buildTargets?.[p.id]?.[0]:undefined;
     const complete=tile?.kind==='property'&&colorGroupTiles(tile.group,s.boardSize).every(t=>t.position===tile.position||s.properties[t.position]?.ownerId===p.id);
-    const limit=Math.min(Math.max(0,p.cash-style.reserve),tile?(building&&tile.kind==='property'?tile.houseCost*1.5:tile.price*(complete?1.7:style.bid)):0);
+    const credit=auctionCredit(a,p.id);
+    const liquid=credit ? p.cash+credit : Math.max(0,p.cash-style.reserve);
+    const limit=Math.min(liquid,tile?(building&&tile.kind==='property'?tile.houseCost*1.5:tile.price*(complete?1.7:style.bid)):0);
     const increment=style.bid>1.2&&limit-a.currentBid>60?20:10,amount=Math.max(10,a.currentBid+increment);
     const bid:GameAction={type:'AUCTION_BID',playerId:p.id,amount,propertyId:target};
     return amount<=limit&&legal(bid)?bid:{type:'AUCTION_BID',playerId:p.id,pass:true};

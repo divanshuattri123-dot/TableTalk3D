@@ -5,6 +5,7 @@ import { getPurchasableTile, getTile, isStreetTile } from "../engine/board";
 import { calculateRent } from "../engine/reducer";
 import { formatRupees } from "../engine/currency";
 import { classicSpendableCash } from "../engine/classic";
+import { auctionCredit, cityLoanTotal, permitPaused } from "../engine/mayor";
 import type { GameAction, GameState, Player } from "../engine/types";
 import type { PresentationFrame } from "../presentation/plan";
 import { GROUP_COLORS } from "./palette";
@@ -41,6 +42,9 @@ export function TitleDeed({ game, position, rent }: { game: GameState; position:
     <header><small>{tile.kind === "property" ? `${tile.region?.split(" · ")[0] ?? tile.group} DISTRICT · TITLE DEED` : `${tile.kind.toUpperCase()} · TITLE DEED`}</small><h2>{tile.name}</h2></header>
     {tile.region && <p className="title-deed-region">{tile.region}</p>}
     {tile.detail && <p className="title-deed-detail">{tile.detail}</p>}
+    {tile.kind === "property" && permitPaused(game, tile.group) && <p className="title-deed-detail">Building permits paused this round</p>}
+    {tile.kind === "property" && game.mayor?.policy?.kind === "rent-relief" && game.mayor.policy.district === tile.group &&
+      <p className="title-deed-detail">First rent payment here qualifies for district relief this round</p>}
     <div className="deed-symbol">{tile.kind === "railroad" ? "🚂" : tile.kind === "utility" ? "⚡" : "⌂"}</div>
     <dl>{rows.map(([label, value]) => <div key={label} className={value === rent ? "applicable-rent" : ""}><dt>{label}</dt><dd>{typeof value === "number" ? money(value) : value}</dd></div>)}</dl>
     <footer><p>Mortgage value <b>{money(tile.mortgageValue)}</b></p>{isStreetTile(tile) && <><p>Houses cost <b>{money(tile.houseCost)} each</b></p><p>Hotel costs <b>{money(tile.houseCost)} + 4 houses</b></p></>}<small>{isStreetTile(tile) ? "Own the complete colour set. Build evenly." : tile.kind === "utility" ? game.mode === "classic" ? "Roll again to determine utility rent. No token movement." : "Multiply by the total of the landing dice." : "More railroads mean higher rent."}</small></footer>
@@ -106,7 +110,10 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
     const tile = getPurchasableTile(position, game.boardSize, game.city);
     const eligible = Boolean(!sold && game.auction && me && !me.bankrupt && auction.eligiblePlayerIds.includes(me.id) && (game.mode === "classic" || !auction.passedPlayerIds.includes(me.id)) && auction.highestBidderId !== me.id);
     const minimum = Math.max(game.mode === "classic"?10:1,auction.currentBid + 1);
-    const available=(me?.cash??0)-(game.suspendedAuction?.highestBidderId===localId?game.suspendedAuction.currentBid:0);
+    const credit = auctionCredit(auction, localId);
+    const ownCash = (me?.cash ?? 0) - (game.suspendedAuction?.highestBidderId === localId ? game.suspendedAuction.currentBid : 0);
+    const available = ownCash + credit;
+    const borrowing = Math.max(0, Number(bid) - ownCash);
     const doBid = (amount: number) => { sendAction({ type: "AUCTION_BID", playerId: localId, amount, ...(building?{propertyId:chosenTarget}:{}) }); setBid(""); };
     return <div className="event-backdrop auction-backdrop" style={{ "--auction-color": tile?.kind === "property" ? GROUP_COLORS[tile.group] : "#7695a8" } as CSSProperties}>
       <section className={`auction-stage ${sold ? "is-sold" : ""}`} role="dialog" aria-modal="true" aria-label="Live property auction">
@@ -115,7 +122,9 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
         <div className="auction-deed"><TitleDeed game={game} position={position} />{sold && <span className="sold-stamp">SOLD</span>}</div>
         <div className="auction-bidding"><div className="highest-bid" key={auction.currentBid}><small>{sold ? "WINNING BID" : "HIGHEST BID"}</small><strong>{money(auction.currentBid)}</strong><span>{winner?.name ?? "No bids yet"}</span></div>
           <div className="auction-participants">{game.players.filter(p => !p.bankrupt).map(player => <div className={`${auction.passedPlayerIds.includes(player.id) ? "has-passed" : ""} ${winner?.id === player.id ? "high-bidder" : ""}`} key={player.id}><PlayerPortrait player={player} /><span><b>{player.name}</b><small>{auction.passedPlayerIds.includes(player.id) ? "Passed" : winner?.id === player.id ? "Leading" : "In the auction"}</small></span><strong>{money(player.cash)}</strong></div>)}</div>
-          {eligible && <div className="big-bid-controls">{building && <label>Build on<select aria-label="Auction building target" value={chosenTarget} onChange={e=>setBuildTarget(e.target.value)}>{targets.map(id=><option key={id} value={id}>{getTile(id, game.boardSize, game.city).name}</option>)}</select></label>}<div>{[10, 50, 100].map(step => <button type="button" key={step} disabled={busy || available < auction.currentBid + step} onClick={() => doBid(auction.currentBid + step)}>+{money(step)}</button>)}</div><label>Choose your bid<input aria-label="Auction bid amount" type="number" min={minimum} max={available} step="1" value={bid} placeholder={String(minimum)} onChange={e => setBid(e.target.value)} /></label><div><button className="event-primary" type="button" disabled={busy || !bid || !Number.isSafeInteger(Number(bid)) || Number(bid) < minimum || Number(bid) > available} onClick={() => doBid(Number(bid))}>Place bid</button><button className="event-secondary" type="button" disabled={busy || auction.passedPlayerIds.includes(localId)} onClick={() => sendAction({ type: "AUCTION_BID", playerId: localId, pass: true })}>Pass</button></div></div>}
+          {eligible && <div className="big-bid-controls">
+            {credit > 0 && <p className="bid-credit">City backing up to <b>{money(credit)}</b>. {borrowing > 0 && borrowing <= credit
+              ? `If you win this bid, repay ${money(cityLoanTotal(borrowing))} on ${money(borrowing)} borrowed.` : "Borrow only what your winning bid needs."}</p>}{building && <label>Build on<select aria-label="Auction building target" value={chosenTarget} onChange={e=>setBuildTarget(e.target.value)}>{targets.map(id=><option key={id} value={id}>{getTile(id, game.boardSize, game.city).name}</option>)}</select></label>}<div>{[10, 50, 100].map(step => <button type="button" key={step} disabled={busy || available < auction.currentBid + step} onClick={() => doBid(auction.currentBid + step)}>+{money(step)}</button>)}</div><label>Choose your bid<input aria-label="Auction bid amount" type="number" min={minimum} max={available} step="1" value={bid} placeholder={String(minimum)} onChange={e => setBid(e.target.value)} /></label><div><button className="event-primary" type="button" disabled={busy || !bid || !Number.isSafeInteger(Number(bid)) || Number(bid) < minimum || Number(bid) > available} onClick={() => doBid(Number(bid))}>Place bid</button><button className="event-secondary" type="button" disabled={busy || auction.passedPlayerIds.includes(localId)} onClick={() => sendAction({ type: "AUCTION_BID", playerId: localId, pass: true })}>Pass</button></div></div>}
           {!eligible && !sold && <p className="auction-waiting">{winner?.id === localId ? "You have the highest bid. Waiting for the others." : auction.passedPlayerIds.includes(localId) ? "You passed. Watch the bidding." : "Watching the auction."}</p>}
           {!sold && financeTools}
         </div>

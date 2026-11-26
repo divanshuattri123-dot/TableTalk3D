@@ -1,11 +1,14 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { getTile } from "../engine/board";
+import { getBoard, getTile } from "../engine/board";
 import { formatRupees as money } from "../engine/currency";
-import { cityLoanAvailable, cityStable, fortPosition, WHEEL_SECTIONS } from "../engine/mayor";
+import {
+  canChallengeCityProject, CITY_CONTRACTS, CITY_POLICIES, cityLoanAvailable, cityPolicyAvailable,
+  cityStable, councilSpeaker, districtName, fortPosition, LOAN_REPAYMENT, reserveLevy, WHEEL_SECTIONS
+} from "../engine/mayor";
 import type { CityAction, CityPolicy, WheelDecision } from "../engine/mayor";
-import type { GameState } from "../engine/types";
+import type { ColorGroup, GameState } from "../engine/types";
 import { useViewSettings } from "../assets";
 import { createScratchBurst, eraseScratchFoil, paintScratchFlakes, paintScratchFoil } from "./scratchFoil";
 import type { ScratchBurst } from "./scratchFoil";
@@ -14,7 +17,14 @@ import "./mayor.css";
 
 const FortWheelCloseup = lazy(() => import("./FortWheelCloseup"));
 
-const projects: Record<CityPolicy, string> = { loans: "Emergency Loans", transit: "Transit Day" };
+const projectDetails: Record<CityPolicy, string> = {
+  loans: "Rivals with ₹400 or less can use city funds to borrow ₹200 and repay ₹225.",
+  transit: "One free Express ride per player while the city has funds.",
+  wealth: "Once per match. A player with at least ₹2,000 and more than half the table’s shown cash pays 20% above ₹1,500, capped at ₹300.",
+  credit: "The next eligible deed auction backs cash-light players with up to ₹200. The winner repays only what they borrow, plus 12.5% interest rounded up.",
+  "rent-relief": "In one district, each player’s first rent is halved, with a discount of at most ₹250.",
+  permits: "New construction pauses in one district for a round. Existing rent, selling and trading continue."
+};
 const wheelIcons = ["₹100", "₹150", "−₹50", "KEY", "GO", "✦"];
 const wheelDetails = ["Collect ₹100.", "Collect ₹150.", "Pay ₹50.", "Keep a Get Out of Jail card.", "Move to GO and collect ₹200.", "Scratch to uncover your prize."];
 type SendCity = (action: CityAction) => void;
@@ -37,6 +47,8 @@ function CityModal({ title, kind = "ledger", onClose, children }: { title: strin
 export function CityHall({ game, localId, available, open, onOpen, onClose, sendAction }: {
   game: GameState; localId: string; available: boolean; open: boolean; onOpen: () => void; onClose: () => void; sendAction: SendCity;
 }) {
+  const [selected, setSelected] = useState<CityPolicy>("loans");
+  const [selectedDistrict, setSelectedDistrict] = useState<ColorGroup>();
   const desk = game.mayor;
   if (!desk) return null;
   const seat = desk.seats[localId];
@@ -52,11 +64,18 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
   const voteCount = proposal?.votes.filter(id => game.players.some(p => p.id === id && !p.bankrupt)).length ?? 0;
   const seatCount = game.players.filter(player => !player.bankrupt).length;
   const localName = (id: string) => game.players.find(player => player.id === id)?.name ?? "Player";
+  const speaker = councilSpeaker(game);
+  const districtPolicy = selected === "rent-relief" || selected === "permits";
+  const groups = desk.council ? [...new Set(getBoard(game.boardSize, game.city).flatMap(tile => tile.kind === "property" ? [tile.group] : []))] : [];
+  const district = districtPolicy ? selectedDistrict ?? groups[0] : undefined;
+  const competingPolicy = proposal?.kind === "loans" ? "transit" : proposal?.kind === "transit" ? "loans" : undefined;
+  const canChooseContract = desk.council && seat && !seat.contract && desk.round <= 2 && local && !local.bankrupt;
+  const estimate = selected === "wealth" ? reserveLevy(game) : undefined;
   const journal = game.eventLog.filter(event => event.kind === "civic").slice(0, 8);
 
   return <>
     <button type="button" className="city-hall-trigger" onClick={onOpen} aria-haspopup="dialog" aria-expanded={open}>
-      <span aria-hidden="true">♜</span> City Hall {bills.length > 0 && <i aria-label="Private bill open" />}
+      <span aria-hidden="true">♜</span> City Hall {(bills.length > 0 || canChooseContract && here) && <i aria-label="City Hall choice available" />}
     </button>
     {open && <CityModal title={game.phase === "gameOver" ? "The city’s story" : "City Hall"} onClose={onClose}>
       <div className="city-modal-body">
@@ -64,7 +83,11 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
           <div><span>IN OFFICE · TERM {desk.term}</span><b>{mayor?.name ?? "Mayor"}{office ? " (you)" : ""}</b></div>
           <div><span>ROUND {desk.round} · CITY FUNDS</span><b>{money(desk.treasury)}</b></div>
         </div>
-        {desk.policy && <p className="city-status"><b>{projects[desk.policy.kind]} is active</b>{desk.policy.kind === "loans" ? " · Until the end of this round" : " · Free station rides while the city can cover the fare"}</p>}
+        {speaker && <p className="city-status"><b>Council Speaker · {localName(speaker)}{speaker === localId ? " (you)" : ""}</b>
+          {speaker === localId && (desk.speakerUsedTerm === desk.term ? " · Challenge used this term" : " · You can call one extra vote this term")}</p>}
+        {desk.policy && <p className="city-status"><b>{CITY_POLICIES[desk.policy.kind]}{desk.policy.district ? ` · ${districtName(game, desk.policy.district)}` : ""}</b>
+          {desk.policy.kind === "credit" && desk.policy.used ? " · Auction backing spent this round" :
+            desk.policy.kind === "wealth" ? " · Assessed when this round opened" : " · In effect this round"}</p>}
         {seat && <section aria-label="Your private bills">
           <h3>Your private bills</h3>
           {bills.length === 0 && seat.loanDue === undefined && <p>Nothing due.</p>}
@@ -75,8 +98,19 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
               {bill.status === "open" && here && bill.dueTurn === seat.turns + 2 && <button type="button" disabled={!stable} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: bill.round })}>Defer</button>}
             </div>
           </div>)}
-          {seat.loanDue !== undefined && <p>City loan: <b>₹225</b> due at the end of {seat.loanDue <= seat.turns + 1 ? "this turn" : "your next turn"}.</p>}
+          {seat.loanDue !== undefined && <p>City loan due <b>{money(seat.loanAmountDue ?? LOAN_REPAYMENT)}</b>{seat.loanDue <= seat.turns + 1 ? " at the end of your upcoming turn." : " within two of your turns."}</p>}
           {cityLoanAvailable(game, localId) && <div className="city-actions"><button type="button" disabled={!stable} onClick={() => sendAction({ type: "CITY_LOAN", playerId: localId, round: desk.round })}>Borrow ₹200 · repay ₹225</button></div>}
+        </section>}
+        {desk.council && seat && (seat.contract || canChooseContract) && <section aria-label="Your City Contract">
+          <h3>Your City Contract</h3>
+          {seat.contract ? <p><b>{CITY_CONTRACTS[seat.contract]}</b> · {seat.contractPaid ? "₹150 earned" : seat.contract === "build"
+            ? "Own a clear colour set with at least four building levels across it." : "Own two unmortgaged stations and take an Express ride."}</p> :
+            <><p>Pick one private goal by round two. Completing it pays ₹150 once.</p>
+            <div className="city-actions">
+              <button type="button" disabled={!stable || !here} onClick={() => sendAction({ type: "CITY_CONTRACT", playerId: localId, contract: "build" })}>Develop a District</button>
+              <button type="button" disabled={!stable || !here} onClick={() => sendAction({ type: "CITY_CONTRACT", playerId: localId, contract: "transit" })}>Connect the City</button>
+            </div>
+            <p><small>Develop a clear colour set or connect two stations with an Express ride.</small></p></>}
         </section>}
         {office && local && !local.bankrupt && game.phase !== "gameOver" && <section aria-label="Mayor's decisions">
           <h3>Your decisions as Mayor</h3>
@@ -86,14 +120,35 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
                 <div className="city-actions"><button type="button" disabled={!stable} onClick={() => sendAction({ type: "CITY_TIP", playerId: localId, term: desk.term })}>Investigate for a tip</button></div>}
               <div className="city-actions" aria-label="Choose a rival for the warrant">{rivals.map(player => <button type="button" key={player.id} disabled={!stable} onClick={() => sendAction({ type: "CITY_AUDIT", playerId: localId, term: desk.term, targetId: player.id })}>Audit {player.name}</button>)}</div>
             </>}
-          {!desk.proposalUsed && !proposal && <><p>Propose one project on your turn. It starts next round.</p><div className="city-actions">{(Object.keys(projects) as CityPolicy[]).map(policy =>
-            <button type="button" key={policy} disabled={!stable || !here} onClick={() => sendAction({ type: "CITY_PROPOSE", playerId: localId, term: desk.term, policy })}>Propose {projects[policy]}</button>)}</div></>}
+          {!desk.proposalUsed && !proposal && <>
+            <p>Propose one project on your turn. It takes effect next round.</p>
+            <div className="city-project-picker">
+              <label>Project<select aria-label="City project" value={selected} onChange={event => setSelected(event.target.value as CityPolicy)}>
+                {(desk.council ? Object.keys(CITY_POLICIES) as CityPolicy[] : ["loans", "transit"] as const).map(policy =>
+                  <option key={policy} value={policy}>{CITY_POLICIES[policy]}</option>)}
+              </select></label>
+              {districtPolicy && <label>District<select aria-label="City project district" value={district} onChange={event => setSelectedDistrict(event.target.value as ColorGroup)}>
+                {groups.map(group => <option key={group} value={group}>{districtName(game, group)}</option>)}
+              </select></label>}
+            </div>
+            <p>{projectDetails[selected]}</p>
+            {selected === "wealth" && <p><small>{desk.reserveLevyUsed ? "The reserve levy has already been collected in this match." : estimate
+              ? `${localName(estimate.playerId)} would owe ${money(estimate.amount)} at current balances.` : "Nobody qualifies at current balances."}</small></p>}
+            <div className="city-actions"><button type="button" disabled={!stable || !here || !cityPolicyAvailable(game, selected, district)}
+              onClick={() => sendAction({ type: "CITY_PROPOSE", playerId: localId, term: desk.term, policy: selected, district })}>Propose {CITY_POLICIES[selected]}</button></div>
+          </>}
         </section>}
         {proposal && <section aria-label="Council proposal">
-          <h3>Next round · {projects[proposal.kind]}</h3>
-          <p>{challenged ? `${voteCount} of ${Math.floor(seatCount / 2) + 1} votes to switch.` : "The table can challenge one project per match."}</p>
-          {seatCount > 2 && proposal.sponsorId !== localId && !proposal.votes.includes(localId) && (!desk.voteUsed || challenged) &&
-            <div className="city-actions"><button type="button" disabled={!stable} onClick={() => sendAction({ type: "CITY_VOTE", playerId: localId, term: proposal.term })}>{challenged ? "Vote for" : "Challenge for"} {projects[proposal.kind === "loans" ? "transit" : "loans"]}</button></div>}
+          <h3>Next round · {CITY_POLICIES[proposal.kind]}</h3>
+          {proposal.district && <p>{districtName(game, proposal.district)}</p>}
+          <p>{challenged ? `${voteCount} of ${Math.floor(seatCount / 2) + 1} votes to ${competingPolicy ? "switch" : "stop"} the project.` :
+            "The vote closes when the next round starts."}</p>
+          {canChallengeCityProject(game, localId) &&
+            <div className="city-actions"><button type="button" disabled={!stable}
+              onClick={() => sendAction({ type: "CITY_VOTE", playerId: localId, term: proposal.term })}>
+              {competingPolicy ? `${challenged ? "Vote for" : "Challenge for"} ${CITY_POLICIES[competingPolicy]}` :
+                challenged ? "Vote against the project" : "Challenge the project"}
+            </button></div>}
         </section>}
         <section aria-label="City headlines"><h3>City headlines</h3>
           {journal.length ? <ol className="city-journal">{journal.map(event => <li key={event.id}>{event.text}</li>)}</ol> : <p>The city is watching the first deals.</p>}
@@ -117,7 +172,7 @@ export function CityHeadline({ game, paused }: { game: GameState; paused: boolea
     return () => window.clearTimeout(timer);
   }, [newest?.id, paused]);
   if (!visible || paused) return null;
-  const labels = { raid: "CITY HALL WARRANT", office: "MAYOR TAKES OFFICE", investigation: "INVESTIGATION OPEN", policy: "CITY DESK", wheel: "FORT WHEEL", express: "EXPRESS TRAIN", auction: "AUCTION REPORT" };
+  const labels = { raid: "CITY HALL WARRANT", office: "MAYOR TAKES OFFICE", investigation: "INVESTIGATION OPEN", policy: "CITY DESK", wheel: "FORT WHEEL", express: "EXPRESS TRAIN", auction: "AUCTION REPORT", contract: "CITY CONTRACT" };
   return <aside key={visible.id} className={`city-headline ${visible.civic === "raid" ? "raid" : ""}`} role="status">
     <span className="city-headline-seal" aria-hidden="true">{visible.civic === "raid" ? "!" : "♜"}</span>
     <div><small>{visible.civic ? labels[visible.civic] : "CITY NEWS"}</small><b>{visible.text}</b></div>
