@@ -76,7 +76,12 @@ export interface CityDesk {
   wheelResult?: WheelDecision;
   jackpotUsed?: true;
   pendingRoundAdvance?: true;
-  office?: { permitPropertyIds?: number[]; rivalMoveTerm?: number; investigationUsed?: true };
+  office?: {
+    permitPropertyIds?: number[];
+    rivalMoveTerm?: number;
+    investigationUsed?: true;
+    lastBotSeizureTurn?: number;
+  };
 }
 export type CityAction =
   | { type: "CITY_PAY_TAX" | "CITY_DEFER_TAX"; playerId: string; round: number; billId?: number | null }
@@ -233,7 +238,7 @@ export function nextCityTurn(state: GameState, actor: string, nextId: string): G
   const start = state.players.findIndex(player => player.id === desk!.firstId);
   const index = (id: string) => (state.players.findIndex(player => player.id === id) - start + state.players.length) % state.players.length;
   if (index(nextId) > index(actor)) return state;
-  if (state.bankAuctionQueue?.length) {
+  if (state.bankAuctionQueue?.length || state.mayorClassic && (state.auction || state.debts?.length || state.mortgageTransfers?.length)) {
     return { ...state, mayor: { ...desk, pendingRoundAdvance: true } };
   }
   return advanceCityRound(state);
@@ -304,6 +309,23 @@ export function mayorCanGrantLoan(state: GameState, targetId: string, amount: nu
 export function cityLoanBalance(state: GameState, playerId: string) {
   const seat = state.mayor?.seats[playerId];
   return seat?.loanDue === undefined ? 0 : seat.loanAmountDue ?? LOAN_REPAYMENT;
+}
+
+export function applyCityLoanPayment(state: GameState, id: string, amount: number) {
+  const balance = cityLoanBalance(state, id);
+  const credit = Math.min(balance, amount);
+  if (!state.mayor || credit <= 0) return state;
+  const remaining = Math.round((balance - credit) * 100) / 100;
+  return updateCitySeat({ ...state, mayor: { ...state.mayor, treasury: Math.round((state.mayor.treasury + credit) * 100) / 100 } }, id, seat => ({
+    ...seat, loanAmountDue: remaining || undefined,
+    loanDue: remaining ? seat.loanDue : undefined, loanStatus: remaining ? seat.loanStatus : undefined
+  }));
+}
+
+export function bookCityLoan(state: GameState, id: string, principal: number, amountDue: number) {
+  if (!state.mayor) return state;
+  return updateCitySeat({ ...state, mayor: { ...state.mayor, treasury: state.mayor.treasury - principal } }, id,
+    seat => ({ ...seat, borrowed: true, loanDue: seat.turns + 2, loanAmountDue: amountDue, loanStatus: undefined }));
 }
 
 export function cityHasSeizedDeeds(state: GameState, playerId: string) {

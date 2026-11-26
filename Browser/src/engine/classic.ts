@@ -1,6 +1,10 @@
 import { BOARD, colorGroupTiles, getPurchasableTile, isPurchasableTile, railroadPositions, utilityPositions } from "./board";
 import { CLASSIC_CARDS, jailCardIndex } from "./classicCards";
 import { formatRupees as money } from "./currency";
+import {
+  applyCityLoanPayment, auctionCredit, bookCityLoan, cityAuctionBacking, cityHasSeizedDeeds, cityLoanBalance,
+  cityLoanTotal, citySeizedOwner, permitPaused, propertyPermitLocked, recordRent, rentRelief, trainOffer, updateCitySeat
+} from "./mayor";
 import type { AuctionState, CardDeck, DebtResumePhase, Dice, GameAction, GameEvent, GameState, Player, StreetTile, TradeOffer } from "./types";
 
 class RuleViolation extends Error {}
@@ -12,7 +16,11 @@ const cents = (n: number) => Math.round(n*100)/100;
 const owner = (s: GameState, id: string) => s.players.find(p => p.id === id)!;
 const group = (tile: StreetTile) => colorGroupTiles(tile.group, 40);
 const held = (p: Player) => p.jailCardDecks ?? [];
+const fortCards = (p: Player) => Math.max(0, p.getOutOfJailCards - held(p).length);
 const levels = (s: GameState, tile: StreetTile) => group(tile).map(t => s.properties[t.position]!.houses);
+// A City Hall auction can divide a developed district between different owners.
+const ownedGroup = (s: GameState, tile: StreetTile, id: string) => group(tile).filter(t => s.properties[t.position]?.ownerId === id);
+const ownedLevels = (s: GameState, tile: StreetTile, id: string) => ownedGroup(s, tile, id).map(t => s.properties[t.position]!.houses);
 const fullSet = (s: GameState, id: string, tile: StreetTile) => group(tile).every(t => s.properties[t.position]!.ownerId === id && !s.properties[t.position]!.mortgaged);
 const live = (s: GameState) => s.players.filter(p => !p.bankrupt);
 const buildingValue = (s: GameState, tile: StreetTile) => (s.properties[tile.position]!.buildingCosts ?? Array(s.properties[tile.position]!.houses).fill(tile.houseCost)).reduce((n,cost)=>n+cost,0);
@@ -22,7 +30,7 @@ export const classicSpendableCash = (s: GameState, id: string) => (owner(s, id)?
   [s.auction, s.suspendedAuction].reduce((n, a) => n + (a?.highestBidderId === id ? a.currentBid : 0), 0);
 export const classicLiquidationValue = (s: GameState, id: string) => BOARD.reduce((n, tile) => {
   const p = s.properties[tile.position];
-  return !isPurchasableTile(tile) || p?.ownerId !== id ? n : n + (p.mortgaged ? 0 : tile.mortgageValue) +
+  return !isPurchasableTile(tile) || p?.ownerId !== id || citySeizedOwner(s, tile.position) ? n : n + (p.mortgaged ? 0 : tile.mortgageValue) +
     (tile.kind === "property" ? buildingValue(s,tile) / 2 : 0);
 }, owner(s, id)?.cash ?? 0);
 export const canClassicManage = (s: GameState, id: string) => Boolean(owner(s, id) && !owner(s, id).bankrupt &&
@@ -36,7 +44,7 @@ export const classicBuildingGroupLocked = (s: GameState, propertyId: number, id:
 };
 export const canClassicTradeProperty = (s: GameState, propertyId: number, id: string) => {
   const tile = getPurchasableTile(propertyId, 40), p = s.properties[propertyId];
-  if (!tile || p?.ownerId !== id || p.houses || tile.kind === "property" && levels(s, tile).some(Boolean)) return false;
+  if (!tile || p?.ownerId !== id || citySeizedOwner(s, propertyId) || p.houses || tile.kind === "property" && ownedLevels(s, tile, id).some(Boolean)) return false;
   if (s.mortgageTransfers?.some(t => t.propertyIds.includes(propertyId))) return false;
   return ![s.auction, s.suspendedAuction].some(a => {
     if (!a || a.kind !== "house" && a.kind !== "hotel" || a.highestBidderId !== id) return false;
@@ -47,7 +55,7 @@ export const canClassicTradeProperty = (s: GameState, propertyId: number, id: st
 const buildable = (s: GameState, id: string, propertyId: number, hotel = false) => {
   const tile = BOARD[propertyId], p = s.properties[propertyId];
   return Boolean(tile?.kind === "property" && p?.ownerId === id && !p.mortgaged && fullSet(s, id, tile) &&
-    p.houses === Math.min(...levels(s, tile)) && (hotel ? p.houses === 4 : p.houses < 4));
+    !citySeizedOwner(s, propertyId) && !propertyPermitLocked(s, propertyId) && !permitPaused(s, tile.group) && p.houses === Math.min(...levels(s, tile)) && (hotel ? p.houses === 4 : p.houses < 4));
 };
 
 class Table {
@@ -64,14 +72,43 @@ class Table {
     for (const debt of this.s.debts ?? []) {
       if (debt.playerId !== id || !debt.amount || amount <= 0) continue;
       const paid = Math.min(amount, debt.amount); debt.amount = cents(debt.amount-paid); amount = cents(amount-paid);
-      if (debt.creditorId !== "bank" && !owner(this.s, debt.creditorId)?.bankrupt) this.credit(debt.creditorId, paid);
+      this.postPayment(debt.creditorId, paid, debt.city ? "city" : debt.rent ? "rent" : undefined);
     }
   }
-  pay(id: string, target: string, amount: number, reason: string) {
+  postPayment(target: string, amount: number, kind?: "rent" | "city") {
+    if (amount <= 0) return;
+    if (kind === "city" && this.s.mayor) {
+      this.s.mayor.treasury = cents(this.s.mayor.treasury + amount);
+      return;
+    }
+    if (target === "bank" || owner(this.s, target)?.bankrupt) return;
+    if (kind === "rent" && this.s.mayor) {
+      const seized = cityHasSeizedDeeds(this.s, target);
+      const credit = seized ? Math.min(amount, cityLoanBalance(this.s, target)) : 0;
+      this.payCityLoan(target, credit);
+      amount = cents(amount - credit);
+      Object.assign(this.s, recordRent(this.s, target, amount));
+    }
+    this.credit(target, amount);
+  }
+  payCityLoan(id: string, amount: number) {
+    if (amount <= 0) return;
+    const seized = cityHasSeizedDeeds(this.s, id);
+    Object.assign(this.s, applyCityLoanPayment(this.s, id, amount));
+    if (!cityLoanBalance(this.s, id)) {
+      this.event(this.player(id).name + (seized ? " repaid their city loan. City Hall released their unsold deeds." : " repaid their city loan."),
+        "civic", { civic: "policy", playerId: id });
+    }
+  }
+  pay(id: string, target: string, amount: number, reason: string, kind?: "rent" | "city") {
     if (!amount) return;
     const p = this.player(id), paid = Math.min(Math.max(0, p.cash), amount);
-    p.cash = cents(p.cash-amount); if (target !== "bank") this.credit(target, paid);
-    if (paid < amount) (this.s.debts ??= []).push({ playerId: id, creditorId: target, reason, amount: cents(amount - paid) });
+    p.cash = cents(p.cash - amount);
+    this.postPayment(target, paid, kind);
+    if (paid < amount) (this.s.debts ??= []).push({
+      playerId: id, creditorId: target, reason, amount: cents(amount - paid),
+      ...(kind === "city" ? { city: true } : kind === "rent" && this.s.mayor ? { rent: true } : {})
+    });
     this.event(`${p.name} ${paid < amount ? "owes" : "paid"} ${money(amount)} ${reason}.`, "money", { playerId: id, recipientId: target, amount });
   }
   active(id: string, phase: GameState["phase"]) { requireRule(this.s.activePlayerId === id && this.s.phase === phase, "That decision is not available on your turn."); return this.player(id); }
@@ -79,14 +116,24 @@ class Table {
   spend(id: string, amount: number) { requireRule(classicSpendableCash(this.s, id) >= amount, "Not enough unreserved cash."); this.player(id).cash = cents(this.player(id).cash-amount); }
   endLanding() { this.s.phase = "awaitingEndTurn"; this.s.pendingRoll = undefined; }
   chargeRent(payerId: string, ownerId: string, propertyId: number, amount: number) {
-    if (this.s.rulesEdition !== 'hasbro-2025') { this.pay(payerId, ownerId, amount, `rent for ${BOARD[propertyId]!.name}`); return; }
+    const tile = BOARD[propertyId]!;
+    const relief = rentRelief(this.s, payerId, tile, amount);
+    if (relief) {
+      Object.assign(this.s, updateCitySeat(this.s, payerId, seat => ({ ...seat, rentReliefRound: this.s.mayor!.round })));
+      amount -= relief;
+      this.event(this.player(payerId).name + " saved " + money(relief) + " with Rent Relief.", "civic", { civic: "policy", playerId: payerId, amount: relief });
+    }
+    if (this.s.rulesEdition !== "hasbro-2025") {
+      this.pay(payerId, ownerId, amount, "rent for " + tile.name, "rent");
+      return;
+    }
     this.s.rentClaim = { id: this.s.nextEventId, payerId, ownerId, propertyId, amount };
     this.event(`${this.player(ownerId).name} may claim ${money(amount)} rent before the next movement roll.`, 'info', { playerId: ownerId, position: propertyId });
   }
   move(id: string, to: number, collect: boolean) {
     const p = this.player(id); p.position = to;
     this.event(`${p.name} moved to ${BOARD[to]!.name}.`, "turn", { playerId: id, position: to });
-    if (collect) { this.credit(id, 200); this.event(`${p.name} passed GO and collected ₹200.`, "money", { playerId: id, amount: 200 }); }
+    if (collect) { Object.assign(this.s, updateCitySeat(this.s, id, seat => ({ ...seat, rodeExpress: undefined }))); this.credit(id, 200); this.event(`${p.name} passed GO and collected ₹200.`, "money", { playerId: id, amount: 200 }); }
   }
   jail(id: string) {
     const p = this.player(id); p.position = 10; p.inJail = true; p.jailTurns = 0;
@@ -111,7 +158,7 @@ class Table {
         this.s.pendingUtility = { playerId: id, propertyId: p.position, multiplier: multiplier ?? (utilityPositions(40).every(i => this.s.properties[i]!.ownerId === deed.ownerId) ? 10 : 4) };
         this.s.phase = "awaitingUtilityRoll"; return;
       }
-      this.chargeRent(id, deed.ownerId, p.position, this.rent(p.position, this.s.lastRoll!.total) * (multiplier ?? 1));
+      this.chargeRent(id, deed.ownerId, p.position, this.rent(p.position, this.s.lastRoll?.total ?? 0) * (multiplier ?? 1));
       this.endLanding(); return;
     }
     if (tile.kind === "goToJail") { this.jail(id); return; }
@@ -127,7 +174,7 @@ class Table {
     switch (effect.kind) {
       case "money": if (effect.amount >= 0) { this.credit(id, effect.amount); this.event(`${p.name} received ${money(effect.amount)}.`, "money", { playerId: id, amount: effect.amount }); } else this.pay(id, "bank", -effect.amount, "for a card"); break;
       case "goToJail": this.jail(id); return;
-      case "jailCard": (p.jailCardDecks ??= []).push(deck); p.getOutOfJailCards = held(p).length; break;
+      case "jailCard": (p.jailCardDecks ??= []).push(deck); p.getOutOfJailCards++; break;
       case "collectFromEach": for (const other of live(this.s)) if (other.id !== id) this.pay(other.id, id, effect.amount, `to ${p.name}`); break;
       case "payEach": for (const other of live(this.s)) if (other.id !== id) this.pay(id, other.id, effect.amount, `to ${other.name}`); break;
       case "repairs": {
@@ -191,7 +238,7 @@ class Table {
       d.houses=0; d.buildingCosts=[]; d.ownerId=creditor?.id; if (!creditor) d.mortgaged=false;
     }
     if (creditor) {
-      this.credit(creditor.id,proceeds); creditor.jailCardDecks=[...held(creditor),...held(p)]; creditor.getOutOfJailCards=held(creditor).length; this.queueMortgages(creditor.id,ids);
+      this.credit(creditor.id,proceeds); creditor.jailCardDecks=[...held(creditor),...held(p)]; creditor.getOutOfJailCards+=p.getOutOfJailCards; this.queueMortgages(creditor.id,ids);
     } else {
       for (const deck of held(p)) this.s.decks![deck].push(jailCardIndex(deck));
       (this.s.bankAuctionQueue ??= []).push(...ids);
@@ -203,29 +250,66 @@ class Table {
       const finishAuctionFirst=this.s.debtResumePhase==="awaitingAuction" && Boolean(this.s.auction);
       this.nextTurn(id); this.s.debtResumePhase=finishAuctionFirst?"awaitingAuction":"awaitingRoll";
       if (finishAuctionFirst) this.s.phase="awaitingDebt";
-      if (finishAuctionFirst && !this.s.suspendedAuction) this.s.auctionResumePhase="awaitingRoll";
+      if (finishAuctionFirst) {
+        if (this.s.suspendedAuction) this.s.suspendedAuctionResumePhase = "awaitingRoll";
+        else this.s.auctionResumePhase = "awaitingRoll";
+      }
       if (this.s.mortgageResumePhase) this.s.mortgageResumePhase=finishAuctionFirst?"awaitingAuction":"awaitingRoll";
     }
   }
   auction(propertyId: number, kind: AuctionState["kind"] = "property", targets?: Record<string,number[]>) {
     this.s.auction={ propertyId, kind, currentBid:0, landingPlayerId:this.s.activePlayerId!, eligiblePlayerIds:targets?Object.keys(targets):live(this.s).map(p=>p.id), passedPlayerIds:[], buildTargets:targets };
+    const backing = cityAuctionBacking(this.s);
+    if (backing) {
+      this.s.auction.cityBacking = backing;
+      this.s.mayor!.policy!.used = true;
+      this.event("City Hall reserved up to " + money(backing.limit) + " to back an eligible bidder.", "civic", { civic: "auction" });
+    }
     this.s.phase="awaitingAuction";
     this.event(`${kind === "property" ? BOARD[propertyId]!.name : "The last available "+kind} is up for auction.`);
   }
-  finishAuction() {
+  auctionCredit(a: AuctionState, id: string) {
+    if (cityLoanBalance(this.s, id)) return 0;
+    return Math.min(auctionCredit(a, id), this.s.mayor?.treasury ?? 0);
+  }
+  finishAuction(stillAvailable = true) {
     const a=this.s.auction!, winner=a.highestBidderId;
     if (winner) {
       const id=a.winningTarget ?? a.propertyId, tile=getPurchasableTile(id,40)!;
       this.s.auction=undefined;
+      const shortfall = cents(a.currentBid - classicSpendableCash(this.s, winner));
+      if (shortfall > 0) {
+        requireRule(shortfall <= this.auctionCredit(a, winner), "The winning bid needs more city backing than is available.");
+        Object.assign(this.s, bookCityLoan(this.s, winner, shortfall, cityLoanTotal(shortfall)));
+        this.credit(winner, shortfall);
+      }
       this.spend(winner,a.currentBid);
       if (a.kind==="house" || a.kind==="hotel") {
         requireRule(buildable(this.s,winner,id,a.kind==="hotel"),"The winning building target is no longer legal.");
         this.addBuilding(id,a.currentBid);
+      } else if (a.seizedFromId) {
+        const deed = this.s.properties[id]!;
+        let proceeds = a.currentBid;
+        if (tile.kind === "property") {
+          proceeds += buildingValue(this.s, tile) / 2;
+          if (deed.houses === 5) this.s.bankHotels++;
+          else this.s.bankHouses += deed.houses;
+        }
+        const recovered = Math.min(proceeds, cityLoanBalance(this.s, a.seizedFromId));
+        this.payCityLoan(a.seizedFromId, recovered);
+        this.credit(a.seizedFromId, cents(proceeds - recovered));
+        this.s.properties[id] = { ownerId: winner, houses: 0, mortgaged: false };
       } else this.s.properties[id]!.ownerId=winner;
       this.event(`${this.player(winner).name} won ${a.kind==="house"||a.kind==="hotel"?a.kind+" on ":""}${tile.name} for ${money(a.currentBid)}.`,"money",{playerId:winner,position:id,amount:a.currentBid});
-    } else { this.s.auction=undefined; this.event("No bids; the item stays with the bank."); }
+    } else { this.s.auction=undefined; this.event(!stillAvailable ? "The seizure auction closed because the deed has been released." : a.seizedFromId ? "No bids; the deed remains in City Hall custody." : "No bids; the item stays with the bank."); }
     this.s.phase=this.s.auctionResumePhase ?? (a.landingPlayerId===this.s.activePlayerId?"awaitingEndTurn":"awaitingRoll"); this.s.auctionResumePhase=undefined;
-    if (this.s.suspendedAuction) { this.s.auction=this.s.suspendedAuction; this.s.suspendedAuction=undefined; this.s.phase="awaitingAuction"; }
+    if (this.s.suspendedAuction) {
+      this.s.auction = this.s.suspendedAuction;
+      this.s.auctionResumePhase = this.s.suspendedAuctionResumePhase;
+      this.s.suspendedAuction = undefined;
+      this.s.suspendedAuctionResumePhase = undefined;
+      this.s.phase = "awaitingAuction";
+    }
   }
   bid(action: Extract<GameAction,{type:"AUCTION_BID"}>) {
     const a=this.s.auction!, p=this.player(action.playerId);
@@ -233,7 +317,7 @@ class Table {
     requireRule(a.highestBidderId!==p.id,"You already hold the highest bid.");
     if (action.pass) { if (!a.passedPlayerIds.includes(p.id)) a.passedPlayerIds.push(p.id); this.event(`${p.name} passed the auction.`,"info",{playerId:p.id}); }
     else {
-      const amount=action.amount ?? -1, available=p.cash-(this.s.suspendedAuction?.highestBidderId===p.id?this.s.suspendedAuction.currentBid:0);
+      const amount=action.amount ?? -1, available=classicSpendableCash(this.s, p.id)+this.auctionCredit(a, p.id);
       requireRule(whole(amount) && amount>=Math.max(10,a.currentBid+1) && amount<=available,"Bids must open at ₹10, increase and be affordable.");
       const target=action.propertyId ?? a.buildTargets?.[p.id]?.[0] ?? a.propertyId;
       if (a.buildTargets) requireRule(a.buildTargets[p.id]?.includes(target) && buildable(this.s,p.id,target,a.kind==="hotel"),"Choose a legal building target.");
@@ -252,9 +336,12 @@ class Table {
   }
   build(action: Extract<GameAction,{type:"BUILD"}>) {
     const p=this.manage(action.playerId), tile=BOARD[action.propertyId], d=this.s.properties[action.propertyId];
-    requireRule(tile?.kind==="property" && d?.ownerId===p.id && fullSet(this.s,p.id,tile),"You need an unmortgaged complete colour set.");
+    requireRule(tile?.kind==="property" && d?.ownerId===p.id,"Choose a street deed you own.");
     requireRule(!classicBuildingGroupLocked(this.s,tile.position,p.id),"Finish the winning building auction before changing that colour set.");
+    requireRule(!citySeizedOwner(this.s, tile.position), "City Hall currently controls this deed.");
     if (action.operation==="build") {
+      requireRule(fullSet(this.s,p.id,tile),"You need an unmortgaged complete colour set.");
+      requireRule(!propertyPermitLocked(this.s, tile.position) && !permitPaused(this.s, tile.group), "City Hall paused upgrades for this deed.");
       requireRule(buildable(this.s,p.id,tile.position,d.houses===4) && classicSpendableCash(this.s,p.id)>=tile.houseCost,"Build evenly with available cash.");
       requireRule(this.s.auction?.kind!=="house" && this.s.auction?.kind!=="hotel","Finish the building auction first.");
       const kind=d.houses===4?"hotel":"house", stock=kind==="hotel"?this.s.bankHotels:this.s.bankHouses;
@@ -266,7 +353,10 @@ class Table {
           if (ids.length && classicSpendableCash(this.s,other.id)>=10) targets[other.id]=ids;
         }
         if (Object.keys(targets).length>1) {
-          if (this.s.auction) this.s.suspendedAuction=this.s.auction;
+          if (this.s.auction) {
+            this.s.suspendedAuction = this.s.auction;
+            this.s.suspendedAuctionResumePhase = this.s.auctionResumePhase;
+          }
           this.s.auctionResumePhase=this.s.phase as DebtResumePhase; this.auction(tile.position,kind,targets); return;
         }
       }
@@ -276,10 +366,10 @@ class Table {
     requireRule(d.houses>0,"There are no buildings to sell.");
     if (action.operation==="sellGroup") {
       let value=0;
-      for (const member of group(tile)) { const owned=this.s.properties[member.position]!; value+=buildingValue(this.s,member)/2; if (owned.houses===5) this.s.bankHotels++; else this.s.bankHouses+=owned.houses; owned.houses=0; owned.buildingCosts=[]; }
+      for (const member of ownedGroup(this.s, tile, p.id)) { const owned=this.s.properties[member.position]!; value+=buildingValue(this.s,member)/2; if (owned.houses===5) this.s.bankHotels++; else this.s.bankHouses+=owned.houses; owned.houses=0; owned.buildingCosts=[]; }
       this.credit(p.id,value); this.event(`${p.name} sold all district buildings near ${tile.name} for ${money(value)}.`,"money",{playerId:p.id,position:tile.position,amount:value}); return;
     }
-    requireRule(d.houses===Math.max(...levels(this.s,tile)),"Sell buildings evenly.");
+    requireRule(d.houses===Math.max(...ownedLevels(this.s,tile,p.id)),"Sell buildings evenly.");
     if (d.houses===5) { requireRule(this.s.bankHouses>=4,"Use district liquidation when replacement houses are unavailable."); this.s.bankHouses-=4; this.s.bankHotels++; }
     else this.s.bankHouses++;
     d.buildingCosts ??= Array(d.houses).fill(tile.houseCost);
@@ -288,9 +378,9 @@ class Table {
   }
   mortgage(action: Extract<GameAction,{type:"MORTGAGE"}>) {
     const p=this.manage(action.playerId), tile=getPurchasableTile(action.propertyId,40), d=this.s.properties[action.propertyId];
-    requireRule(tile && d?.ownerId===p.id && d.mortgaged!==action.mortgage,"That mortgage cannot be changed.");
+    requireRule(tile && d?.ownerId===p.id && !citySeizedOwner(this.s, action.propertyId) && d.mortgaged!==action.mortgage,"That mortgage cannot be changed.");
     if (action.mortgage) {
-      requireRule(tile.kind!=="property" || levels(this.s,tile).every(n=>n===0),"Sell every building in the colour set first.");
+      requireRule(tile.kind!=="property" || ownedLevels(this.s,tile,p.id).every(n=>n===0),"Sell every building in the colour set first.");
       requireRule(canClassicTradeProperty(this.s,tile.position,p.id),"Finish the winning building auction before mortgaging that colour set.");
       d.mortgaged=true; this.credit(p.id,tile.mortgageValue);
     } else { this.spend(p.id,tile.mortgageValue+Math.ceil(tile.mortgageValue/10)); d.mortgaged=false; }
@@ -312,6 +402,7 @@ class Table {
     ] as const) {
       const p=this.player(id);
       requireRule(cashAmount(cash) && cash<=Math.max(0,classicSpendableCash(this.s,id)) && new Set(ids).size===ids.length && ids.every(i=>canClassicTradeProperty(this.s,i,id)),"Trade cash or deeds are no longer available.");
+      requireRule(!cash || !cityLoanBalance(this.s, id), "Repay your city loan before offering cash in a trade.");
       requireRule(new Set(cards).size===cards.length && cards.every(deck=>held(p).includes(deck)),"That release card is not available.");
       const fees=this.s.rulesEdition === 'hasbro-2025' ? 0 : received.reduce((n,i)=>n+(this.s.properties[i]?.mortgaged?Math.ceil(getPurchasableTile(i,40)!.mortgageValue/10):0),0);
       requireRule(!fees || classicSpendableCash(this.s,id)-cash+incoming>=fees,"Include enough unreserved cash for the receiver's mortgage interest.");
@@ -333,7 +424,7 @@ class Table {
     for (const [from,to,ids,cards] of [[t.fromPlayerId,t.toPlayerId,t.offeredPropertyIds,t.offeredJailCards??[]],[t.toPlayerId,t.fromPlayerId,t.requestedPropertyIds,t.requestedJailCards??[]]] as const) {
       for (const id of ids) this.s.properties[id]!.ownerId=to;
       this.player(from).jailCardDecks=held(this.player(from)).filter(deck=>!cards.includes(deck)); this.player(to).jailCardDecks=[...held(this.player(to)),...cards];
-      this.player(from).getOutOfJailCards=held(this.player(from)).length; this.player(to).getOutOfJailCards=held(this.player(to)).length; this.queueMortgages(to,ids);
+      this.player(from).getOutOfJailCards-=cards.length; this.player(to).getOutOfJailCards+=cards.length; this.queueMortgages(to,ids);
     }
     this.s.pendingTrade=undefined; this.s.phase=t.resumePhase;
     this.event(`${this.player(action.playerId).name} accepted the trade.`,"money",{playerId:action.playerId});
@@ -353,7 +444,7 @@ class Table {
       if (!a) continue;
       const winner=a.highestBidderId;
       const unavailableSite=winner && a.buildTargets && !buildable(this.s,winner,a.winningTarget??a.propertyId,a.kind==="hotel");
-      if (winner && (owner(this.s,winner)?.bankrupt || classicSpendableCash(this.s,winner)<0 || unavailableSite)) {
+      if (winner && (owner(this.s,winner)?.bankrupt || classicSpendableCash(this.s,winner) + this.auctionCredit(a, winner)<0 || unavailableSite)) {
         // Compulsory payments take priority; a stale bid must not lock the debtor's only assets.
         a.highestBidderId=undefined; a.currentBid=0; a.winningTarget=undefined; a.passedPlayerIds=[];
         this.event("A winning bid was released because its cash or building site is no longer available. The auction reopens.");
@@ -374,6 +465,7 @@ class Table {
     if (live(this.s).length===1) {
       this.s.phase="gameOver"; this.s.winnerId=live(this.s)[0]!.id; this.s.activePlayerId=this.s.winnerId;
       this.s.debts=undefined; this.s.pendingTrade=undefined; this.s.auction=undefined; this.s.suspendedAuction=undefined;
+      this.s.auctionResumePhase = undefined; this.s.suspendedAuctionResumePhase = undefined;
       this.s.bankAuctionQueue=undefined; this.s.mortgageTransfers=undefined; this.s.pendingUtility=undefined; return;
     }
     if (this.s.debts || this.s.pendingTrade) return;
@@ -384,7 +476,11 @@ class Table {
     this.s.mortgageTransfers=undefined;
     if (this.s.phase==="awaitingMortgageDecision") { this.s.phase=this.s.mortgageResumePhase??"awaitingEndTurn"; this.s.mortgageResumePhase=undefined; }
     const auction=this.s.auction;
-    if (this.s.phase==="awaitingAuction" && auction && auction.eligiblePlayerIds.filter(id=>id!==auction.highestBidderId).every(id=>auction.passedPlayerIds.includes(id))) this.finishAuction();
+    if (auction?.seizedFromId && citySeizedOwner(this.s, auction.propertyId) !== auction.seizedFromId) {
+      auction.highestBidderId = undefined;
+      this.finishAuction(false);
+    }
+    if (this.s.phase==="awaitingAuction" && auction && this.s.auction===auction && auction.eligiblePlayerIds.filter(id=>id!==auction.highestBidderId).every(id=>auction.passedPlayerIds.includes(id))) this.finishAuction();
     if (!this.s.auction && this.s.bankAuctionQueue?.length) {
       const id=this.s.bankAuctionQueue.shift()!; this.s.auctionResumePhase=this.s.phase as DebtResumePhase;
       if (!this.s.bankAuctionQueue.length) this.s.bankAuctionQueue=undefined;
@@ -404,7 +500,19 @@ class Table {
       (action.type==="BANKRUPT" || action.type==="TRADE_OFFER" || action.type==="BUILD" && action.operation!=="build" || action.type==="MORTGAGE" && action.mortgage),"Settle the outstanding debt first.");
     switch (action.type) {
       case "ROLL": { if(this.s.phase === 'awaitingRoll') this.s.rentClaim=undefined; this.roll(action.playerId,action.dice); break; }
-      case "CLAIM_RENT": { const claim=this.s.rentClaim; requireRule(this.s.rulesEdition === 'hasbro-2025' && claim && claim.id === action.claimId && claim.ownerId === action.playerId, 'No current rent claim belongs to you.'); this.player(action.playerId); this.s.rentClaim=undefined; this.pay(claim!.payerId,claim!.ownerId,claim!.amount,`rent for ${BOARD[claim!.propertyId]!.name}`); break; }
+      case "CLAIM_RENT": { const claim=this.s.rentClaim; requireRule(this.s.rulesEdition === 'hasbro-2025' && claim && claim.id === action.claimId && claim.ownerId === action.playerId, 'No current rent claim belongs to you.'); this.player(action.playerId); this.s.rentClaim=undefined; this.pay(claim.payerId,claim.ownerId,claim.amount,"rent for " + BOARD[claim.propertyId]!.name,"rent"); break; }
+      case "CITY_EXPRESS": {
+        const p = this.active(action.playerId, "awaitingRoll"), ride = trainOffer(this.s, p.id);
+        requireRule(ride, "An Express ride is not available before this roll.");
+        this.spend(p.id, ride.fare);
+        Object.assign(this.s, updateCitySeat(this.s, p.id, seat => ({ ...seat, rodeExpress: true, completedExpress: true })));
+        this.s.lastRoll = undefined;
+        this.s.rentClaim = undefined;
+        this.event(p.name + " boarded the Express for " + money(ride.fare) + ".", "civic", { civic: "express", playerId: p.id, position: ride.to });
+        this.move(p.id, ride.to, false);
+        this.land(p.id);
+        break;
+      }
       case "MOVE_RESULT": { const p=this.active(action.playerId,"awaitingMove"), roll=this.s.pendingRoll!; this.move(p.id,(p.position+roll.total)%40,p.position+roll.total>=40); this.s.pendingRoll=undefined; this.land(p.id); break; }
       case "BUY": { const p=this.active(action.playerId,"awaitingBuy"), pending=this.s.pendingPurchase; requireRule(pending?.propertyId===action.propertyId && !this.s.properties[action.propertyId]!.ownerId,"No matching property purchase."); const tile=getPurchasableTile(action.propertyId,40)!; this.spend(p.id,tile.price); this.s.properties[action.propertyId]!.ownerId=p.id; this.s.pendingPurchase=undefined; this.endLanding(); this.event(`${p.name} bought ${tile.name} for ${money(tile.price)}.`,"money",{playerId:p.id,position:tile.position,amount:tile.price}); break; }
       case "DECLINE_BUY": { this.active(action.playerId,"awaitingBuy"); const id=this.s.pendingPurchase!.propertyId; this.s.pendingPurchase=undefined; this.auction(id); break; }
@@ -421,7 +529,16 @@ class Table {
         requireRule(this.s.phase==="awaitingRoll" || this.s.phase==="awaitingJailPayment","No jail payment is waiting.");
         const p=this.player(action.playerId); requireRule(this.s.activePlayerId===p.id && p.inJail,"Only the jailed active player may pay.");
         const pending=this.s.phase==="awaitingJailPayment";
-        if (action.kind==="jailCard") { requireRule(!pending && held(p).length,"Use a release card before attempting the third roll."); const deck=action.deck??held(p)[0]!; requireRule(held(p).includes(deck),"That release card is not held."); p.jailCardDecks=held(p).filter(d=>d!==deck); p.getOutOfJailCards=held(p).length; this.s.decks![deck].push(jailCardIndex(deck)); }
+        if (action.kind === "jailCard") {
+          requireRule(!pending && p.getOutOfJailCards > 0, "Use a release card before attempting the third roll.");
+          if (action.deck || !this.s.mayor || !fortCards(p)) {
+            const deck = action.deck ?? held(p)[0];
+            requireRule(deck && held(p).includes(deck), "That release card is not held.");
+            p.jailCardDecks = held(p).filter(d => d !== deck);
+            this.s.decks![deck].push(jailCardIndex(deck));
+          }
+          p.getOutOfJailCards--;
+        }
         else this.pay(p.id,"bank",50,"to leave Jail");
         p.inJail=false; p.jailTurns=0; this.s.phase=pending?"awaitingMove":"awaitingRoll"; this.event(`${p.name} left Jail.`,"turn",{playerId:p.id}); break;
       }
@@ -434,6 +551,21 @@ class Table {
     }
     this.settle();
   }
+}
+
+export function applyClassicCityPayment(state: GameState, id: string, target: string, amount: number, reason: string, kind?: "city") {
+  const table = new Table(structuredClone(state));
+  table.pay(id, target, amount, reason, kind);
+  table.settle();
+  return table.s;
+}
+
+export function applyClassicCredit(state: GameState, id: string, amount: number) {
+  if (!amount) return state;
+  const table = new Table(structuredClone(state));
+  table.credit(id, amount);
+  table.settle();
+  return table.s;
 }
 
 export function startClassic(state: GameState, action: Extract<GameAction,{type:"START"}>): GameState {

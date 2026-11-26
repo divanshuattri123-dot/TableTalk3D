@@ -1,3 +1,4 @@
+import { usesClassicRules } from "./engine/rules";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -510,8 +511,8 @@ function Lobby({
       <button type="button" className="lobby-world-trigger" disabled={isHost && !canConfigure} onClick={()=>setMaps(true)}>Choose 3D map</button>
       {maps&&<MapPicker world={game.world} city={game.city} disabled={!canConfigure} onWorld={world=>sendAction({type:'SET_WORLD',playerId:localId,world})} onCity={city=>sendAction({type:'SET_CITY',playerId:localId,city})} onClose={()=>setMaps(false)}/>}
       <CityPicker value={game.city} disabled={!canConfigure} onSelect={city=>sendAction({type:'SET_CITY',playerId:localId,city})}/>
-      <label className="field-label">Rules mode<select className="text-input" aria-label="Rules mode" value={game.rulesEdition === "hasbro-2025" ? "classic-2025" : game.mode ?? "expanding"} disabled={!canConfigure} onChange={e => sendAction({ type: "SET_MODE", playerId: localId, mode: e.target.value === "expanding" ? "expanding" : e.target.value === "mayor" ? "mayor" : "classic", rulesEdition: e.target.value === "classic-2025" ? "hasbro-2025" : undefined, mayorOffice: e.target.value === "mayor" ? true : undefined })}><option value="classic-2025">Classic · Hasbro 2025 · claim rent</option><option value="expanding">Expanding India · larger with friends</option><option value="classic">Classic traditional · automatic rent</option><option value="mayor">Mayor · City Hall Stories</option></select></label>
-      <div className="map-size-note"><b>{game.boardSize} spaces</b><span>{game.mode === "classic" ? "Classic India" : game.mode === "mayor" ? "Mayor · City Hall Stories" : "Expanding India"}</span><small>{game.mode === "classic" ? "40 spaces for 2–6 players. Shuffled 16-card decks, starting dice contest and off-turn finances." : game.mode === "mayor" ? "Rotating Mayor and Speaker, city projects, private contracts, Express Trains, and the Fort wheel." : "4 players → 48 · 5 → 56 · 6 → 64. Locks at start."}</small></div>
+      <label className="field-label">Rules mode<select className="text-input" aria-label="Rules mode" value={game.mode === "classic" && game.rulesEdition === "hasbro-2025" ? "classic-2025" : game.mode ?? "expanding"} disabled={!canConfigure} onChange={e => sendAction({ type: "SET_MODE", playerId: localId, mode: e.target.value === "expanding" ? "expanding" : e.target.value === "mayor" ? "mayor" : "classic", rulesEdition: e.target.value === "classic-2025" ? "hasbro-2025" : undefined, mayorClassic: e.target.value === "mayor" ? true : undefined })}><option value="classic-2025">Classic · Hasbro 2025 · claim rent</option><option value="expanding">Expanding India · larger with friends</option><option value="classic">Classic traditional · automatic rent</option><option value="mayor">Mayor · City Hall Stories</option></select></label>
+      <div className="map-size-note"><b>{game.boardSize} spaces</b><span>{game.mode === "classic" ? "Classic India" : game.mode === "mayor" ? "Mayor · City Hall Stories" : "Expanding India"}</span><small>{game.mode === "classic" ? "40 spaces for 2–6 players. Shuffled 16-card decks, starting dice contest and off-turn finances." : game.mode === "mayor" ? "Classic 40 with claimable rent, plus a rotating Mayor and Speaker, city projects, private contracts, Express and the Fort wheel." : "4 players → 48 · 5 → 56 · 6 → 64. Locks at start."}</small></div>
       <BotLobbyControls disabled={!canConfigure} game={game} localId={localId} sendAction={sendAction}/><PlayerRoster game={game} localId={localId} />
       {local && <details className="lobby-colours"><summary>Your token colour</summary><TokenColorPicker color={local.color} players={game.players} localId={localId} onChoose={color => sendAction({ type: "SET_APPEARANCE", playerId: localId, color })} /></details>}
       {duplicateColours && <p className="inline-error" role="status">Every player needs a different colour. Open “Your token colour” to choose a free one.</p>}
@@ -667,8 +668,8 @@ function Controls({
   const debt = game.debts?.[0], settling = debt?.playerId === local.id;
   const train = trainOffer(game, local.id);
   const normalTurn = game.phase === "awaitingRoll" || game.phase === "awaitingEndTurn" || game.phase === "awaitingDebt" || game.phase === "awaitingJailPayment";
-  const managing = available && !local.bankrupt && (game.mode === "classic" ? canClassicManage(game, local.id) : normalTurn && isCurrent);
-  const canSurrender = game.mode !== "classic" || classicLiquidationValue(game, local.id) < 0;
+  const managing = available && !local.bankrupt && (usesClassicRules(game) ? canClassicManage(game, local.id) : normalTurn && isCurrent);
+  const canSurrender = !usesClassicRules(game) || classicLiquidationValue(game, local.id) < 0;
   useEffect(() => {
     if (settling && game.phase === "awaitingDebt") { setShowBuild(true); setShowTrade(false); }
     if (!debt) { setShowBuild(false); setShowTrade(false); setConfirmBankruptcy(false); }
@@ -732,7 +733,7 @@ function Controls({
 function ClassicFinanceMenu({game,local,available,sendAction}:{game:GameState;local:Player;available:boolean;sendAction:(action:GameAction)=>void}) {
   const [tool,setTool]=useState<"build"|"trade">();
   useEffect(()=>{if(!tool)return;const close=(event:KeyboardEvent)=>{if(event.key==="Escape")setTool(undefined);};window.addEventListener("keydown",close);return()=>window.removeEventListener("keydown",close);},[tool]);
-  if(game.mode!=="classic" || !available || !canClassicManage(game,local.id))return null;
+  if(!usesClassicRules(game) || !available || !canClassicManage(game,local.id))return null;
   const properties=getBoard(game.boardSize, game.city).filter(t=>isPurchasableTile(t) && game.properties[t.position]!.ownerId===local.id);
   return <div className="classic-finance-menu"><button className="event-secondary" type="button" onClick={()=>setTool("build")}>Manage deeds</button><button className="event-secondary" type="button" onClick={()=>setTool("trade")}>Propose trade</button>{tool && createPortal(<div className="finance-backdrop" onClick={()=>setTool(undefined)}><section className="finance-sheet" role="dialog" aria-modal="true" aria-label={tool==="build"?"Manage deeds during a decision":"Propose a trade during a decision"} onClick={e=>e.stopPropagation()}><header><h2>{tool==="build"?"Your property desk":"Make a deal"}</h2><button autoFocus type="button" aria-label="Close finance desk" onClick={()=>setTool(undefined)}>×</button></header>{tool==="build"?<PropertyTools game={game} player={local} properties={properties} sendAction={sendAction}/>:<TradeComposer game={game} local={local} sendAction={sendAction}/>}</section></div>,document.body)}</div>;
 }
@@ -756,17 +757,19 @@ function PropertyTools({
         if (!isPurchasableTile(tile)) return null;
         const property = game.properties[tile.position] as PropertyState;
         const district = tile.kind === "property" ? colorGroupTiles(tile.group, game.boardSize) : [];
-        const classic = game.mode === "classic", cash = classic ? classicSpendableCash(game, player.id) : player.cash;
-        const liquidation = district.reduce((sum, member) => {const deed=game.properties[member.position]!;return sum+(classic && deed.buildingCosts ? deed.buildingCosts.reduce((n,c)=>n+c,0)/2 : Math.floor(deed.houses*member.houseCost/2));}, 0);
+        const classic = usesClassicRules(game), cash = classic ? classicSpendableCash(game, player.id) : player.cash;
+        const heldDistrict = classic ? district.filter(member => game.properties[member.position]?.ownerId === player.id) : district;
+        const liquidation = heldDistrict.reduce((sum, member) => {const deed=game.properties[member.position]!;return sum+(classic && deed.buildingCosts ? deed.buildingCosts.reduce((n,c)=>n+c,0)/2 : Math.floor(deed.houses*member.houseCost/2));}, 0);
         const levels = district.map(member => game.properties[member.position]!.houses);
+        const saleLevels = heldDistrict.map(member => game.properties[member.position]!.houses);
         const clearSet = district.every(member => game.properties[member.position]?.ownerId === player.id && !game.properties[member.position]?.mortgaged);
         const locked = classic && classicBuildingGroupLocked(game,tile.position,player.id);
         const deedPaused = propertyPermitLocked(game, tile.position);
         const seized = !!citySeizedOwner(game, tile.position);
         const paused = deedPaused || (tile.kind === "property" && permitPaused(game, tile.group));
         const canBuild = !seized && !paused && !locked && game.auction?.kind !== "house" && game.auction?.kind !== "hotel" && tile.kind === "property" && clearSet && game.phase !== "awaitingDebt" && property.houses < 5 && property.houses === Math.min(...levels) && cash >= tile.houseCost && (property.houses === 4 ? game.bankHotels > 0 : game.bankHouses > 0);
-        const canSell = !seized && !locked && clearSet && property.houses > 0 && property.houses === Math.max(...levels) && (property.houses < 5 || game.bankHouses >= 4);
-        const canMortgage = !seized && !locked && (property.mortgaged ? game.phase !== "awaitingDebt" && cash >= tile.mortgageValue + Math.ceil(tile.mortgageValue / 10) : !levels.some(level => level > 0));
+        const canSell = !seized && !locked && (classic || clearSet) && property.houses > 0 && property.houses === Math.max(...saleLevels) && (property.houses < 5 || game.bankHouses >= 4);
+        const canMortgage = !seized && !locked && (property.mortgaged ? game.phase !== "awaitingDebt" && cash >= tile.mortgageValue + Math.ceil(tile.mortgageValue / 10) : !saleLevels.some(level => level > 0));
         const buildReason=seized?"Seized by City Hall until your loan is repaid.":tile.kind!=="property"?"":deedPaused?"Building permits are paused until the Mayor changes.":paused?"City Hall paused building permits here this round.":locked?"This district is reserved by an active auction.":game.auction?.kind==="house"||game.auction?.kind==="hotel"?"Finish the building auction first.":!district.every(member=>game.properties[member.position]?.ownerId===player.id)?"Own every deed in this colour set to build.":!clearSet?"Unmortgage the whole colour set first.":game.phase==="awaitingDebt"?"Settle the debt before buying buildings.":property.houses>=5?"Hotel complete.":property.houses!==Math.min(...levels)?"Build evenly: improve the less developed deeds first.":cash<tile.houseCost?"You need more available cash to build.":property.houses===4&&game.bankHotels===0?"The bank has no hotels left.":property.houses<4&&game.bankHouses===0?"The bank has no houses left.":"";
         const refund = tile.kind === "property" ? classic && property.buildingCosts?.length ? property.buildingCosts[property.buildingCosts.length-1]!/2 : Math.floor(tile.houseCost/2) : 0;
         return (
@@ -775,7 +778,7 @@ function PropertyTools({
             <div className="deed-actions">
               {tile.kind === "property" && <><button type="button" disabled={!canBuild} title={buildReason||"Build evenly on a complete colour set."} aria-describedby={`deed-build-${tile.position}`} aria-label={`Build on ${tile.name}`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "build" })}>{property.houses===4?"Hotel":"House"} {formatMoney(tile.houseCost)}</button><button type="button" disabled={!canSell} title={property.houses === 5 && game.bankHouses < 4 ? "No replacement houses: use Sell district buildings instead." : "Sell evenly from the most developed properties."} aria-label={`Sell a building on ${tile.name}`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "sell" })}>Sell {formatMoney(refund)}</button></>}
               {tile.kind === "property" && !seized && !locked && property.houses === 5 && game.bankHouses < 4 && <button type="button" aria-label={`Sell all buildings in ${tile.group} district`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "sellGroup" })}>Sell district buildings {formatMoney(liquidation)}</button>}
-              <button type="button" disabled={!canMortgage} title="Sell every building in the district before mortgaging. Repaying a mortgage includes 10% interest." aria-label={`${property.mortgaged ? "Unmortgage" : "Mortgage"} ${tile.name}`} onClick={() => sendAction({ type: "MORTGAGE", playerId: player.id, propertyId: tile.position, mortgage: !property.mortgaged })}>{property.mortgaged ? "Unmortgage" : `Mortgage ${formatMoney(tile.mortgageValue)}`}</button>
+              <button type="button" disabled={!canMortgage} title="Sell your buildings in this district before mortgaging. Repaying a mortgage includes 10% interest." aria-label={`${property.mortgaged ? "Unmortgage" : "Mortgage"} ${tile.name}`} onClick={() => sendAction({ type: "MORTGAGE", playerId: player.id, propertyId: tile.position, mortgage: !property.mortgaged })}>{property.mortgaged ? "Unmortgage" : `Mortgage ${formatMoney(tile.mortgageValue)}`}</button>
             </div>
           </div>
         );
@@ -816,7 +819,7 @@ function TradeComposer({ game, local, sendAction, counterTrade }: { game: GameSt
   const [requestedIds, setRequestedIds] = useState<number[]>(counterTrade?.offeredPropertyIds ?? []);
   const [offeredCards,setOfferedCards]=useState<CardDeck[]>(counterTrade?.requestedJailCards ?? []),[requestedCards,setRequestedCards]=useState<CardDeck[]>(counterTrade?.offeredJailCards ?? []);
   const target = game.players.find((player) => player.id === toPlayerId);
-  const classic=game.mode==="classic", round=(s:string)=>Math.max(0,classic?Math.round((Number(s)||0)*100)/100:Math.floor(Number(s)||0));
+  const classic=usesClassicRules(game), round=(s:string)=>Math.max(0,classic?Math.round((Number(s)||0)*100)/100:Math.floor(Number(s)||0));
   const giving = round(offeredCash), asking = round(requestedCash);
   const hasAsset=offeredIds.length+requestedIds.length+offeredCards.length+requestedCards.length>0;
   const hasTerms = classic ? hasAsset : giving > 0 || asking > 0 || hasAsset;

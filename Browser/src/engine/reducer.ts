@@ -15,7 +15,7 @@ import {
 import { formatRupees } from "./currency";
 import {
   AUDIT_FINE, CITY_CONTRACTS, CITY_CONTRACT_REWARD, CITY_POLICIES, LOAN_AMOUNT, LOAN_REPAYMENT, TRAIN_FARE, WHEEL_SECTIONS,
-  advanceCityRound, auctionCredit, canChallengeCityProject, cityAuctionBacking, cityContractReady, cityLoanAvailable, cityLoanTotal,
+  advanceCityRound, applyCityLoanPayment, auctionCredit, bookCityLoan, canChallengeCityProject, cityAuctionBacking, cityContractReady, cityLoanAvailable, cityLoanTotal,
   cityPolicyAvailable, cityStable, councilSpeaker, districtName, fortPosition, newTerm, nextCityTurn,
   MAYOR_MOVE_SPACES, PERMIT_LOCK_COUNT, cityHasSeizedDeeds, cityLoanBalance, citySeizedOwner,
   mayorCanGrantLoan, mayorCanReleaseJail, nextMayor, permitPaused, propertyPermitLocked,
@@ -23,7 +23,8 @@ import {
 } from "./mayor";
 import type { CityAction, TaxBill } from "./mayor";
 import { isPlayerColorTaken, playerColorKey, PLAYER_COLORS } from "./playerColors";
-import { canClassicTradeProperty, reduceClassic, startClassic } from "./classic";
+import { applyClassicCityPayment, applyClassicCredit, canClassicTradeProperty, classicSpendableCash, reduceClassic, startClassic } from "./classic";
+import { usesClassicRules } from "./rules";
 import { cityInfo, isCityId } from './cities';
 import {isWorldId,worldInfo} from './worlds';
 import type {
@@ -144,7 +145,7 @@ export const netWorth = (state: GameState, playerId: string): number => {
     if (property.ownerId !== playerId) {
       return total;
     }
-    const improvements = isStreetTile(tile) ? state.mode === "classic" && property.buildingCosts
+    const improvements = isStreetTile(tile) ? usesClassicRules(state) && property.buildingCosts
       ? property.buildingCosts.reduce((n, cost) => n + cost, 0) : property.houses * tile.houseCost : 0;
     return total + tile.price + improvements - (property.mortgaged ? tile.mortgageValue : 0);
   }, player.cash);
@@ -168,7 +169,7 @@ const groupIsUnmortgaged = (
   );
 
 export const canTradeProperty = (state: GameState, propertyId: number, playerId: string): boolean => {
-  if (state.mode === "classic") return canClassicTradeProperty(state, propertyId, playerId);
+  if (usesClassicRules(state)) return canClassicTradeProperty(state, propertyId, playerId);
   const tile = getPurchasableTile(propertyId, state.boardSize);
   const property = state.properties[propertyId];
   return Boolean(tile && property?.ownerId === playerId && !citySeizedOwner(state, propertyId) && property.houses === 0 &&
@@ -300,6 +301,7 @@ const makePayment = (
   if (scratch?.playerId === fromPlayerId && scratch.prize && (playerById(state, fromPlayerId)?.cash ?? 0) < amount) {
     state = closeWheel(state, true);
   }
+  if (usesClassicRules(state)) return applyClassicCityPayment(state, fromPlayerId, target, amount, reason, kind === "city" ? kind : undefined);
   const available = Math.max(0, playerById(state, fromPlayerId)?.cash ?? 0);
   let next = changeCash(state, fromPlayerId, -amount);
   const paid = Math.min(available, amount);
@@ -585,7 +587,7 @@ const handleJoin = (state: GameState, action: Extract<GameAction, { type: "JOIN"
     bankrupt: false
   };
   const players = [...state.players, player];
-  const boardSize = state.mode === "classic" ? 40 : boardSizeForPlayers(players.length);
+  const boardSize = usesClassicRules(state) ? 40 : boardSizeForPlayers(players.length);
   const board = boardSize === state.boardSize ? state : {
     ...state, boardSize, properties: createInitialState(state.roomCode, boardSize).properties,
     bankHouses: 32 + (boardSize - 40) * 2, bankHotels: 12 + (boardSize - 40) / 2
@@ -609,7 +611,12 @@ const handleStart = (state: GameState, action: Extract<GameAction, { type: "STAR
   if (!playerById(state, action.firstPlayerId)) {
     return reject(state, "Choose a player in this room to go first.");
   }
-  if (state.mode === "classic") return startClassic(state, action);
+  if (usesClassicRules(state)) {
+    const next = startClassic(state, action);
+    return next.phase === "awaitingRoll" && state.mode === "mayor"
+      ? { ...next, mayor: startCity(next.players, action.firstPlayerId, true) }
+      : next;
+  }
   return addEvent(
     { ...state, phase: "awaitingRoll", activePlayerId: action.firstPlayerId,
       ...(state.mode === "mayor" ? { mayor: startCity(state.players, action.firstPlayerId, state.mayorOffice) } : {}) },
@@ -1231,21 +1238,20 @@ const civicEvent = (state: GameState, text: string, civic: NonNullable<GameEvent
 const changeTreasury = (state: GameState, delta: number): GameState =>
   state.mayor ? { ...state, mayor: { ...state.mayor, treasury: state.mayor.treasury + delta } } : state;
 
+function creditCityCash(state: GameState, id: string, amount: number) {
+  return usesClassicRules(state) ? applyClassicCredit(state, id, amount) : changeCash(state, id, amount);
+}
+
 function fundCityLoan(state: GameState, id: string, principal: number, amountDue: number) {
-  return updateCitySeat(changeTreasury(changeCash(state, id, principal), -principal), id,
-    record => ({ ...record, borrowed: true, loanDue: record.turns + 2, loanAmountDue: amountDue, loanStatus: undefined }));
+  return bookCityLoan(creditCityCash(state, id, principal), id, principal, amountDue);
 }
 
 function creditCityLoan(state: GameState, id: string, amount: number) {
   const balance = cityLoanBalance(state, id);
   const credit = Math.min(balance, amount);
   if (credit <= 0) return state;
-  const remaining = balance - credit;
-  const next = updateCitySeat(changeTreasury(state, credit), id, seat => ({
-    ...seat, loanAmountDue: remaining || undefined,
-    loanDue: remaining ? seat.loanDue : undefined, loanStatus: remaining ? seat.loanStatus : undefined
-  }));
-  if (remaining) return next;
+  const next = applyCityLoanPayment(state, id, credit);
+  if (cityLoanBalance(next, id)) return next;
   const released = cityHasSeizedDeeds(state, id) ? " City Hall released their unsold deeds." : "";
   return civicEvent(next, `${playerName(state, id)} repaid their city loan.${released}`,
     "policy", { playerId: id });
@@ -1365,7 +1371,7 @@ function closeWheel(state: GameState, reveal: boolean): GameState {
   } };
   if (!reveal || !prize) return next;
   const heading = prize === 2000 ? "Fort jackpot!" : "Lucky Scratch";
-  return civicEvent(changeCash(next, playerId, prize), `${heading} ${playerName(next, playerId)} found ${formatRupees(prize)}.`, "wheel",
+  return civicEvent(creditCityCash(next, playerId, prize), `${heading} ${playerName(next, playerId)} found ${formatRupees(prize)}.`, "wheel",
     { playerId, position: fortPosition(next), amount: prize });
 }
 
@@ -1418,8 +1424,11 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
         "policy", { playerId: id, recipientId: action.targetId, amount: action.amount });
     }
     case "CITY_REPAY_LOAN": {
-      const available = Math.min(player.cash, cityLoanBalance(state, id));
-      if (!desk.office || !Number.isSafeInteger(action.amount) || action.amount <= 0 || action.amount > available) {
+      const classic = usesClassicRules(state);
+      const available = Math.min(classic ? classicSpendableCash(state, id) : player.cash, cityLoanBalance(state, id));
+      const cents = Math.round(action.amount * 100);
+      const valid = classic ? Number.isSafeInteger(cents) && cents / 100 === action.amount : Number.isSafeInteger(action.amount);
+      if (!desk.office || !valid || action.amount <= 0 || action.amount > available) {
         return reject(state, "Choose a repayment within your cash and outstanding city loan.");
       }
       return creditCityLoan(changeCash(state, id, -action.amount), id, action.amount);
@@ -1432,14 +1441,21 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
         seizedFromId, propertyId: tile.position, landingPlayerId: id, currentBid: 0,
         eligiblePlayerIds: solvent.map(candidate => candidate.id), passedPlayerIds: []
       };
-      return civicEvent({ ...state, phase: "awaitingAuction", auction, bankAuctionResumePhase: state.phase as DebtResumePhase },
+            const resume = state.phase as DebtResumePhase;
+      const nextDesk = player.bot ? { ...desk, office: { ...desk.office, lastBotSeizureTurn: seat.turns } } : desk;
+      return civicEvent({ ...state, mayor: nextDesk, phase: "awaitingAuction", auction,
+        ...(usesClassicRules(state) ? { auctionResumePhase: resume } : { bankAuctionResumePhase: resume })
+      },
         `City Hall opened an auction for the seized deed at ${tile.name}.`, "auction", { position: tile.position });
     }
     case "CITY_RELEASE_JAIL": {
       if (!office) return reject(state, "Only the sitting Mayor can release a player from Jail.");
       const released = withPlayer(state, action.targetId, target => ({ ...target, inJail: false, jailTurns: 0 }));
       const phase = state.phase === "awaitingJailPayment" ? "awaitingMove" : state.phase;
-      return addEvent({ ...released, phase }, `${playerName(state, action.targetId)} left Jail by order of Mayor ${player.name}.`,
+      const lastRoll = phase === "awaitingEndTurn" && released.lastRoll?.playerId === action.targetId
+        ? { ...released.lastRoll, grantsExtraRoll: false }
+        : released.lastRoll;
+      return addEvent({ ...released, phase, lastRoll }, `${playerName(state, action.targetId)} left Jail by order of Mayor ${player.name}.`,
         "turn", { playerId: action.targetId });
     }
     case "CITY_MOVE_RIVALS": {
@@ -1532,7 +1548,7 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
       const result = { ...wheel, section };
       let next = civicEvent({ ...state, mayor: { ...desk, wheel: undefined, wheelResult: result } },
         `${player.name} spun the Fort wheel: ${WHEEL_SECTIONS[section]}.`, "wheel", { playerId: id, position });
-      if (section === 0 || section === 1) return changeCash(next, id, section === 0 ? 100 : 150);
+      if (section === 0 || section === 1) return creditCityCash(next, id, section === 0 ? 100 : 150);
       if (section === 2) return makePayment(next, id, "bank", 50, "for the Fort wheel doctor’s fee");
       if (section === 3) return withPlayer(next, id, candidate => ({ ...candidate, getOutOfJailCards: candidate.getOutOfJailCards + 1 }));
       if (section === 4) return moveTo(next, id, 0, true);
@@ -1583,7 +1599,7 @@ function afterCityAction(before: GameState, state: GameState): GameState {
     const seat = next.mayor!.seats[player.id];
     if (player.bankrupt || player.cash < 0 || !seat?.contract || seat.contractPaid || !cityContractReady(next, player.id, seat.contract)) continue;
     const completed = CITY_CONTRACTS[seat.contract];
-    next = updateCitySeat(changeCash(next, player.id, CITY_CONTRACT_REWARD), player.id, record => ({ ...record, contractPaid: true }));
+    next = updateCitySeat(creditCityCash(next, player.id, CITY_CONTRACT_REWARD), player.id, record => ({ ...record, contractPaid: true }));
     next = civicEvent(next, `${player.name} completed ${completed} for ${formatRupees(CITY_CONTRACT_REWARD)}.`, "contract", { playerId: player.id, amount: CITY_CONTRACT_REWARD });
   }
   const sale = before.auction && !next.auction && next.eventLog.find(event => event.id >= before.nextEventId &&
@@ -1616,7 +1632,7 @@ const applyAction = (state: GameState, action: GameAction): GameState => {
       if(state.phase!=='lobby'||state.players[0]?.id!==action.playerId)return reject(state,'Only the host can remove AI players before starting.');
       const bot=state.players.find(p=>p.id===action.botId&&p.bot);
       if(!bot)return reject(state,'Choose an AI player to remove.');
-      const players=state.players.filter(p=>p.id!==bot.id),initial=createInitialState(state.roomCode,state.mode==='classic'?40:boardSizeForPlayers(players.length));
+      const players=state.players.filter(p=>p.id!==bot.id),initial=createInitialState(state.roomCode,usesClassicRules(state)?40:boardSizeForPlayers(players.length));
       return addEvent({...state,players,boardSize:initial.boardSize,properties:initial.properties,bankHouses:initial.bankHouses,bankHotels:initial.bankHotels},`${bot.name} left the lobby.`);
     }
     case 'SET_WORLD': {
@@ -1632,8 +1648,10 @@ const applyAction = (state: GameState, action: GameAction): GameState => {
     case "SET_MODE": {
       if (state.phase !== "lobby" || state.players[0]?.id !== action.playerId) return reject(state, "Only the room creator can choose a mode before starting.");
       if (action.mode !== "classic" && action.mode !== "expanding" && action.mode !== "mayor") return reject(state, "Choose Classic, Expanding or Mayor.");
-      const initial = createInitialState(state.roomCode, action.mode === "classic" ? 40 : boardSizeForPlayers(state.players.length));
-      return addEvent({ ...state, mode: action.mode, mayorOffice: action.mode === "mayor" && action.mayorOffice === true ? true : undefined, rulesEdition: action.mode === 'classic' ? action.rulesEdition : undefined, boardSize: initial.boardSize, properties: initial.properties,
+      const mayorClassic = action.mode === "mayor" && action.mayorClassic === true ? true : undefined;
+      const classic = usesClassicRules({ mode: action.mode, mayorClassic });
+      const initial = createInitialState(state.roomCode, classic ? 40 : boardSizeForPlayers(state.players.length));
+      return addEvent({ ...state, mode: action.mode, mayorOffice: action.mode === "mayor" && (mayorClassic || action.mayorOffice === true) ? true : undefined, mayorClassic, rulesEdition: mayorClassic ? 'hasbro-2025' : classic ? action.rulesEdition : undefined, boardSize: initial.boardSize, properties: initial.properties,
         bankHouses: initial.bankHouses, bankHotels: initial.bankHotels }, `The room selected ${action.mode === "classic" ? "Classic · 40 spaces" : action.mode === "mayor" ? "Mayor · City Hall Stories" : "Expanding Indian board"}.`);
     }
     case "CITY_PAY_TAX":
@@ -1729,9 +1747,33 @@ const synchronizeDebt = (state: GameState): GameState => {
   return { ...next, phase: next.pendingTrade ? "awaitingTradeResponse" : "awaitingDebt", debts: outstanding, debtResumePhase: resume };
 };
 
+function reduceMayorClassic(state: GameState, action: GameAction): GameState {
+  let beforeAction = state;
+  if (action.type === "END_TURN" && state.phase === "awaitingEndTurn" && action.playerId === state.activePlayerId) {
+    const id = action.playerId;
+    if (state.mayor?.wheel?.playerId === id) beforeAction = closeWheel(beforeAction, true);
+    const rollAgain = beforeAction.lastRoll?.playerId === id && beforeAction.lastRoll.grantsExtraRoll && !playerById(beforeAction, id)?.inJail;
+    if (!rollAgain) beforeAction = settleCityEnd(beforeAction, id);
+    if (beforeAction.phase !== "awaitingEndTurn") return beforeAction;
+  }
+  let next = action.type.startsWith("CITY_") && action.type !== "CITY_EXPRESS"
+    ? handleCityAction(beforeAction, action as CityAction)
+    : reduceClassic(beforeAction, action);
+  if (next.notice || next.phase === "gameOver") return next;
+  if (state.activePlayerId && next.activePlayerId && state.activePlayerId !== next.activePlayerId) {
+    next = nextCityTurn(next, state.activePlayerId, next.activePlayerId);
+  }
+  if (next.mayor?.pendingRoundAdvance && !next.debts?.length && !next.auction && !next.bankAuctionQueue?.length && !next.mortgageTransfers?.length) {
+    next = advanceCityRound(next);
+  }
+  return afterCityAction(state, next);
+}
+
 const reduceCore = (state: GameState, action: GameAction): GameState => {
   if(action.type==='ADD_BOT'||action.type==='REMOVE_BOT')return applyAction(state,action);
-  if (state.mode === "classic" && state.phase !== "lobby") return reduceClassic(state, action);
+  if (usesClassicRules(state) && state.phase !== "lobby") {
+    return state.mode === "mayor" ? reduceMayorClassic(state, action) : reduceClassic(state, action);
+  }
   const before = synchronizeDebt(state), debt = before.debts?.[0];
   if (debt) {
     const actor = "playerId" in action ? action.playerId : "";

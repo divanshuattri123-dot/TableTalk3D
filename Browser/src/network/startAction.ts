@@ -1,9 +1,10 @@
+import { usesClassicRules } from "../engine/rules";
 import type { Dice, GameAction, GameState, SetupRoll } from "../engine/types";
 import {randomUnit} from './random';
 
 // Randomness belongs at the action boundary, never in the shared reducer.
 export function makeStartAction(game: GameState, playerId: string, random = randomUnit): Extract<GameAction,{type:"START"}> {
-  if(game.mode!=="classic")return {type:"START",playerId,firstPlayerId:game.players[Math.floor(random()*game.players.length)]!.id};
+  if(!usesClassicRules(game))return {type:"START",playerId,firstPlayerId:game.players[Math.floor(random()*game.players.length)]!.id};
   let tied=game.players.map(p=>p.id);const rounds:SetupRoll[][]=[];
   while(tied.length>1) {
     const rolls=tied.map(id=>({playerId:id,dice:[1+Math.floor(random()*6),1+Math.floor(random()*6)] as Dice}));

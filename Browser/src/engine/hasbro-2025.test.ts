@@ -1,10 +1,11 @@
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createInitialState, reduceGame } from './reducer';
 import type { GameState } from './types';
+describe.each(["classic", "mayor"] as const)("%s rent and mortgages", (mode) => {
 const modern=():GameState=>{
   let s=createInitialState('GNEW');
   for(const [id,color] of [['p1','red'],['p2','blue'],['p3','green']])s=reduceGame(s,{type:'JOIN',player:{id:id!,name:id!,color:color!}});
-  s=reduceGame(s,{type:'SET_MODE',playerId:'p1',mode:'classic',rulesEdition:'hasbro-2025'});
+  s=reduceGame(s,{type:'SET_MODE',playerId:'p1',mode,rulesEdition:'hasbro-2025',mayorClassic:mode==='mayor'?true:undefined});
   const order=Array.from({length:16},(_,i)=>i);
   return reduceGame(s,{type:'START',playerId:'p1',firstPlayerId:'p1',deckOrder:{chance:order,community:order},setupRolls:[s.players.map((p,i)=>({playerId:p.id,dice:i===0?[6,6]:[1,2]}))]});
 };
@@ -31,4 +32,5 @@ it('retains received mortgages for free in G0009 and charges normal redemption l
   const keep=reduceGame(s,{type:'RESOLVE_MORTGAGES',playerId:'p2',redeemPropertyIds:[]});expect(keep.players[1]!.cash).toBe(1500);expect(keep.properties[1]!.mortgaged).toBe(true);
   const redeem=reduceGame(s,{type:'RESOLVE_MORTGAGES',playerId:'p2',redeemPropertyIds:[1]});expect(redeem.players[1]!.cash).toBe(1467);expect(redeem.properties[1]!.mortgaged).toBe(false);
   const legacy={...s,rulesEdition:undefined};expect(reduceGame(legacy,{type:'RESOLVE_MORTGAGES',playerId:'p2',redeemPropertyIds:[]}).players[1]!.cash).toBe(1497);
+});
 });

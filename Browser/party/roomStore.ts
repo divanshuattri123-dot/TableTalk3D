@@ -1,3 +1,4 @@
+import { usesClassicRules } from "../src/engine/rules";
 import { createInitialState, reduceGame } from "../src/engine/reducer";
 import {recoverClassicAuction} from '../src/engine/classic';
 import type { GameAction, GameState } from "../src/engine/types";
@@ -22,7 +23,7 @@ export class SavedRoom {
       // An incompatible save must fail visibly, never silently become a fresh lobby.
       if (saved.version !== 1 || saved.state.roomCode !== this.state.roomCode) throw new Error("Unsupported room save.");
       this.checkpoint = saved;
-      if (saved.state.mode==='classic') {
+      if (usesClassicRules(saved.state)) {
         const state=recoverClassicAuction(saved.state);
         if (state!==saved.state) {
           const repaired={...saved,state};
