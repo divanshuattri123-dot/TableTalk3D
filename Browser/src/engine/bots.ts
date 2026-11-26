@@ -1,7 +1,7 @@
 import {colorGroupTiles,getBoard,getPurchasableTile,isPurchasableTile} from './board';
 import {classicSpendableCash} from './classic';
 import {calculateRent,canTradeProperty,decisionPlayerId,reduceGame} from './reducer';
-import {auctionCredit,canChallengeCityProject,cityLoanAvailable,cityPolicyAvailable,cityStable,MAYOR_MOVE_SPACES,mayorCanGrantLoan,PERMIT_LOCK_COUNT,reserveLevy,trainOffer} from './mayor';
+import {auctionCredit,canChallengeCityProject,cityLoanAvailable,cityLoanBalance,cityPolicyAvailable,citySeizedOwner,cityStable,LOAN_AMOUNT,MAYOR_MOVE_SPACES,mayorCanGrantLoan,mayorCanReleaseJail,PERMIT_LOCK_COUNT,reserveLevy,trainOffer} from './mayor';
 import type {Dice,GameAction,GameState,Player,TradeOffer} from './types';
 
 const STYLES=[
@@ -12,7 +12,8 @@ const STYLES=[
   {name:'Cautious',reserve:280,bid:0.95,buildReserve:350,trade:1.2},
   {name:'Opportunist',reserve:140,bid:1.2,buildReserve:230,trade:1.3}
 ] as const;
-export const botStyle=(p:Player)=>STYLES[Math.max(0,Number(p.id.replace('ai-',''))-1)%STYLES.length]??STYLES[0];
+const PRO={name:'Pro',reserve:150,bid:1.12,buildReserve:175,trade:1.4} as const;
+export const botStyle=(p:Player)=>p.botLevel==='pro'?PRO:STYLES[Math.max(0,Number(p.id.replace('ai-',''))-1)%STYLES.length]??STYLES[0];
 const spendable=(s:GameState,p:Player)=>s.mode==='classic'?classicSpendableCash(s,p.id):p.cash;
 const deeds=(s:GameState,p:Player)=>getBoard(s.boardSize).filter(isPurchasableTile).filter(t=>s.properties[t.position]?.ownerId===p.id);
 const portfolio=(s:GameState,id:string)=>getBoard(s.boardSize).filter(isPurchasableTile).reduce((value,t)=>{
@@ -21,11 +22,52 @@ const portfolio=(s:GameState,id:string)=>getBoard(s.boardSize).filter(isPurchasa
   return value+t.price*(complete?1.7:1)-(d.mortgaged?t.mortgageValue:0);
 },0);
 
+function upcomingRent(s:GameState,p:Player,offset=0) {
+  const costs: number[]=[];
+  const board=getBoard(s.boardSize);
+  for(let a=1;a<=6;a++)for(let b=1;b<=6;b++){
+    const position=(p.position+offset+a+b)%s.boardSize;
+    const tile=board[position]!;
+    const owner=s.properties[position]?.ownerId;
+    costs.push(owner && owner!==p.id?calculateRent(s,position,a+b):tile.kind==='tax'?tile.amount:0);
+  }
+  costs.sort((a,b)=>a-b);
+  return costs[28]??0;
+}
+
+function proReserve(s:GameState,p:Player) {
+  const account=s.mayor?.seats[p.id];
+  const due=account?.loanDue!==undefined && account.loanDue<=account.turns+1 ? cityLoanBalance(s,p.id) : 0;
+  return Math.min(550,Math.max(PRO.reserve,upcomingRent(s,p)))+due;
+}
+
+function proDeedValue(s:GameState,p:Player,position:number) {
+  const tile=getPurchasableTile(position,s.boardSize);
+  if(!tile)return 0;
+  if(tile.kind==='railroad'){
+    const connected=deeds(s,p).filter(deed=>deed.kind==='railroad').length;
+    return tile.price*(1.05+connected*.18);
+  }
+  if(tile.kind!=='property')return tile.price;
+  const other=colorGroupTiles(tile.group,s.boardSize).filter(deed=>deed.position!==position);
+  const owners=other.map(deed=>s.properties[deed.position]?.ownerId);
+  const mine=owners.filter(id=>id===p.id).length;
+  if(mine===other.length)return tile.price*2.1;
+  const rival=owners[0];
+  if(rival && rival!==p.id && owners.every(id=>id===rival))return tile.price*1.55;
+  return tile.price*(1.15+mine*.2);
+}
+
 function tradeDelta(s:GameState,t:TradeOffer,p:Player) {
   const properties={...s.properties};
   for(const id of t.offeredPropertyIds)properties[id]={...properties[id]!,ownerId:t.toPlayerId};
   for(const id of t.requestedPropertyIds)properties[id]={...properties[id]!,ownerId:t.fromPlayerId};
-  return t.offeredCash-t.requestedCash+portfolio({...s,properties},p.id)-portfolio(s,p.id)+25*((t.offeredJailCards?.length??0)-(t.requestedJailCards?.length??0));
+  const rivalSet=t.requestedPropertyIds.some(id=>{
+    const deed=getPurchasableTile(id,s.boardSize);
+    return deed?.kind==='property' && colorGroupTiles(deed.group,s.boardSize).every(member=>properties[member.position]?.ownerId===t.fromPlayerId);
+  });
+  const premium=p.botLevel==='pro'&&rivalSet?160:0;
+  return t.offeredCash-t.requestedCash+portfolio({...s,properties},p.id)-portfolio(s,p.id)+25*((t.offeredJailCards?.length??0)-(t.requestedJailCards?.length??0))-premium;
 }
 
 // Candidates pass through the real rules engine, including scarce-building and debt rules.
@@ -35,6 +77,9 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
   const legal=(action:GameAction)=>{const next=reduceGame(s,action);return !next.notice&&JSON.stringify(next)!==JSON.stringify(s);};
   const first=(actions:GameAction[])=>actions.find(legal);
   const desk=s.mayor;
+  const actingMayor=bot(desk?.mayorId);
+  if(desk?.office && actingMayor && s.phase==='awaitingJailPayment' && mayorCanReleaseJail(s,actingMayor.id))
+    return {type:'CITY_RELEASE_JAIL',playerId:actingMayor.id,term:desk.term,targetId:actingMayor.id};
   if(desk && cityStable(s)){
     for(const candidate of s.players){
       if(!candidate.bot || candidate.bankrupt)continue;
@@ -59,7 +104,19 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
     }
     if(mayor && active===mayor && desk.office){
       const playerId=mayor.id;
-      if(mayor.cash<250 && mayorCanGrantLoan(s,playerId))return {type:'CITY_GRANT_LOAN',playerId,term,targetId:playerId};
+            if(mayorCanReleaseJail(s,playerId) && (mayor.botLevel!=='pro' || upcomingRent(s,mayor)<200))
+        return {type:'CITY_RELEASE_JAIL',playerId,term,targetId:playerId};
+      const amount=Math.min(desk.treasury,mayor.botLevel==='pro'?Math.max(LOAN_AMOUNT,proReserve(s,mayor)-mayor.cash):LOAN_AMOUNT);
+      if(mayor.cash<250 && mayorCanGrantLoan(s,playerId,amount))return {type:'CITY_GRANT_LOAN',playerId,term,targetId:playerId,amount};
+      if(mayor.botLevel==='pro'){
+        const collateral=getBoard(s.boardSize).filter(isPurchasableTile).find(tile=>{
+          const borrower=citySeizedOwner(s,tile.position);
+          return borrower && borrower!==playerId &&
+            s.players.some(rival=>!rival.bankrupt&&rival.id!==borrower&&rival.cash>=tile.price/2) &&
+            !s.eventLog.some(event=>event.civic==='auction'&&event.position===tile.position&&event.text.includes('opened an auction for the seized deed'));
+        });
+        if(collateral)return {type:'CITY_AUCTION_SEIZED',playerId,term,propertyId:collateral.position};
+      }
       if(!desk.office.permitPropertyIds){
         const streets=getBoard(s.boardSize).filter(tile=>{
           const owned=s.properties[tile.position];
@@ -108,6 +165,9 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
     }
     if(active){
       const playerId=active.id,seat=desk.seats[playerId]!;
+      const balance=cityLoanBalance(s,playerId);
+      if(desk.office && balance>0 && seat.loanStatus && active.cash>=balance)
+        return {type:'CITY_REPAY_LOAN',playerId,amount:balance};
       if(desk.council && desk.round<=2 && !seat.contract){
         const transit=deeds(s,active).some(tile=>tile.kind==='railroad') || botStyle(active).name==='Opportunist';
         return {type:'CITY_CONTRACT',playerId,contract:transit?'transit':'build'};
@@ -148,9 +208,13 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
     const target=building?a.buildTargets?.[p.id]?.[0]:undefined;
     const complete=tile?.kind==='property'&&colorGroupTiles(tile.group,s.boardSize).every(t=>t.position===tile.position||s.properties[t.position]?.ownerId===p.id);
     const credit=auctionCredit(a,p.id);
-    const liquid=credit ? p.cash+credit : Math.max(0,p.cash-style.reserve);
-    const limit=Math.min(liquid,tile?(building&&tile.kind==='property'?tile.houseCost*1.5:tile.price*(complete?1.7:style.bid)):0);
-    const increment=style.bid>1.2&&limit-a.currentBid>60?20:10,amount=Math.max(10,a.currentBid+increment);
+    const reserve=p.botLevel==='pro'?proReserve(s,p):style.reserve;
+    const liquid=credit ? p.cash+credit : Math.max(0,p.cash-reserve);
+    const limit=Math.floor(Math.min(liquid,tile?(building&&tile.kind==='property'?tile.houseCost*1.5:
+      p.botLevel==='pro'?proDeedValue(s,p,tile.position):tile.price*(complete?1.7:style.bid)):0));
+    const increment=style.bid>1.2&&limit-a.currentBid>60?20:10;
+    const minBid=Math.max(s.mode==='classic'?10:1,a.currentBid+1);
+    const amount=p.botLevel==='pro'?Math.max(minBid,Math.min(limit,a.currentBid+increment)):Math.max(10,a.currentBid+increment);
     const bid:GameAction={type:'AUCTION_BID',playerId:p.id,amount,propertyId:target};
     return amount<=limit&&legal(bid)?bid:{type:'AUCTION_BID',playerId:p.id,pass:true};
   }
@@ -180,12 +244,15 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
     const propertyId=s.pendingPurchase.propertyId,tile=getPurchasableTile(propertyId,s.boardSize);
     const buy={type:'BUY',playerId,propertyId} as const;
     const complete=tile?.kind==='property'&&colorGroupTiles(tile.group,s.boardSize).every(t=>t.position===tile.position||s.properties[t.position]?.ownerId===p.id);
-    return tile&&cash>=tile.price+(complete?50:style.reserve)&&legal(buy)?buy:{type:'DECLINE_BUY',playerId};
+    const reserve=p.botLevel==='pro'?proReserve(s,p):style.reserve;
+    const remaining=complete?(p.botLevel==='pro'?Math.max(75,reserve-150):50):reserve;
+    return tile&&cash>=tile.price+remaining&&legal(buy)?buy:{type:'DECLINE_BUY',playerId};
   }
   if(s.phase==='awaitingEndTurn'){
+    const usableReserve=p.botLevel==='pro'?proReserve(s,p):style.buildReserve;
     const finance=first([
-      ...owned.filter(t=>s.properties[t.position]!.mortgaged&&cash>=t.mortgageValue*1.1+style.buildReserve).map(t=>({type:'MORTGAGE',playerId,propertyId:t.position,mortgage:false} as const)),
-      ...owned.filter(t=>t.kind==='property'&&s.properties[t.position]!.houses<5&&cash>=t.houseCost+style.buildReserve).sort((a,b)=>s.properties[a.position]!.houses-s.properties[b.position]!.houses).map(t=>({type:'BUILD',playerId,propertyId:t.position,operation:'build'} as const))
+      ...owned.filter(t=>s.properties[t.position]!.mortgaged&&cash>=t.mortgageValue*1.1+usableReserve).map(t=>({type:'MORTGAGE',playerId,propertyId:t.position,mortgage:false} as const)),
+      ...owned.filter(t=>t.kind==='property'&&s.properties[t.position]!.houses<5&&cash>=t.houseCost+usableReserve).sort((a,b)=>s.properties[a.position]!.houses-s.properties[b.position]!.houses).map(t=>({type:'BUILD',playerId,propertyId:t.position,operation:'build'} as const))
     ]);
     if(finance)return finance;
     if(!p.botTradeOffered&&cash>=400){

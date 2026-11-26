@@ -123,7 +123,7 @@
 @media (prefers-reduced-motion: reduce) { .wheel-readout .scratch-prize { animation: none; } }
 .city-project-picker { display: flex; gap: 8px; flex-wrap: wrap; }
 .city-project-picker label { flex: 1 1 175px; display: grid; gap: 4px; font-size: 12px; color: #ebd7a9; }
-.city-project-picker select {
+.city-project-picker select, .city-project-picker input {
   width: 100%; min-width: 0; min-height: 44px; padding: 7px 10px;
   border: 1px solid #d8b76e; border-radius: 8px; color: #fff3d5; background: #254b4c; font: 650 13px system-ui, sans-serif;
 }
@@ -137,6 +137,8 @@
   color: #fff4da; background: linear-gradient(135deg, #1b4447f7, #112d31f7);
   box-shadow: 0 12px 30px #06181ab8;
 }
+.city-loan-notice { border-left-color: #e58170; }
+.city-project-picker + .city-actions { margin-top: 8px; }
 .city-tax-copy { display: grid; gap: 1px; min-width: 180px; flex: 1 1 200px; }
 .city-tax-copy small { color: #f6d58e; font: 800 9px system-ui, sans-serif; letter-spacing: .12em; }
 .city-tax-copy b { color: #fff8e6; font: 800 14px/1.25 system-ui, sans-serif; }

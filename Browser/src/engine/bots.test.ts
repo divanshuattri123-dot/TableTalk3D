@@ -29,6 +29,14 @@ describe('mixed human and AI lobby',()=>{
     s=apply(s,{type:'START',playerId:'p0',firstPlayerId:'p0'});expect(reduceGame(s,{type:'REMOVE_BOT',playerId:'p0',botId:'ai-1'}).players).toEqual(s.players);
     expect(reduceGame(createInitialState(),{type:'ADD_BOT',playerId:'nobody'}).players).toHaveLength(0);
   });
+  it('adds a Pro AI seat alongside standard bots and preserves the choice after starting',()=>{
+    let state=apply(lobby(),{type:'ADD_BOT',playerId:'p0',level:'pro'});
+    state=apply(state,{type:'SET_MODE',playerId:'p0',mode:'mayor',mayorOffice:true});
+    state=apply(state,{type:'START',playerId:'p0',firstPlayerId:'ai-2'});
+    expect(botStyle(state.players.find(p=>p.id==='ai-2')!).name).toBe('Pro');
+    expect(botStyle(state.players.find(p=>p.id==='ai-1')!).name).toBe('Balanced');
+  });
+
   it('keeps Classic at forty spaces and old human-only saves idle',()=>{
     const s=apply(lobby(1,5),{type:'SET_MODE',playerId:'p0',mode:'classic'});expect(s.boardSize).toBe(40);
     expect(nextBotAction(lobby())).toBeUndefined();expect(nextBotAction({...started(),players:started().players.map(p=>({...p,bot:undefined}))})).toBeUndefined();
@@ -44,6 +52,17 @@ describe('AI decisions obey ordinary rules',()=>{
     const s=started();s.phase='awaitingBuy';s.pendingPurchase={playerId:'ai-1',propertyId:39};bot(s).cash=600;
     expect(decision(s).type).toBe('BUY');bot(s).id='ai-5';s.activePlayerId='ai-5';s.pendingPurchase.playerId='ai-5';expect(decision(s).type).toBe('DECLINE_BUY');expect(botStyle(bot(s)).name).toBe('Cautious');
   });
+  it('makes Pro ask for a premium before handing a rival their final deed of a set',()=>{
+    let state=started();
+    state={...state,activePlayerId:'p0',properties:{...state.properties,
+      1:{ownerId:'p0',houses:0,mortgaged:false},3:{ownerId:'ai-1',houses:0,mortgaged:false}}};
+    state=apply(state,{type:'TRADE_OFFER',playerId:'p0',toPlayerId:'ai-1',offerId:'complete-set',
+      offeredCash:100,requestedCash:0,offeredPropertyIds:[],requestedPropertyIds:[3]});
+    expect(decision(state).type).toBe('TRADE_ACCEPT');
+    const pro={...state,players:state.players.map(p=>p.bot?{...p,botLevel:'pro' as const}:p)};
+    expect(decision(pro)).toMatchObject({type:'TRADE_COUNTER',requestedCash:230});
+  });
+
   it('bids or passes but waits when a human is the only remaining responder',()=>{
     let s=started();s.phase='awaitingBuy';s.pendingPurchase={playerId:'ai-1',propertyId:3};s=apply(s,{type:'DECLINE_BUY',playerId:'ai-1'});
     s=apply(s,decision(s));expect(s.auction?.highestBidderId).toBe('ai-1');expect(nextBotAction(s)).toBeUndefined();

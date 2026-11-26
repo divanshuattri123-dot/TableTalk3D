@@ -43,7 +43,7 @@ describe("Mayor office rules", () => {
 
   it("lets the Mayor lend to a rival with over ₹1,000, then lets that seat borrow again after repayment", () => {
     const before = table();
-    const grant = {type:"CITY_GRANT_LOAN",playerId:"a",term:1,targetId:"b"} as const;
+    const grant = {type:"CITY_GRANT_LOAN",playerId:"a",term:1,targetId:"b",amount:200} as const;
     expect(step(before, {...grant,playerId:"c"}).notice).toBeTruthy();
     const after = step(before,grant);
     expect(player(after,"b").cash).toBe(1700);
@@ -120,5 +120,82 @@ describe("Mayor office rules", () => {
     expect(player(arrived,"b")).toMatchObject({position:5,cash:1400});
     expect(player(arrived,"a").cash).toBe(1525);
     expect(trainOffer({...arrived,phase:"awaitingRoll"},"b")).toBeUndefined();
+  });
+});
+
+describe("Custom city loans and jail releases", () => {
+  function overdue(amount:number) {
+    const grant = {type:"CITY_GRANT_LOAN",playerId:"a",term:1,targetId:"b",amount} as const;
+    const state=table();
+    expect(step(state,{...grant,amount:401}).notice).toBeTruthy();
+    expect(step(state,{...grant,amount:3.5}).notice).toBeTruthy();
+    const loan=step(state,grant);
+    const empty=changePlayer(loan,"b",{cash:0});
+    return round(round(empty));
+  }
+
+  it("warns once, seizes after the extra turn, credits rent and releases collateral after repayment", () => {
+    const warned=overdue(137);
+    expect(warned.mayor?.seats.b).toMatchObject({loanAmountDue:155,loanStatus:"notice",loanDue:3});
+    expect(warned.eventLog.some(event=>event.text.includes("one more turn"))).toBe(true);
+    const seized=round(warned);
+    expect(seized.phase).toBe("awaitingRoll");
+    expect(seized.mayor?.seats.b?.loanStatus).toBe("seized");
+    const estate={...seized,properties:{...seized.properties,5:{ownerId:"b",houses:0 as const,mortgaged:false}}};
+    expect(step(turn(estate,"b"),{type:"MORTGAGE",playerId:"b",propertyId:5,mortgage:true}).notice).toContain("seized");
+    const rolled=step(estate,{type:"ROLL",playerId:"a",dice:[2,3]});
+    const rented=step(rolled,{type:"MOVE_RESULT",playerId:"a"});
+    expect(player(rented,"b").cash).toBe(0);
+    expect(rented.mayor?.treasury).toBe(288);
+    expect(rented.mayor?.seats.b?.loanAmountDue).toBe(130);
+    const funded=changePlayer(rented,"b",{cash:140});
+    const partial=step(funded,{type:"CITY_REPAY_LOAN",playerId:"b",amount:30});
+    expect(partial.mayor?.seats.b).toMatchObject({loanAmountDue:100,loanStatus:"seized"});
+    const paid=step(partial,{type:"CITY_REPAY_LOAN",playerId:"b",amount:100});
+    expect(paid.mayor?.seats.b?.loanStatus).toBeUndefined();
+    expect(paid.mayor?.seats.b?.loanDue).toBeUndefined();
+    const mortgaged=step({...turn(paid,"b"),phase:"awaitingRoll"},{type:"MORTGAGE",playerId:"b",propertyId:5,mortgage:true});
+    expect(mortgaged.properties[5]?.mortgaged).toBe(true);
+  });
+
+  it("opens seized deeds to every solvent bidder and settles the loan before releasing other deeds", () => {
+    const state=round(overdue(250));
+    const estate: GameState={...state,bankHouses:30,properties:{...state.properties,
+      1:{ownerId:"b",houses:2,mortgaged:false},5:{ownerId:"b",houses:0,mortgaged:true}}};
+    const open={type:"CITY_AUCTION_SEIZED",playerId:"b",term:2,propertyId:1} as const;
+    expect(step(estate,{...open,playerId:"a"}).notice).toBeTruthy();
+    const auction=step(estate,open);
+    expect(auction.auction?.eligiblePlayerIds).toEqual(["a","b","c"]);
+    expect(auction.auction?.cityBacking).toBeUndefined();
+    const pass=(game:GameState,playerId:string)=>step(game,{type:"AUCTION_BID",playerId,pass:true});
+    const unsold=pass(pass(pass(auction,"a"),"b"),"c");
+    expect(unsold.properties[1]?.ownerId).toBe("b");
+    expect(unsold.mayor?.seats.b?.loanStatus).toBe("seized");
+    const bid=step(step(unsold,open),{type:"AUCTION_BID",playerId:"c",amount:300});
+    const sold=pass(pass(bid,"a"),"b");
+    expect(sold.phase).toBe("awaitingRoll");
+    expect(sold.activePlayerId).toBe("a");
+    expect(sold.properties[1]).toEqual({ownerId:"c",houses:0,mortgaged:false});
+    expect(sold.properties[5]).toEqual(estate.properties[5]);
+    expect(sold.bankHouses).toBe(32);
+    expect(sold.mayor?.treasury).toBe(432);
+    expect(player(sold,"b").cash).toBe(68);
+    expect(sold.mayor?.seats.b?.loanStatus).toBeUndefined();
+  });
+
+  it("lets the Mayor pardon a jailed rival and finish an already rolled jail move without a fee", () => {
+    const state=turn(changePlayer(table(),"b",{inJail:true,jailTurns:2,position:10}),"b");
+    const failed=step(state,{type:"ROLL",playerId:"b",dice:[2,3]});
+    expect(failed.phase).toBe("awaitingJailPayment");
+    const release={type:"CITY_RELEASE_JAIL",playerId:"a",targetId:"b",term:1} as const;
+    expect(step(failed,{...release,playerId:"c"}).notice).toBeTruthy();
+    const freed=step(failed,release);
+    expect(freed.phase).toBe("awaitingMove");
+    expect(player(freed,"b")).toMatchObject({cash:1500,inJail:false,jailTurns:0,position:10});
+    expect(freed.pendingRoll).toEqual(failed.pendingRoll);
+    expect(step(freed,{type:"MOVE_RESULT",playerId:"b"}).pendingPurchase?.propertyId).toBe(15);
+    const early=step(state,release);
+    expect(early.phase).toBe("awaitingRoll");
+    expect(player(early,"b").inJail).toBe(false);
   });
 });

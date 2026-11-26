@@ -5,7 +5,7 @@ import { getPurchasableTile, getTile, isStreetTile } from "../engine/board";
 import { calculateRent } from "../engine/reducer";
 import { formatRupees } from "../engine/currency";
 import { classicSpendableCash } from "../engine/classic";
-import { auctionCredit, cityLoanTotal, permitPaused, propertyPermitLocked } from "../engine/mayor";
+import { auctionCredit, cityLoanTotal, citySeizedOwner, permitPaused, propertyPermitLocked } from "../engine/mayor";
 import type { GameAction, GameState, Player } from "../engine/types";
 import type { PresentationFrame } from "../presentation/plan";
 import { GROUP_COLORS } from "./palette";
@@ -42,6 +42,7 @@ export function TitleDeed({ game, position, rent }: { game: GameState; position:
     <header><small>{tile.kind === "property" ? `${tile.region?.split(" · ")[0] ?? tile.group} DISTRICT · TITLE DEED` : `${tile.kind.toUpperCase()} · TITLE DEED`}</small><h2>{tile.name}</h2></header>
     {tile.region && <p className="title-deed-region">{tile.region}</p>}
     {tile.detail && <p className="title-deed-detail">{tile.detail}</p>}
+    {citySeizedOwner(game, position) && <p className="title-deed-detail">Seized by City Hall · rent repays the city loan</p>}
     {propertyPermitLocked(game, position) && <p className="title-deed-detail">Building permits paused until the Mayor changes</p>}
     {tile.kind === "property" && permitPaused(game, tile.group) && <p className="title-deed-detail">Building permits paused this round</p>}
     {tile.kind === "property" && game.mayor?.policy?.kind === "rent-relief" && game.mayor.policy.district === tile.group &&
@@ -124,7 +125,7 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
     };
     return <div className="event-backdrop auction-backdrop" style={{ "--auction-color": tile?.kind === "property" ? GROUP_COLORS[tile.group] : "#7695a8" } as CSSProperties}>
       <section className={`auction-stage ${sold ? "is-sold" : ""}`} role="dialog" aria-modal="true" aria-label="Live property auction">
-        <header className="auction-heading"><span>LIVE {building?auction.kind?.toUpperCase():"PROPERTY"} AUCTION</span><h1>{sold ? "SOLD!" : building?`Who wants the last ${auction.kind}?`:"Who wants the deed?"}</h1><p>{sold ? frame.text : game.mode === "classic"?"Opens at ₹10. Higher bids reopen bidding to previous passers.":"Bid higher, or pass. The last bidder wins."}</p></header>
+        <header className="auction-heading"><span>{auction.seizedFromId ? "CITY SEIZURE AUCTION" : `LIVE ${building ? auction.kind?.toUpperCase() : "PROPERTY"} AUCTION`}</span><h1>{sold ? "SOLD!" : building?`Who wants the last ${auction.kind}?`:"Who wants the deed?"}</h1><p>{sold ? frame.text : game.mode === "classic"?"Opens at ₹10. Higher bids reopen bidding to previous passers.":"Bid higher, or pass. The last bidder wins."}</p></header>
         <div className="auctioneer"><div className="auction-speech" key={frame?.id ?? auction.currentBid}>{sold ? `${winner?.name} takes it!` : frame?.kind === "bid" ? frame.text : auction.currentBid ? `${money(auction.currentBid)}. Any higher?` : "Let’s open the bidding!"}</div><Character pose={sold ? "sold" : "waiting"} /><Character pose="hammer" className={frame?.kind === "bid" || sold ? "auction-hammer striking" : "auction-hammer"} /></div>
         <div className="auction-deed"><TitleDeed game={game} position={position} />{sold && <span className="sold-stamp">SOLD</span>}</div>
         <div className="auction-bidding"><div className="highest-bid" key={auction.currentBid}><small>{sold ? "WINNING BID" : "HIGHEST BID"}</small><strong>{money(auction.currentBid)}</strong><span>{winner?.name ?? "No bids yet"}</span></div>

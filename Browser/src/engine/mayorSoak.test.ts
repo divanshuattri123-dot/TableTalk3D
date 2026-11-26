@@ -7,14 +7,14 @@ import type { GameState } from "./types";
 
 const seatId = (seat: number) => `ai-${seat}`;
 
-function table(count: number, firstSeat = 1): GameState {
+function table(count: number, firstSeat = 1, pro = false): GameState {
   let state = createInitialState("SOAK");
   for (let seat = 1; seat <= count; seat++) {
     state = reduceGame(state, { type: "JOIN", player: { id: seatId(seat), name: `Seat ${seat}`, color: PLAYER_COLORS[seat - 1]! } });
   }
-  state = reduceGame(state, { type: "SET_MODE", playerId: seatId(1), mode: "mayor" });
+  state = reduceGame(state, { type: "SET_MODE", playerId: seatId(1), mode: "mayor", mayorOffice: pro ? true : undefined });
   state = reduceGame(state, { type: "START", playerId: seatId(1), firstPlayerId: seatId(firstSeat) });
-  return { ...state, players: state.players.map(player => ({ ...player, bot: true })) };
+  return { ...state, players: state.players.map(player => ({ ...player, bot: true, botLevel: pro && player.id===seatId(firstSeat) ? "pro" : undefined })) };
 }
 
 function diceSource(seed: number) {
@@ -27,14 +27,17 @@ function diceSource(seed: number) {
 
 describe("Mayor game regression coverage", () => {
   it.each([
-    [2, 1, 73],
-    [3, 3, 11],
-    [4, 2, 54],
-    [5, 4, 13],
-    [6, 5, 151]
-  ])("resolves legal bot actions with %i seats, first seat %i and seed %i", (count, firstSeat, seed) => {
+    [2, 1, 73, false],
+    [3, 3, 11, false],
+    [4, 2, 54, false],
+    [5, 4, 13, false],
+    [6, 5, 151, false],
+    [2, 1, 43, true],
+    [3, 3, 51, true],
+    [6, 5, 159, true]
+  ] as const)("resolves legal bot actions with %i seats, first seat %i and seed %i (Pro %s)", (count, firstSeat, seed, pro) => {
     const pick = diceSource(seed);
-    let state = table(count, firstSeat);
+    let state = table(count, firstSeat, pro);
     let steps = 0;
     for (; steps < 1200 && state.phase !== "gameOver"; steps++) {
       let action = nextBotAction(state, [1 + pick(6), 1 + pick(6)]);

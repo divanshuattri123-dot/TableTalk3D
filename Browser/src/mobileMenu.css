@@ -170,3 +170,5 @@
   .mobile-front-footer { padding-top:4px;font-size:9px; }
   .menu-resume { min-height:30px;font-size:10px; }
 }
+
+.bot-lobby-buttons { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }

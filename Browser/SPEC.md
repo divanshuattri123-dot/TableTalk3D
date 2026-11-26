@@ -483,9 +483,23 @@ and rooms created through older clients keep their existing rules.
 - The Mayor selects exactly three distinct street deeds during a regular turn.
   Nobody can add houses or hotels to those deeds until the office changes hands.
   Buying, trading, mortgages and the sale of improvements keep their normal rules.
-- The Mayor can issue a ₹200 Emergency Loan to any solvent seat from City Funds.
-  The seat repays ₹225 at the end of its second turn with the loan. A seat may
-  receive another loan once its existing balance is repaid.
+- The Mayor can lend any positive whole-rupee amount from City Funds at 12.5%
+  interest, rounded up. A borrower can repay early in part or in full and has
+  until the end of their second turn with the loan. At the deadline the city
+  collects the full amount if the borrower can pay. Otherwise the borrower
+  receives a warning and one more turn to pay. If they still cannot pay, the
+  city seizes their deeds. One active city loan per player.
+- While deeds are seized, the owner cannot improve, mortgage or trade them.
+  Rent collection goes toward the outstanding city loan, and rent above the
+  remaining balance goes to the owner. Full repayment releases all unsold deeds.
+  The Mayor may list a seized deed for a normal auction open to every solvent
+  player. The sale transfers a clear deed and returns improvements to the bank.
+  The bid and improvement resale proceeds repay the loan first. Any surplus is
+  returned to the debtor. With no bid, the deed stays seized. Ordinary bankruptcy
+  follows the room’s existing creditor and bank-auction rules.
+- The Mayor can release any solvent jailed player without a fine, including
+  themselves. The player stays on Just Visiting, or completes their pending move
+  when a third failed jail roll was already awaiting payment.
 - The ₹75 Express ride takes the active player from their station to the next
   station before rolling, once per lap. Resolve the destination deed normally
   and skip the GO salary if the train wraps around. Transit Day is unavailable.

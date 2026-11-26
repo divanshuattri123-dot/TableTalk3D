@@ -40,6 +40,7 @@ interface CitySeat {
   borrowed?: true;
   loanDue?: number;
   loanAmountDue?: number;
+  loanStatus?: "notice" | "seized";
   rentReliefRound?: number;
   completedExpress?: true;
   contract?: CityContract;
@@ -87,7 +88,10 @@ export type CityAction =
   | { type: "CITY_CONTRACT"; playerId: string; contract: CityContract }
   | { type: "CITY_EXPRESS"; playerId: string }
   | { type: "CITY_LOCK_PERMITS"; playerId: string; term: number; propertyIds: readonly number[] }
-  | { type: "CITY_GRANT_LOAN"; playerId: string; term: number; targetId: string }
+  | { type: "CITY_GRANT_LOAN"; playerId: string; term: number; targetId: string; amount: number }
+  | { type: "CITY_REPAY_LOAN"; playerId: string; amount: number }
+  | { type: "CITY_AUCTION_SEIZED"; playerId: string; term: number; propertyId: number }
+  | { type: "CITY_RELEASE_JAIL"; playerId: string; term: number; targetId: string }
   | { type: "CITY_MOVE_RIVALS"; playerId: string; term: number }
   | { type: "CITY_SPIN"; playerId: string; wheelId: number; section?: number; prizeRoll?: number }
   | { type: "CITY_SCRATCH" | "CITY_SKIP_WHEEL"; playerId: string; wheelId: number };
@@ -289,11 +293,32 @@ export function rentRelief(state: GameState, playerId: string, tile: Tile, rent:
 export const propertyPermitLocked = (state: GameState, propertyId: number) =>
   state.mayor?.office?.permitPropertyIds?.includes(propertyId) === true;
 
-export function mayorCanGrantLoan(state: GameState, targetId: string) {
+export function mayorCanGrantLoan(state: GameState, targetId: string, amount: number) {
   const desk = state.mayor;
-  return !!desk?.office && cityStable(state) && desk.treasury >= LOAN_AMOUNT &&
+  return !!desk?.office && cityStable(state) && Number.isSafeInteger(amount) && amount > 0 &&
+    amount <= desk.treasury && Number.isSafeInteger(cityLoanTotal(amount)) &&
     state.players.some(player => player.id === targetId && !player.bankrupt && player.cash >= 0) &&
     !!desk.seats[targetId] && desk.seats[targetId].loanDue === undefined;
+}
+
+export function cityLoanBalance(state: GameState, playerId: string) {
+  const seat = state.mayor?.seats[playerId];
+  return seat?.loanDue === undefined ? 0 : seat.loanAmountDue ?? LOAN_REPAYMENT;
+}
+
+export function cityHasSeizedDeeds(state: GameState, playerId: string) {
+  return state.mayor?.seats[playerId]?.loanStatus === "seized" && cityLoanBalance(state, playerId) > 0;
+}
+
+export function citySeizedOwner(state: GameState, propertyId: number): string | undefined {
+  const owner = state.properties[propertyId]?.ownerId;
+  return owner && cityHasSeizedDeeds(state, owner) ? owner : undefined;
+}
+
+export function mayorCanReleaseJail(state: GameState, targetId: string) {
+  return !!state.mayor?.office && (
+    cityStable(state) || state.phase === "awaitingJailPayment" && state.activePlayerId === targetId && !!state.pendingRoll
+  ) && state.players.some(player => player.id === targetId && !player.bankrupt && player.inJail);
 }
 
 export const permitPaused = (state: GameState, district: ColorGroup) =>
@@ -301,7 +326,7 @@ export const permitPaused = (state: GameState, district: ColorGroup) =>
 
 export function cityAuctionBacking(state: GameState) {
   const desk = state.mayor, auction = state.auction;
-  if (!desk || !auction || auction.kind === "house" || auction.kind === "hotel" ||
+  if (!desk || !auction || auction.seizedFromId || auction.kind === "house" || auction.kind === "hotel" ||
       desk.policy?.kind !== "credit" || desk.policy.used || desk.treasury <= 0) return;
   const limit = Math.min(desk.treasury, LOAN_AMOUNT);
   const playerIds = state.players.filter(player => auction.eligiblePlayerIds.includes(player.id) &&

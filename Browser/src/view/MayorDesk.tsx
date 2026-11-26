@@ -5,7 +5,7 @@ import { getBoard, getTile } from "../engine/board";
 import { formatRupees as money } from "../engine/currency";
 import {
   canChallengeCityProject, CITY_CONTRACTS, CITY_POLICIES, cityLoanAvailable, cityLoanReason, cityPolicyAvailable,
-  cityStable, councilSpeaker, districtName, fortPosition, LOAN_REPAYMENT, OFFICE_PROJECTS, reserveLevy, WHEEL_SECTIONS
+  cityLoanBalance, cityStable, councilSpeaker, districtName, fortPosition, LOAN_REPAYMENT, OFFICE_PROJECTS, reserveLevy, WHEEL_SECTIONS
 } from "../engine/mayor";
 import type { CityAction, CityPolicy, WheelDecision } from "../engine/mayor";
 import type { ColorGroup, GameState } from "../engine/types";
@@ -14,6 +14,7 @@ import { createScratchBurst, eraseScratchFoil, paintScratchFlakes, paintScratchF
 import type { ScratchBurst } from "./scratchFoil";
 import { FORT_SPIN_MS } from "./wheelTiming";
 import MayorOffice from "./MayorOffice";
+import {CityLoanAccount} from "./CityLoans";
 import "./mayor.css";
 
 const FortWheelCloseup = lazy(() => import("./FortWheelCloseup"));
@@ -78,7 +79,7 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
   const loanAvailable = cityLoanAvailable(game, localId);
   const loanNote = cityLoanReason(game, localId);
   const hasActionDot = bills.length > 0 || Boolean(canChooseContract && here) || loanAvailable ||
-    Boolean(office && here && (desk.office || (!desk.proposalUsed && !proposal))) || canChallengeCityProject(game, localId);
+    Boolean(seat?.loanStatus || office && (desk.office || (here && !desk.proposalUsed && !proposal))) || canChallengeCityProject(game, localId);
   const estimate = selected === "wealth" ? reserveLevy(game) : undefined;
   const journal = game.eventLog.filter(event => event.kind === "civic").slice(0, 8);
 
@@ -107,7 +108,8 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
               {bill.status === "open" && bill.dueTurn <= seat.turns + 2 && <button type="button" disabled={!taxReady} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: bill.round, billId: bill.id ?? null })}>Defer</button>}
             </div>
           </div>)}
-          {seat.loanDue !== undefined && <p>City loan due <b>{money(seat.loanAmountDue ?? LOAN_REPAYMENT)}</b>{seat.loanDue <= seat.turns + 1 ? " at the end of your upcoming turn." : " within two of your turns."}</p>}
+          {desk.office && <CityLoanAccount game={game} localId={localId} available={stable} sendAction={sendAction} />}
+          {!desk.office && seat.loanDue !== undefined && <p>City loan due <b>{money(seat.loanAmountDue ?? LOAN_REPAYMENT)}</b>{seat.loanDue <= seat.turns + 1 ? " at the end of your upcoming turn." : " within two of your turns."}</p>}
           {loanAvailable && <div className="city-actions"><button type="button" disabled={!stable} onClick={() => sendAction({ type: "CITY_LOAN", playerId: localId, round: desk.round })}>Borrow ₹200 · repay ₹225</button></div>}
           {loanNote && <p><small>{loanNote}</small></p>}
         </section>}
@@ -122,7 +124,7 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
             </div>
             <p><small>Develop a clear colour set or {desk.office ? "own two unmortgaged stations." : "connect two stations with an Express ride."}</small></p></>}
         </section>}
-        {desk.office && <MayorOffice key={desk.term} game={game} localId={localId} available={stable} sendAction={sendAction} />}
+        {desk.office && <MayorOffice key={desk.term} game={game} localId={localId} available={stable} jailAvailable={available} sendAction={sendAction} />}
         {office && local && !local.bankrupt && game.phase !== "gameOver" && <section aria-label="Mayor's decisions">
           <h3>Your decisions as Mayor</h3>
           {!desk.office && desk.auditUsed ? <p>Your warrant has been used this term.</p> : !desk.office && rivals.length === 1 ? <p>In a two-player table, a deferred bill is audited automatically when your rival ends their turn if your warrant is still available.</p> :
@@ -171,15 +173,23 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
   </>;
 }
 
-export function CityTaxPrompt({ game, localId, available, hidden, sendAction }: {
-  game: GameState; localId: string; available: boolean; hidden: boolean; sendAction: SendCity;
+export function CityTaxPrompt({ game, localId, available, hidden, openCityHall, sendAction }: {
+  game: GameState; localId: string; available: boolean; hidden: boolean; openCityHall: () => void; sendAction: SendCity;
 }) {
   if (hidden || !game.mayor) return null;
   const local = game.players.find(player => player.id === localId);
   const seat = game.mayor.seats[localId];
   const openBill = seat?.bills.find(bill => bill.status === "open" && bill.dueTurn <= seat.turns + 2);
-  if (!local || local.bankrupt || !openBill) return null;
-  const ready = available && !game.debts?.length && game.phase !== "lobby" && game.phase !== "gameOver" && game.phase !== "awaitingAuction";
+  if (!local || local.bankrupt || game.phase === "gameOver") return null;
+  if (seat?.loanStatus) return <aside className="city-tax-prompt city-loan-notice" role="region" aria-label="City loan notice">
+    <div className="city-tax-copy"><small>{seat.loanStatus === "seized" ? "CITY SEIZURE" : "LOAN WARNING"}</small>
+      <b>{money(cityLoanBalance(game, localId))} city loan outstanding</b>
+      <span>{seat.loanStatus === "seized" ? "Rent repays your loan. Seized deeds can be auctioned." : "Pay by the end of your next turn to keep your deeds."}</span>
+    </div>
+    <div className="city-actions"><button type="button" onClick={openCityHall}>View city loan</button></div>
+  </aside>;
+  if (!openBill) return null;
+  const ready = available && !game.debts?.length && game.phase !== "lobby" && game.phase !== "awaitingAuction";
   return <aside className="city-tax-prompt" role="region" aria-label="City rent tax">
     <div className="city-tax-copy">
       <small>CITY HALL RENT TAX</small>

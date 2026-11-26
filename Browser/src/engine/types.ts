@@ -91,6 +91,7 @@ export interface PlayerInput {
 
 export interface Player extends PlayerInput {
   bot?: true;
+  botLevel?: "pro";
   botTradeOffered?: boolean;
   cash: number;
   position: number;
@@ -123,6 +124,7 @@ export interface PendingPurchase {
 
 export interface AuctionState {
   cityBacking?: { limit: number; playerIds: string[] };
+  seizedFromId?: string;
   kind?: "property" | "house" | "hotel";
   buildTargets?: Record<string, number[]>;
   winningTarget?: number;
@@ -222,7 +224,7 @@ export type PayKind = "jailFine" | "jailCard";
 
 export type GameAction =
   | CityAction
-  | {type:'ADD_BOT';playerId:string}
+  | {type:'ADD_BOT';playerId:string;level?:'pro'}
   | {type:'REMOVE_BOT';playerId:string;botId:string}
   | {type:'SET_WORLD';playerId:string;world:WorldId}
   | { type:'SET_CITY'; playerId:string; city:CityId }
