@@ -2,7 +2,7 @@ import { usesClassicRules } from "./rules";
 import {colorGroupTiles,getBoard,getPurchasableTile,isPurchasableTile} from './board';
 import {classicSpendableCash} from './classic';
 import {calculateRent,canTradeProperty,decisionPlayerId,reduceGame} from './reducer';
-import {auctionCredit,canChallengeCityProject,cityLoanAvailable,cityLoanBalance,cityPolicyAvailable,citySeizedOwner,cityStable,propertyPermitLocked,LOAN_AMOUNT,MAYOR_MOVE_SPACES,mayorCanGrantLoan,mayorCanReleaseJail,PERMIT_LOCK_COUNT,reserveLevy,trainOffer} from './mayor';
+import {DUEL_VETO_COST,auctionCredit,canChallengeCityProject,cityLoanAvailable,cityLoanBalance,cityPolicyAvailable,citySeizedOwner,cityStable,propertyPermitLocked,LOAN_AMOUNT,MAYOR_MOVE_SPACES,mayorCanGrantLoan,mayorCanReleaseJail,PERMIT_LOCK_COUNT,reserveLevy,trainOffer} from './mayor';
 import type {Dice,GameAction,GameState,Player,TradeOffer} from './types';
 
 const STYLES=[
@@ -127,7 +127,7 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
     if(mayor && s.players.filter(p=>!p.bankrupt).length>=3 && !desk.auditUsed){
       if(!desk.tip && !desk.office?.investigationUsed && s.phase==='awaitingEndTurn')return {type:'CITY_TIP',playerId:mayor.id,term};
       const rivals=desk.tip?.map(id=>s.players.find(p=>p.id===id && !p.bankrupt)).filter(p=>p!==undefined);
-      if(rivals?.length){
+      if(rivals?.length && mayor.cash>=50){
         const target=[...rivals].sort((a,b)=>a.cash-b.cash)[0]!;
         return {type:'CITY_AUDIT',playerId:mayor.id,term,targetId:target.id};
       }
@@ -166,15 +166,18 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
     if(mayor && active===mayor && (desk.office || !desk.proposalUsed) && !desk.proposal && desk.round>=2){
       const playerId=mayor.id;
       const cashLeader=reserveLevy(s);
-      if(cashLeader && cashLeader.playerId!==playerId && cityPolicyAvailable(s,'wealth'))
+      if(desk.policy?.kind!=="wealth" && cashLeader && cashLeader.playerId!==playerId && cityPolicyAvailable(s,'wealth'))
         return {type:'CITY_PROPOSE',playerId,term,policy:'wealth'};
       const lowCash=s.players.filter(p=>!p.bankrupt&&p.cash<=400&&(desk.office?desk.seats[p.id]?.loanDue===undefined:!desk.seats[p.id]?.borrowed));
       if(lowCash.some(p=>p.id===playerId) && cityPolicyAvailable(s,'credit'))
         return {type:'CITY_PROPOSE',playerId,term,policy:'credit'};
       if(desk.council && s.phase==='awaitingRoll'){
         const ahead=[5,6,7,8,9].map(n=>getPurchasableTile((mayor.position+n)%s.boardSize,s.boardSize));
-        const danger=ahead.find(tile=>tile?.kind==='property' && s.properties[tile.position]?.ownerId!==playerId &&
-          calculateRent(s,tile.position,7)>=Math.min(500,mayor.cash*.6));
+        const danger=ahead.find(tile=>{
+          const owner=tile?.kind==='property'?s.properties[tile.position]?.ownerId:undefined;
+          const rent=owner && owner!==playerId?calculateRent(s,tile!.position,7):0;
+          return rent>0 && rent>=Math.min(500,mayor.cash*.6);
+        });
         if(danger?.kind==='property' && cityPolicyAvailable(s,'rent-relief',danger.group))
           return {type:'CITY_PROPOSE',playerId,term,policy:'rent-relief',district:danger.group};
       }
@@ -185,14 +188,15 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
     }
     const proposal=desk.proposal;
     if(active && proposal && canChallengeCityProject(s,active.id)){
+      const isDuel=s.players.filter(p=>!p.bankrupt).length===2;
       const needsLoan=active.cash<=350 && !desk.seats[active.id]?.borrowed;
       const usesTrain=trainOffer(s,active.id)!==undefined;
       const targeted=proposal.kind==='wealth' && reserveLevy(s)?.playerId===active.id;
       const portfolioAffected=proposal.district && colorGroupTiles(proposal.district,s.boardSize)
         .some(tile=>s.properties[tile.position]?.ownerId===active.id);
-      if(targeted || portfolioAffected || (needsLoan && proposal.kind==='transit') ||
-        (!needsLoan && usesTrain && proposal.kind==='loans'))
-        return {type:'CITY_VOTE',playerId:active.id,term:proposal.term};
+      if((!isDuel || active.cash>=DUEL_VETO_COST+400) && (targeted || portfolioAffected || (!isDuel && ((needsLoan && proposal.kind==='transit') ||
+        (!needsLoan && usesTrain && proposal.kind==='loans')))))
+        return {type:'CITY_VOTE',playerId:active.id,term:proposal.term,proposalId:proposal.id};
     }
     if(active){
       const playerId=active.id,seat=desk.seats[playerId]!;

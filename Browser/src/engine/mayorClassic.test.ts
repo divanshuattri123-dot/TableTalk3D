@@ -54,22 +54,23 @@ describe("City Hall on the Classic table", () => {
     expect(state.mayor!.seats.p1!.turns).toBe(1);
   });
 
-  it("uses Classic debt settlement while a city fine is outstanding and prevents double charging at End turn", () => {
+  it("uses Classic debt settlement while a city fine is outstanding and prevents double charging", () => {
     let state = table();
     state.phase = "awaitingEndTurn";
-    state.players[0]!.cash = 2;
-    state.properties[39]!.ownerId = "p1";
-    state.mayor!.seats.p1!.bills = [{ round: 1, amount: 30, dueTurn: 1, status: "open" }];
-    state = apply(state, { type: "END_TURN", playerId: "p1" });
+    state.activePlayerId = "p2";
+    state.players[1]!.cash = 2;
+    state.properties[39]!.ownerId = "p2";
+    state.mayor!.seats.p2!.bills = [{ round: 1, amount: 30, dueTurn: 1, status: "deferred" }];
+    state = apply(state, { type: "CITY_AUDIT", playerId: "p1", term: 1, targetId: "p2" });
     expect(state.phase).toBe("awaitingDebt");
-    expect(state.debts).toMatchObject([{ playerId: "p1", amount: 28, city: true }]);
+    expect(state.debts).toMatchObject([{ playerId: "p2", amount: 53, city: true }]);
     expect(state.mayor!.treasury).toBe(402);
-    state = apply(state, { type: "MORTGAGE", playerId: "p1", propertyId: 39, mortgage: true });
+    state = apply(state, { type: "MORTGAGE", playerId: "p2", propertyId: 39, mortgage: true });
     expect(state.phase).toBe("awaitingEndTurn");
-    expect(state.mayor!.treasury).toBe(430);
-    state = apply(state, { type: "END_TURN", playerId: "p1" });
-    expect(state.activePlayerId).toBe("p2");
-    expect(state.mayor!.treasury).toBe(430);
+    expect(state.mayor!.treasury).toBe(455);
+    state = apply(state, { type: "END_TURN", playerId: "p2" });
+    expect(state.activePlayerId).toBe("p3");
+    expect(state.mayor!.treasury).toBe(455);
   });
 
   it("lets the Mayor lock three upgrade sites without changing the other Classic properties", () => {
@@ -77,7 +78,7 @@ describe("City Hall on the Classic table", () => {
     for (const id of [1, 3, 6, 8, 9]) state.properties[id]!.ownerId = "p2";
     state = apply(state, { type: "CITY_LOCK_PERMITS", playerId: "p1", term: 1, propertyIds: [1, 3, 6] });
     const locked = reduceGame(state, { type: "BUILD", playerId: "p2", propertyId: 1, operation: "build" });
-    expect(locked.notice).toContain("City Hall paused");
+    expect(locked.notice).toContain("City Hall paused building permits");
     state = apply(state, { type: "BUILD", playerId: "p2", propertyId: 8, operation: "build" });
     expect(state.properties[8]!.houses).toBe(1);
     expect(state.bankHouses).toBe(31);
@@ -88,7 +89,7 @@ describe("City Hall on the Classic table", () => {
     state.players[0]!.position = 35;
     state.properties[5]!.ownerId = "p2";
     state = apply(state, { type: "CITY_EXPRESS", playerId: "p1" });
-    expect(state.players[0]).toMatchObject({ position: 5, cash: 1425 });
+    expect(state.players[0]).toMatchObject({ position: 5, cash: 1525 });
     expect(state.rentClaim).toMatchObject({ payerId: "p1", propertyId: 5, ownerId: "p2", amount: 25 });
     expect(state.phase).toBe("awaitingEndTurn");
   });

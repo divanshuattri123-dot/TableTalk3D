@@ -11,8 +11,8 @@ const modern=():GameState=>{
 };
 const landed=()=>{let s=modern();s.properties[3]!.ownerId='p2';s=reduceGame(s,{type:'ROLL',playerId:'p1',dice:[1,2]});return reduceGame(s,{type:'MOVE_RESULT',playerId:'p1'});};
 it('creates a rent claim without charging money before the owner asks',()=>{
-  const s=landed(); expect(s.players[0]!.cash).toBe(1500);expect(s.players[1]!.cash).toBe(1500);expect(s.rentClaim).toMatchObject({payerId:'p1',ownerId:'p2',propertyId:3,amount:4});
-  const claimed=reduceGame(s,{type:'CLAIM_RENT',playerId:'p2',claimId:s.rentClaim!.id});expect(claimed.players[0]!.cash).toBe(1496);expect(claimed.players[1]!.cash).toBe(1504);expect(claimed.rentClaim).toBeUndefined();
+  const s=landed(), startCash = mode === "mayor" ? 1600 : 1500; expect(s.players[0]!.cash).toBe(startCash);expect(s.players[1]!.cash).toBe(1500);expect(s.rentClaim).toMatchObject({payerId:'p1',ownerId:'p2',propertyId:3,amount:4});
+  const claimed=reduceGame(s,{type:'CLAIM_RENT',playerId:'p2',claimId:s.rentClaim!.id});expect(claimed.players[0]!.cash).toBe(startCash - 4);expect(claimed.players[1]!.cash).toBe(1504);expect(claimed.rentClaim).toBeUndefined();
   expect(reduceGame(claimed,{type:'CLAIM_RENT',playerId:'p2',claimId:s.rentClaim!.id}).players).toEqual(claimed.players);
 });
 it('allows claiming after End turn, but expires the claim on the next movement roll',()=>{

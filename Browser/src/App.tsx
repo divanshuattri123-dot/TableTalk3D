@@ -29,8 +29,8 @@ import TapDice from './view/TapDice';
 import {rollDice} from './network/random';
 import { isPlayerColorTaken, playerColorKey } from "./engine/playerColors";
 import { usePresentation } from "./presentation/usePresentation";
-import { CityHall, CityHeadline, CityTaxPrompt, FortWheel } from "./view/MayorDesk";
-import { cityLoanAvailable, citySeizedOwner, cityStable, councilSpeaker, fortPosition, permitPaused, propertyPermitLocked, trainOffer } from "./engine/mayor";
+import { CityHall, CityHeadline, CityTaxPrompt, CityVotePrompt, FortWheel } from "./view/MayorDesk";
+import { cityLoanAvailable, citySeizedOwner, cityStable, councilSpeaker, fortPosition, permitPaused, propertyPermitLocked, rentReliefActive, trainOffer } from "./engine/mayor";
 import { presentationInteractionBusy } from "./presentation/timeline";
 import { shouldSendMove } from "./presentation/plan";
 import EventStage, { PlayerPortrait } from "./view/EventStage";
@@ -194,14 +194,16 @@ function App() {
 
   const begin = (roomCode: string) => {
     const normalized = roomCode.trim().toUpperCase();
-    if (!name.trim() || !/^[A-Z]{4}$/.test(normalized)) return;
-    saveProfile();
+    const saved = savedSession(normalized);
+    const seatName = (name.trim() || saved?.player.name || "").slice(0, 24);
+    if (!seatName || !/^[A-Z]{4}$/.test(normalized)) return;
+    if (name.trim()) saveProfile();
     setRecentRoom(normalized);
     setWelcomeMenu(false);
     void enterGameFullscreen();
     const nextSession: Session = {
       roomCode: normalized,
-      player: { id: savedSession(normalized)?.player.id ?? randomId(), name: name.trim().slice(0, 24), color, tokenId: token?.id, diceId: die?.id }
+      player: { id: saved?.player.id ?? randomId(), name: seatName, color, tokenId: token?.id, diceId: die?.id }
     };
     window.history.replaceState({}, "", `${window.location.pathname}?room=${normalized}`);
     writeSeat(nextSession, seatStores());
@@ -374,9 +376,22 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
     ? `${game.nextEventId}-${game.pendingRoll.dice.join("-")}` : "";
 
   useEffect(() => {
-    if (!game || !me || !sceneUsable || !moveKey || sentMove.current === moveKey || !shouldSendMove(game, me.id, motion.busy, motion.visible)) return;
-    if (connection === "connected" && sendAction({ type: "MOVE_RESULT", playerId: me.id, cardDraws: makeCardDraws(game, me) })) sentMove.current = moveKey;
-  }, [game, me, moveKey, motion.busy, motion.visible, sceneUsable, sendAction, connection]);
+    if (!game || !me || !sceneUsable || !moveKey || sentMove.current === moveKey || connection !== "connected" || !shouldSendMove(game, me.id, motion.busy, motion.visible)) return;
+    const dispatchMove = () => {
+      if (sentMove.current === moveKey) return true;
+      if (sendAction({ type: "MOVE_RESULT", playerId: me.id, cardDraws: makeCardDraws(game, me) })) {
+        sentMove.current = moveKey;
+        return true;
+      }
+      return false;
+    };
+    if (dispatchMove()) return;
+    // Another in-flight action may briefly hold the pending ack slot; retry until it clears.
+    const timer = window.setInterval(() => {
+      if (dispatchMove()) window.clearInterval(timer);
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [game, me, moveKey, motion.busy, motion.visible, sceneUsable, sendAction, connection, error]);
 
   const copyRoomLink = async () => {
     const link = roomShareUrl(session.roomCode, usesCloudAccount() ? PUBLIC_GAME_URL : window.location.href);
@@ -448,6 +463,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
       {screenNotice && <p className="fullscreen-notice" role="status">{screenNotice}</p>}
       {game.rentClaim && game.rentClaim.ownerId === me?.id && !me?.bankrupt && <div className="rent-claim" role="status"><span><b>{getTile(game.rentClaim.propertyId, game.boardSize, game.city).name}</b><small>Claim before the next movement roll</small></span><button type="button" disabled={connection !== "connected" || motion.busy || !sceneUsable || ["awaitingTradeResponse", "awaitingDebt", "awaitingMortgageDecision"].includes(game.phase)} onClick={() => sendAction({ type: "CLAIM_RENT", playerId: me!.id, claimId: game.rentClaim!.id })}>Claim {formatMoney(game.rentClaim.amount)}</button></div>}
       {game.mayor && me && !me.bankrupt && <CityTaxPrompt game={game} localId={me.id} openCityHall={() => setCityOpen(true)} available={connection === "connected" && !motion.busy && sceneUsable} hidden={cityOpen || !!wheelDialog || !!drawer || !!tablePanel || ["awaitingAuction", "awaitingBuy", "awaitingTradeResponse", "awaitingDebt", "awaitingMove"].includes(game.phase)} sendAction={sendAction} />}
+      {game.mayor && me && !me.bankrupt && <CityVotePrompt game={game} localId={me.id} available={connection === "connected" && !motion.busy && sceneUsable} hidden={cityOpen || !!wheelDialog || !!drawer || !!tablePanel || ["awaitingAuction", "awaitingBuy", "awaitingTradeResponse", "awaitingDebt", "awaitingMove"].includes(game.phase)} sendAction={sendAction} />}
 
       <section className="game-layout">
         {mobileLobby ? <MobileLobby configuringMap={configuringMap} game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} onCopy={copyRoomLink} copied={copied} colorPicker={<TokenColorPicker color={me?.color ?? session.player.color} players={game.players} localId={session.player.id} onChoose={color=>sendAction({type:'SET_APPEARANCE',playerId:session.player.id,color})}/>}/> : <BoardStage diceEnabled={isCurrent&&game.phase==="awaitingRoll"&&!diceToolsOpen&&!drawer&&!tablePanel&&!cityOpen&&!wheelDialog} onWheel={openWheel} onThrow={()=>{if(isCurrent&&me&&game.phase==="awaitingRoll")sendAction({type:"ROLL",playerId:me.id,dice:dice()});}} panel={tablePanel} onPanelChange={setTablePanel} game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />}
@@ -544,13 +560,14 @@ function Board({ game, current, onSelect }: { game: GameState; current?: Player;
           const sideLength = game.boardSize / 4;
           const side = tile.position < sideLength ? "bottom" : tile.position < sideLength * 2 ? "left" : tile.position < sideLength * 3 ? "top" : "right";
           const tileStyle = { ...tileGridPosition(tile.position, game.boardSize), "--tile-color": stripe, "--owner-color": owner?.color } as CSSProperties;
+          const isRelief = rentReliefActive(game, tile);
           return (
             <article
-              className={`board-tile ${tile.kind} ${property?.ownerId ? "owned" : ""}`}
+              className={`board-tile ${tile.kind} ${property?.ownerId ? "owned" : ""} ${property?.mortgaged ? "mortgaged" : ""} ${isRelief ? "rent-relief" : ""}`}
               data-side={side}
               key={tile.position}
               style={tileStyle}
-              title={[tile.name, tile.region, tile.detail].filter(Boolean).join(" · ")}
+              title={[tile.name, tile.region, tile.detail, isRelief ? "Rent Relief active · 50% off rent" : ""].filter(Boolean).join(" · ")}
               role="button"
               tabIndex={0}
               aria-label={`Inspect ${tile.name}${tile.region ? `, ${tile.region}` : ""}${tile.detail ? `, ${tile.detail}` : ""}`}
@@ -569,6 +586,7 @@ function Board({ game, current, onSelect }: { game: GameState; current?: Player;
               {tile.kind === "tax" && <span className="tile-icon">₹</span>}
               {tile.kind === "goToJail" && <span className="tile-icon">⇢</span>}
               {property && propertyLabel(property) && <span className="improvement-mark">{propertyLabel(property)}</span>}
+              {isRelief && <span className="improvement-mark relief-mark">−50%</span>}
               {owner && <span className="owner-marker" title={`Owned by ${owner.name}`} />}
               <span className="token-stack">
                 {players.map((player) => (
@@ -676,7 +694,7 @@ function Controls({
   }, [game.phase, debt?.playerId, local.id]);
   const ownProperties = useMemo(
     () => getBoard(game.boardSize, game.city).filter((tile) => isPurchasableTile(tile) && game.properties[tile.position]?.ownerId === local.id),
-    [game.properties, game.boardSize, local.id]
+    [game.properties, game.boardSize, game.city, local.id]
   );
 
   return (
@@ -766,7 +784,7 @@ function PropertyTools({
         const locked = classic && classicBuildingGroupLocked(game,tile.position,player.id);
         const deedPaused = propertyPermitLocked(game, tile.position);
         const seized = !!citySeizedOwner(game, tile.position);
-        const paused = deedPaused || (tile.kind === "property" && permitPaused(game, tile.group));
+        const paused = deedPaused || (tile.kind === "property" && permitPaused(game, tile.group, player.id));
         const canBuild = !seized && !paused && !locked && game.auction?.kind !== "house" && game.auction?.kind !== "hotel" && tile.kind === "property" && clearSet && game.phase !== "awaitingDebt" && property.houses < 5 && property.houses === Math.min(...levels) && cash >= tile.houseCost && (property.houses === 4 ? game.bankHotels > 0 : game.bankHouses > 0);
         const canSell = !seized && !locked && (classic || clearSet) && property.houses > 0 && property.houses === Math.max(...saleLevels) && (property.houses < 5 || game.bankHouses >= 4);
         const canMortgage = !seized && !locked && (property.mortgaged ? game.phase !== "awaitingDebt" && cash >= tile.mortgageValue + Math.ceil(tile.mortgageValue / 10) : !saleLevels.some(level => level > 0));

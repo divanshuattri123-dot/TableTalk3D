@@ -143,8 +143,12 @@
 .city-tax-copy small { color: #f6d58e; font: 800 9px system-ui, sans-serif; letter-spacing: .12em; }
 .city-tax-copy b { color: #fff8e6; font: 800 14px/1.25 system-ui, sans-serif; }
 .city-tax-copy span { color: #d7e0d4; font: 500 11.5px/1.25 system-ui, sans-serif; }
+.city-status-blue { background: linear-gradient(120deg, #1b4e8a, #173c68); border: 1px solid #7fc3ff; color: #eef7ff; }
+.city-vote-prompt { top: 146px; border-color: #82c6ff; border-left-color: #3993ff; background: linear-gradient(135deg, #163d6bf7, #0f294af7); }
+.city-vote-prompt .city-tax-copy small { color: #9ad1ff; }
 @media (pointer: coarse), (max-width: 780px), (max-height: 500px) {
   .city-tax-prompt { top: auto; bottom: max(76px, calc(env(safe-area-inset-bottom) + 64px)); padding: 8px 11px; gap: 8px 10px; }
+  .city-vote-prompt { top: 62px; bottom: auto; }
   .city-tax-copy b { font-size: 13px; }
   .city-tax-copy span { font-size: 11px; }
 }

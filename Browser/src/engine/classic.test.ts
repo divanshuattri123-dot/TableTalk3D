@@ -9,7 +9,10 @@ function classicGame(count=3, mode: "classic" | "mayor" = "classic"): GameState 
   let s=createInitialState("CLSC");
   for(let i=1;i<=count;i++) s=reduceGame(s,{type:"JOIN",player:{id:"p"+i,name:"Classic "+i,color:["red","blue","green","yellow","purple","pink"][i-1]!}});
   s=reduceGame(s,{type:"SET_MODE",playerId:"p1",mode,mayorClassic:mode==="mayor"?true:undefined});
-  return reduceGame({...s,rulesEdition:undefined},{type:"START",playerId:"p1",firstPlayerId:"p1",deckOrder:{chance:order(),community:order()},setupRolls:[s.players.map((p,i)=>({playerId:p.id,dice:i===0?[6,6]:[1,2]}))]});
+  const started = reduceGame({...s,rulesEdition:undefined},{type:"START",playerId:"p1",firstPlayerId:"p1",deckOrder:{chance:order(),community:order()},setupRolls:[s.players.map((p,i)=>({playerId:p.id,dice:i===0?[6,6]:[1,2]}))]});
+  // Put both variants on the same opening bankroll for the base-rules comparisons.
+  if (mode === "mayor") started.players[0]!.cash = 1500;
+  return started;
 }
 const p=(s:GameState,id="p1")=>s.players.find(p=>p.id===id)!;
 const own=(s:GameState,id:string,ids:number[],houses=0,mortgaged=false)=>{ for(const i of ids)s.properties[i]={ownerId:id,houses:houses as 0|1|2|3|4|5,mortgaged}; return s; };
@@ -173,6 +176,7 @@ describe.each(["classic", "mayor"] as const)("%s base rules", (mode) => {
   it("handles a mortgage-interest bankruptcy chain without stopping the next turn",()=>{
     let s=own(table(4),"p1",[1],0,true);s.phase="awaitingDebt";s.debtResumePhase="awaitingEndTurn";p(s).cash=-100;p(s,"p2").cash=0;s.debts=[{playerId:"p1",creditorId:"p2",reason:"rent",amount:100}];
     s=apply(s,{type:"BANKRUPT",playerId:"p1"});expect(s.phase).toBe("awaitingMortgageDecision");
+    if (mode === "mayor") p(s,"p2").cash=0;
     s=apply(s,{type:"RESOLVE_MORTGAGES",playerId:"p2",redeemPropertyIds:[]});expect(s.phase).toBe("awaitingDebt");expect(p(s,"p2").cash).toBe(-3);
     s=apply(s,{type:"BANKRUPT",playerId:"p2"});expect(s.phase).toBe("awaitingAuction");expect(s.auction?.propertyId).toBe(1);expect(s.activePlayerId).toBe("p3");
   });

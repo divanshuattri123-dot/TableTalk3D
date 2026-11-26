@@ -1,8 +1,28 @@
 import { useCallback, useEffect, useRef } from "react";
 import { assetUrl, useAssets } from "../assets";
 import type { ViewSettings } from "../assets";
-import type { GameState } from "../engine/types";
+import type { GameEvent, GameState } from "../engine/types";
 import {GameAudio} from './gameAudio';
+
+const SOUND_MATCHERS: ReadonlyArray<readonly [string, (text: string) => boolean]> = [
+  ["jail", (text) => text.includes("went to jail")],
+  ["buy", (text) => text.includes("bought") || (text.includes("won") && !text.includes("wins"))],
+  ["accept", (text) => text.includes("accepted the trade")],
+  ["trade", (text) => text.includes("offered a trade")],
+  ["auction", (text) => text.includes("bid ₹")],
+  ["roll", (text) => text.includes("rolled")],
+  ["income", (text) => text.includes("collected") || text.includes("received")]
+];
+
+export function soundForEvents(events: readonly GameEvent[], phase?: GameState["phase"]): string | undefined {
+  if (!events.length) return undefined;
+  if (phase === "gameOver") return "winner";
+  const texts = events.map((event) => event.text.toLowerCase());
+  for (const [key, matches] of SOUND_MATCHERS) {
+    if (texts.some(matches)) return key;
+  }
+  return undefined;
+}
 
 export function useGameAudio(game: GameState | undefined, settings: ViewSettings) {
   const { catalog, byId } = useAssets();
@@ -23,19 +43,14 @@ export function useGameAudio(game: GameState | undefined, settings: ViewSettings
     if(asset)audio.play(assetUrl(asset.src));
   }, [audio,catalog,byId]);
   useEffect(() => {
-    const event = game?.eventLog[0];
-    if (!event || event.id === lastEvent.current) return;
-    const initial = lastEvent.current === 0; lastEvent.current = event.id;
-    if (initial) return;
-    const text = event.text.toLowerCase();
-    if (game?.phase === "gameOver") play("winner");
-    else if (text.includes("rolled")) play("roll");
-    else if (text.includes("bought") || text.includes("won") && !text.includes("wins")) play("buy");
-    else if (text.includes("accepted the trade")) play("accept");
-    else if (text.includes("offered a trade")) play("trade");
-    else if (text.includes("bid ₹")) play("auction");
-    else if (text.includes("went to jail")) play("jail");
-    else if (text.includes("collected") || text.includes("received")) play("income");
-  }, [game?.eventLog, play]);
+    const newest = game?.eventLog[0];
+    if (!newest || newest.id === lastEvent.current) return;
+    const prevId = lastEvent.current;
+    lastEvent.current = newest.id;
+    if (prevId === 0 || newest.id < prevId) return;
+    const fresh = game.eventLog.filter((entry) => entry.id > prevId);
+    const key = soundForEvents(fresh, game.phase);
+    if (key) play(key);
+  }, [game?.eventLog, game?.phase, play]);
   return play;
 }

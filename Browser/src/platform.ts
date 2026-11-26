@@ -1,4 +1,4 @@
-export const PUBLIC_GAME_URL = 'https://divanshuattri123-dot.github.io/TableTalk3D/';
+export const PUBLIC_GAME_URL = import.meta.env.VITE_PUBLIC_GAME_URL || 'https://divanshuattri123-dot.github.io/TableTalk3D/';
 export const CHATGPT_GAME_URL = 'https://tabletalk3d.divanshuattri123.chatgpt.site/';
 export function roomCodeFromSearch(search: string) {
   const room = new URLSearchParams(search).get('room')?.toUpperCase() ?? '';

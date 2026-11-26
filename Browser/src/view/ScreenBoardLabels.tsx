@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef } from "react";
 import { getBoard, isPurchasableTile } from "../engine/board";
-import type { BoardSize } from "../engine/types";
+import type { BoardSize, ColorGroup } from "../engine/types";
 import type { CityId } from '../engine/cities';
 import { fitBoardName } from "./readability";
 import { pinnedLabelLayout } from "./labelProjection";
@@ -9,7 +9,7 @@ import type { ProjectedLabelLayout } from "./labelPaint";
 import type { LabelPacket } from "./readability";
 import { boardSymbol, printedBoardLabel } from "./boardSigns";
 
-export default memo(function ScreenBoardLabels({ size,city,wheelPosition,onWheel }: { size: BoardSize; city?:CityId; wheelPosition?: number; onWheel?: () => void }) {
+export default memo(function ScreenBoardLabels({ size,city,reliefDistrict,wheelPosition,onWheel }: { size: BoardSize; city?:CityId; reliefDistrict?: ColorGroup; wheelPosition?: number; onWheel?: () => void }) {
   const root = useRef<HTMLDivElement>(null), nodes = useRef(new Map<number, HTMLDivElement>());
   const wheelPin = useRef<HTMLButtonElement>(null);
   const board = useMemo(() => getBoard(size,city), [size,city]);
@@ -79,7 +79,7 @@ export default memo(function ScreenBoardLabels({ size,city,wheelPosition,onWheel
     return () => { disposed = true; window.removeEventListener("tabletalk-unity", receive); observer.disconnect(); };
   }, [size, board, wheelPosition]);
   return <div className="screen-board-labels" ref={root}>
-    {board.map(tile => <div className={`screen-tile-label${isPurchasableTile(tile) ? " has-price" : ""}`} key={tile.position} hidden aria-hidden="true" ref={node => { if (node) nodes.current.set(tile.position, node); else nodes.current.delete(tile.position); }}>
+    {board.map(tile => <div className={`screen-tile-label${isPurchasableTile(tile) ? " has-price" : ""}${tile.kind === "property" && tile.group === reliefDistrict ? " is-rent-relief" : ""}`} key={tile.position} hidden aria-hidden="true" ref={node => { if (node) nodes.current.set(tile.position, node); else nodes.current.delete(tile.position); }}>
       <svg className="screen-tile-name" aria-label={printedBoardLabel(tile)}>{boardSymbol(tile) && <image href={`${import.meta.env.BASE_URL}board-icons/${boardSymbol(tile)}.svg`} preserveAspectRatio="xMidYMid meet" />}{[0, 1, 2].map(line => <text key={line} x="50%" textAnchor="middle" dominantBaseline="central" lengthAdjust="spacingAndGlyphs" />)}</svg>
       {isPurchasableTile(tile) && <strong className="screen-tile-price"><i>₹</i>{tile.price}</strong>}
     </div>)}

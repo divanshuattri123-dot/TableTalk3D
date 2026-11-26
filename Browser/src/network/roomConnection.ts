@@ -49,7 +49,7 @@ export class RoomConnection {
     this.callbacks.error(undefined);
     if (!this.ready && !this.offline) {
       this.ready = true; this.callbacks.status("connected");
-      if (this.player && !message.state.players.some(p => p.id === this.player!.id)) {
+      if (this.player && message.state.phase === "lobby" && !message.state.players.some(p => p.id === this.player!.id)) {
         this.pending.set(`${this.clientId}:join`, { action: { type: "JOIN", player: this.player }, sentAt: 0 });
       }
       this.flush();

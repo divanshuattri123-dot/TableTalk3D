@@ -80,11 +80,12 @@ export default function ThreeBoard({ game, settings, onSelect, onFallback, onCam
 
     const board = getBoard(game.boardSize, game.city);
     const tileGeo = new THREE.BoxGeometry(1, .15, 1);
-    const tiles = new THREE.InstancedMesh(tileGeo, new THREE.MeshStandardMaterial({ color: "#b2d0ac", roughness: .9 }), board.length);
+    const tiles = new THREE.InstancedMesh(tileGeo, new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: .9 }), board.length);
     const matrix = new THREE.Matrix4();
     board.forEach((tile) => {
       const layout = tileLayout(tile.position, game.boardSize);
       matrix.compose(new THREE.Vector3(layout.x, .02, layout.z), new THREE.Quaternion(), new THREE.Vector3(layout.width - .015, 1, layout.depth - .015)); tiles.setMatrixAt(tile.position, matrix);
+      tiles.setColorAt(tile.position, new THREE.Color("#b2d0ac"));
     });
     tiles.castShadow = true; tiles.receiveShadow = true; scene.add(tiles);
     const labels = createBoardLabels(board, catalog?.assets ?? []); scene.add(labels.mesh);
@@ -115,15 +116,24 @@ export default function ThreeBoard({ game, settings, onSelect, onFallback, onCam
       }
     }
     function refreshBuildings(state: GameState) {
-      const key = JSON.stringify(state.properties);
+      const reliefGroup = state.mayor?.policy?.kind === "rent-relief" ? state.mayor.policy.district : "";
+      const key = JSON.stringify([state.properties, reliefGroup]);
       if (key === propertyKey) return;
       propertyKey = key; clearDecorations();
+      board.forEach((tile) => {
+        const prop = state.properties[tile.position];
+        const isRelief = tile.kind === "property" && tile.group === reliefGroup;
+        tiles.setColorAt(tile.position, new THREE.Color(isRelief ? "#3b8ef3" : prop?.mortgaged ? "#d75b62" : "#b2d0ac"));
+      });
+      if (tiles.instanceColor) tiles.instanceColor.needsUpdate = true;
       const houses: THREE.Matrix4[] = [], hotels: THREE.Matrix4[] = [];
       for (const [positionString, property] of Object.entries(state.properties)) {
         if (!property.ownerId) continue;
         const position = Number(positionString), point = tilePoint(position, state.boardSize);
         const owner = state.players.find((player) => player.id === property.ownerId);
-        const marker = new THREE.Mesh(new THREE.BoxGeometry(.86, .025, .09), new THREE.MeshBasicMaterial({ color: property.mortgaged ? "#76818a" : owner?.color ?? "#999999" }));
+        const tileEntry = board[position];
+        const isRelief = tileEntry?.kind === "property" && tileEntry.group === reliefGroup;
+        const marker = new THREE.Mesh(new THREE.BoxGeometry(.86, .025, .09), new THREE.MeshBasicMaterial({ color: isRelief ? "#1d6fe0" : property.mortgaged ? "#c92d3e" : owner?.color ?? "#999999" }));
         marker.position.set(point.x, .13, point.z); marker.rotation.y = Math.floor(position / side) * Math.PI / 2; decorations.add(marker);
         for (let index = 0; index < property.houses; index += 1) {
           const hotel = property.houses === 5;

@@ -30,6 +30,8 @@ export async function enterGameFullscreen(element: HTMLElement = document.docume
 
 export async function exitGameFullscreen() {
   releaseGameOrientation();
-  if (document.exitFullscreen && document.fullscreenElement) await document.exitFullscreen();
-  else await (document as FullscreenDocument).webkitExitFullscreen?.();
+  try {
+    if (document.exitFullscreen && document.fullscreenElement) await document.exitFullscreen();
+    else if ((document as FullscreenDocument).webkitFullscreenElement) await (document as FullscreenDocument).webkitExitFullscreen?.();
+  } catch { /* Browser may reject fullscreen exit when the document is no longer active. */ }
 }

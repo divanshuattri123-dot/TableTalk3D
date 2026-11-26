@@ -1,4 +1,4 @@
-import { BOARD, colorGroupTiles, getPurchasableTile, isPurchasableTile, railroadPositions, utilityPositions } from "./board";
+import { BOARD, colorGroupTiles, getBoard, getPurchasableTile, isPurchasableTile, railroadPositions, utilityPositions } from "./board";
 import { CLASSIC_CARDS, jailCardIndex } from "./classicCards";
 import { formatRupees as money } from "./currency";
 import {
@@ -28,7 +28,7 @@ const normalPhases = ["awaitingRoll", "awaitingEndTurn", "awaitingBuy", "awaitin
 
 export const classicSpendableCash = (s: GameState, id: string) => (owner(s, id)?.cash ?? 0) -
   [s.auction, s.suspendedAuction].reduce((n, a) => n + (a?.highestBidderId === id ? a.currentBid : 0), 0);
-export const classicLiquidationValue = (s: GameState, id: string) => BOARD.reduce((n, tile) => {
+export const classicLiquidationValue = (s: GameState, id: string) => getBoard(s.boardSize).reduce((n, tile) => {
   const p = s.properties[tile.position];
   return !isPurchasableTile(tile) || p?.ownerId !== id || citySeizedOwner(s, tile.position) ? n : n + (p.mortgaged ? 0 : tile.mortgageValue) +
     (tile.kind === "property" ? buildingValue(s,tile) / 2 : 0);
@@ -55,7 +55,7 @@ export const canClassicTradeProperty = (s: GameState, propertyId: number, id: st
 const buildable = (s: GameState, id: string, propertyId: number, hotel = false) => {
   const tile = BOARD[propertyId], p = s.properties[propertyId];
   return Boolean(tile?.kind === "property" && p?.ownerId === id && !p.mortgaged && fullSet(s, id, tile) &&
-    !citySeizedOwner(s, propertyId) && !propertyPermitLocked(s, propertyId) && !permitPaused(s, tile.group) && p.houses === Math.min(...levels(s, tile)) && (hotel ? p.houses === 4 : p.houses < 4));
+    !citySeizedOwner(s, propertyId) && !propertyPermitLocked(s, propertyId) && !permitPaused(s, tile.group, id) && p.houses === Math.min(...levels(s, tile)) && (hotel ? p.houses === 4 : p.houses < 4));
 };
 
 class Table {
@@ -341,7 +341,7 @@ class Table {
     requireRule(!citySeizedOwner(this.s, tile.position), "City Hall currently controls this deed.");
     if (action.operation==="build") {
       requireRule(fullSet(this.s,p.id,tile),"You need an unmortgaged complete colour set.");
-      requireRule(!propertyPermitLocked(this.s, tile.position) && !permitPaused(this.s, tile.group), "City Hall paused upgrades for this deed.");
+      requireRule(!propertyPermitLocked(this.s, tile.position) && !permitPaused(this.s, tile.group, p.id), "City Hall paused building permits for this deed.");
       requireRule(buildable(this.s,p.id,tile.position,d.houses===4) && classicSpendableCash(this.s,p.id)>=tile.houseCost,"Build evenly with available cash.");
       requireRule(this.s.auction?.kind!=="house" && this.s.auction?.kind!=="hotel","Finish the building auction first.");
       const kind=d.houses===4?"hotel":"house", stock=kind==="hotel"?this.s.bankHotels:this.s.bankHouses;
@@ -401,8 +401,8 @@ class Table {
       [t.toPlayerId,t.requestedCash,t.requestedPropertyIds,t.requestedJailCards??[],t.offeredCash,t.offeredPropertyIds]
     ] as const) {
       const p=this.player(id);
-      requireRule(cashAmount(cash) && cash<=Math.max(0,classicSpendableCash(this.s,id)) && new Set(ids).size===ids.length && ids.every(i=>canClassicTradeProperty(this.s,i,id)),"Trade cash or deeds are no longer available.");
       requireRule(!cash || !cityLoanBalance(this.s, id), "Repay your city loan before offering cash in a trade.");
+      requireRule(cashAmount(cash) && cash<=Math.max(0,classicSpendableCash(this.s,id)) && new Set(ids).size===ids.length && ids.every(i=>canClassicTradeProperty(this.s,i,id)),"Trade cash or deeds are no longer available.");
       requireRule(new Set(cards).size===cards.length && cards.every(deck=>held(p).includes(deck)),"That release card is not available.");
       const fees=this.s.rulesEdition === 'hasbro-2025' ? 0 : received.reduce((n,i)=>n+(this.s.properties[i]?.mortgaged?Math.ceil(getPurchasableTile(i,40)!.mortgageValue/10):0),0);
       requireRule(!fees || classicSpendableCash(this.s,id)-cash+incoming>=fees,"Include enough unreserved cash for the receiver's mortgage interest.");
@@ -411,7 +411,13 @@ class Table {
   counter(action: Extract<GameAction,{type:"TRADE_COUNTER"}>) {
     const previous = this.s.pendingTrade;
     requireRule(this.s.phase === "awaitingTradeResponse" && previous && previous.id === action.previousOfferId && previous.toPlayerId === action.playerId && action.offerId && action.offerId !== previous.id, "Only the recipient may counter the current offer with a new ID.");
-    const offer: TradeOffer = { ...action, id: action.offerId, counterOfId: previous!.id, fromPlayerId: action.playerId, toPlayerId: previous!.fromPlayerId, resumePhase: previous!.resumePhase };
+    const offer: TradeOffer = {
+      id: action.offerId, counterOfId: previous.id, fromPlayerId: action.playerId, toPlayerId: previous.fromPlayerId,
+      offeredCash: action.offeredCash, requestedCash: action.requestedCash,
+      offeredPropertyIds: [...action.offeredPropertyIds], requestedPropertyIds: [...action.requestedPropertyIds],
+      offeredJailCards: [...(action.offeredJailCards ?? [])], requestedJailCards: [...(action.requestedJailCards ?? [])],
+      resumePhase: previous.resumePhase
+    };
     this.checkTrade(offer); this.s.pendingTrade = offer;
     this.event(`${this.player(action.playerId).name} counter-offered to ${this.player(offer.toPlayerId).name}.`, "info", { playerId: action.playerId });
   }
