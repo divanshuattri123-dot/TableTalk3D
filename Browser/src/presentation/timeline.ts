@@ -35,6 +35,12 @@ export class PresentationTimeline {
     if (previous && game.roomCode === previous.roomCode && game.nextEventId < previous.nextEventId) return;
     this.planned = game;
     if (!previous || previous.roomCode !== game.roomCode || previous.boardSize !== game.boardSize) { this.reset(game, restoredCard(game)); return; }
+    const oldCardExpired = previous.activePlayerId !== game.activePlayerId || Boolean(previous.card && !game.card);
+    if (oldCardExpired && this.unreadCard()) {
+      // A reader cannot keep the next turn waiting after the authoritative room has moved on.
+      this.reset(game, restoredCard(game));
+      return;
+    }
     const frames = planPresentation(previous, game);
     const sameLiveBid = (frame: PresentationFrame) => frame.kind === "bid" && frame.tileId === game.auction?.propertyId;
     if (game.phase === "awaitingAuction" && this.frame && sameLiveBid(this.frame) && this.playing &&

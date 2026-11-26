@@ -79,7 +79,7 @@ function MortgageDecision({game,localId,sendAction}:{game:GameState;localId:stri
 }
 
 export default function EventStage({ game, frame, busy, localId, sendAction, onCardRead, financeTools, counterTools }: {
-  game: GameState; frame?: PresentationFrame; busy: boolean; localId: string; sendAction: (action: GameAction) => void;
+  game: GameState; frame?: PresentationFrame; busy: boolean; localId: string; sendAction: (action: GameAction) => boolean | void;
   onCardRead: (id: string) => void;
   financeTools?: ReactNode;
   counterTools?: () => ReactNode;
@@ -88,6 +88,10 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
   const [counterOpen,setCounterOpen]=useState(false);
   useEffect(()=>setCounterOpen(false),[game.pendingTrade?.id]);
   const [buildTarget,setBuildTarget]=useState("");
+  useEffect(() => {
+    setBid("");
+    setBuildTarget("");
+  }, [game.roomCode, game.auction?.propertyId, game.auction?.kind, game.auction?.landingPlayerId]);
   const previousAuction = useRef(game.auction);
   useEffect(() => { if (game.auction) previousAuction.current = game.auction; }, [game.auction]);
   const me = game.players.find(p => p.id === localId), actor = game.players.find(p => p.id === frame?.playerId);
@@ -114,7 +118,9 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
     const ownCash = (me?.cash ?? 0) - (game.suspendedAuction?.highestBidderId === localId ? game.suspendedAuction.currentBid : 0);
     const available = ownCash + credit;
     const borrowing = Math.max(0, Number(bid) - ownCash);
-    const doBid = (amount: number) => { sendAction({ type: "AUCTION_BID", playerId: localId, amount, ...(building?{propertyId:chosenTarget}:{}) }); setBid(""); };
+    const doBid = (amount: number) => {
+      if (sendAction({ type: "AUCTION_BID", playerId: localId, amount, ...(building ? { propertyId: chosenTarget } : {}) }) !== false) setBid("");
+    };
     return <div className="event-backdrop auction-backdrop" style={{ "--auction-color": tile?.kind === "property" ? GROUP_COLORS[tile.group] : "#7695a8" } as CSSProperties}>
       <section className={`auction-stage ${sold ? "is-sold" : ""}`} role="dialog" aria-modal="true" aria-label="Live property auction">
         <header className="auction-heading"><span>LIVE {building?auction.kind?.toUpperCase():"PROPERTY"} AUCTION</span><h1>{sold ? "SOLD!" : building?`Who wants the last ${auction.kind}?`:"Who wants the deed?"}</h1><p>{sold ? frame.text : game.mode === "classic"?"Opens at ₹10. Higher bids reopen bidding to previous passers.":"Bid higher, or pass. The last bidder wins."}</p></header>

@@ -87,6 +87,33 @@ it("does not present a previous player's completed card when rejoining their fri
   const t = new PresentationTimeline(); t.receive({ ...landed, activePlayerId: "b", phase: "awaitingRoll" });
   expect(t.snapshot().frame).toBeUndefined();
 });
+it("releases a spectator's unread card when the real table has moved on", () => {
+  const initial = start();
+  // Land on Community Chest without doubles, so the next turn belongs to B.
+  const before = { ...initial, players: initial.players.map(p => p.id === "a" ? { ...p, position: 39 } : p) } as typeof initial;
+  const rolled = reduceGame(before, { type: "ROLL", playerId: "a", dice: [1, 2] });
+  const landed = reduceGame(rolled, { type: "MOVE_RESULT", playerId: "a", cardDraws: [{ deck: "community", index: 1 }] });
+  const timeline = new PresentationTimeline();
+  timeline.receive(landed);
+  expect(timeline.snapshot().frame?.kind).toBe("card");
+  const next = reduceGame(landed, { type: "END_TURN", playerId: "a" });
+  expect(next.activePlayerId).toBe("b");
+  timeline.receive(next);
+  expect(timeline.snapshot()).toMatchObject({ shown: next, frame: undefined, busy: false });
+});
+it("clears the previous card when another connection has already continued a doubles turn", () => {
+  const rolled = reduceGame(start(), { type: "ROLL", playerId: "a", dice: [1, 1] });
+  const landed = reduceGame(rolled, { type: "MOVE_RESULT", playerId: "a", cardDraws: [{ deck: "community", index: 1 }] });
+  const timeline = new PresentationTimeline();
+  timeline.receive(landed);
+  timeline.setVisible(false);
+  const next = reduceGame(landed, { type: "END_TURN", playerId: "a" });
+  expect(next.activePlayerId).toBe("a");
+  timeline.receive(next);
+  timeline.setVisible(true);
+  expect(timeline.snapshot()).toMatchObject({ shown: next, frame: undefined, busy: false });
+});
+
 it("does not revive a completed card when reloading a pre-roll trade after doubles", () => {
   let game = reduceGame(start(), { type: "ROLL", playerId: "a", dice: [1, 1] });
   game = reduceGame(game, { type: "MOVE_RESULT", playerId: "a", cardDraws: [{ deck: "community", index: 1 }] });
