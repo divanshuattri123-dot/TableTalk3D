@@ -215,7 +215,7 @@ export function districtName(state: GameState, district: ColorGroup) {
 
 export function cityPolicyAvailable(state: GameState, kind: CityPolicy, district?: ColorGroup) {
   const desk = state.mayor;
-  if (!desk || typeof kind !== "string" || !Object.hasOwn(CITY_POLICIES, kind)) return false;
+  if (!desk || typeof kind !== "string" || !Object.prototype.hasOwnProperty.call(CITY_POLICIES, kind)) return false;
   if (kind === "loans" || kind === "transit") return district === undefined;
   if (!desk.council) return false;
   if (kind === "rent-relief" || kind === "permits") {
