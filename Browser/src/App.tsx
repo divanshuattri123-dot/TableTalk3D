@@ -290,6 +290,7 @@ function App() {
           tokenLabel={token?.label ?? "Sports car"}
           diceLabel={die?.label ?? "Paris dice"}
           onClose={() => closeWithReturnFocus(() => setWelcomeMenu(false))}
+          onSwitchDialog={() => { dialogOpener.current = null; setWelcomeMenu(false); }}
           onOpenMaps={() => { setWelcomeMenu(false); setMapsOpen(true); }}
           onOpenStudio={category => { setWelcomeMenu(false); setStudio(category); }}
         />

@@ -22,7 +22,14 @@ export default function PublisherShell({children}:{children:ReactNode}){
   const [guest,setGuest]=useState(savedGuest),[intro,setIntro]=useState(()=>packaged),[account,setAccount]=useState(false),[store,setStore]=useState(false),[wallet,setWallet]=useState(()=>loadWallet(guest?.id));
   const [privacy,setPrivacy]=useState(false);
   const opener=useRef<HTMLElement|null>(null);
-  const rememberOpener=()=>{if(typeof document!=='undefined'&&document.activeElement instanceof HTMLElement)opener.current=document.activeElement;};
+  const rememberOpener=()=>{
+    const focused=document.activeElement;
+    if(!(focused instanceof HTMLElement))return;
+    // The table menu closes when a publisher panel opens. Return to its persistent home trigger.
+    opener.current=focused.closest('.browser-menu-sheet')
+      ? document.querySelector<HTMLElement>('.browser-home .bh-menu-btn')
+      : focused;
+  };
   const restoreOpener=useCallback(()=>{const node=opener.current;opener.current=null;if(node&&node.isConnected)window.requestAnimationFrame(()=>node.focus());},[]);
   useEffect(()=>{if(!intro)return;const timer=window.setTimeout(()=>setIntro(false),3800);return()=>clearTimeout(timer);},[intro]);
   const syncGuestName=useCallback((rawName:string)=>{
@@ -49,8 +56,13 @@ export default function PublisherShell({children}:{children:ReactNode}){
   const dispatch=(action:WalletAction)=>setWallet(previous=>reducePreviewWallet(previous,action));
   useEffect(()=>{try{if(guest)localStorage.setItem(walletKey(guest.id),JSON.stringify(wallet));}catch{/* Preview ownership remains usable for this session. */}},[wallet,guest]);
   if(intro)return <PublisherIntro onContinue={()=>setIntro(false)}/>;
-  if(account||(packaged&&!guest))return <><GuestSignIn guest={guest} onContinue={signIn} onPrivacy={()=>setPrivacy(true)} onCancel={(!packaged||guest)?closeAccount:undefined}/>{privacy&&<PrivacySheet onClose={()=>setPrivacy(false)}/>}</>;
-  return <PublisherContext.Provider value={{guest,wallet,openStore,openAccount,openPrivacy,syncGuestName}}>{children}{store&&(storeCandidate?<StoreUnavailable onClose={closeStore}/>:<FamilyStore wallet={wallet} dispatch={dispatch} onClose={closeStore}/>)}{privacy&&<PrivacySheet onClose={closePrivacy}/>}</PublisherContext.Provider>;
+  if(packaged&&(!guest||account))return <><GuestSignIn guest={guest} onContinue={signIn} onPrivacy={()=>setPrivacy(true)} onCancel={guest?closeAccount:undefined}/>{privacy&&<PrivacySheet onClose={()=>setPrivacy(false)}/>}</>;
+  return <PublisherContext.Provider value={{guest,wallet,openStore,openAccount,openPrivacy,syncGuestName}}>
+    {packaged ? children : <div style={{display:account?'none':'contents'}}>{children}</div>}
+    {account&&<GuestSignIn guest={guest} onContinue={signIn} onPrivacy={()=>setPrivacy(true)} onCancel={privacy?undefined:closeAccount}/>}
+    {store&&(storeCandidate?<StoreUnavailable onClose={closeStore}/>:<FamilyStore wallet={wallet} dispatch={dispatch} onClose={closeStore}/>)}
+    {privacy&&<PrivacySheet onClose={account?()=>setPrivacy(false):closePrivacy}/>}
+  </PublisherContext.Provider>;
 }
 
 function StoreUnavailable({onClose}:{onClose:()=>void}){

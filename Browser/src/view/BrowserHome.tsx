@@ -283,6 +283,7 @@ export interface BrowserMenuDialogProps {
   tokenLabel: string;
   diceLabel: string;
   onClose: () => void;
+  onSwitchDialog?: () => void;
   onOpenMaps: () => void;
   onOpenStudio: (category: "token" | "dice") => void;
 }
@@ -300,6 +301,7 @@ export function BrowserMenuPanel({
   tokenLabel,
   diceLabel,
   onClose,
+  onSwitchDialog = onClose,
   onOpenMaps,
   onOpenStudio
 }: BrowserMenuDialogProps & {
@@ -313,8 +315,8 @@ export function BrowserMenuPanel({
   const worldEntry = worldInfo(world);
   const guestLabel = publisher.guest?.name?.trim() || "Local nickname";
 
+  useEffect(() => { closeBtnRef.current?.focus(); }, []);
   useEffect(() => {
-    closeBtnRef.current?.focus();
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -430,15 +432,15 @@ export function BrowserMenuPanel({
               <span>Change dice</span>
               <small>{displayAssetName(diceLabel)}</small>
             </button>
-            <button type="button" onClick={() => { onClose(); publisher.openAccount(); }}>
+            <button type="button" onClick={() => { publisher.openAccount(); onSwitchDialog(); }}>
               <span>Guest profile</span>
               <small>{guestLabel}</small>
             </button>
-            <button type="button" onClick={() => { onClose(); publisher.openStore(); }}>
+            <button type="button" onClick={() => { publisher.openStore(); onSwitchDialog(); }}>
               <span>Store</span>
               <small>Cosmetics preview</small>
             </button>
-            <button type="button" onClick={() => { onClose(); publisher.openPrivacy(); }}>
+            <button type="button" onClick={() => { publisher.openPrivacy(); onSwitchDialog(); }}>
               <span>Privacy &amp; support</span>
               <small>Policy &amp; bug reports</small>
             </button>
