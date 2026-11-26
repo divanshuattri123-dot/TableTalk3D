@@ -36,8 +36,20 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
   const first=(actions:GameAction[])=>actions.find(legal);
   const desk=s.mayor;
   if(desk && cityStable(s)){
+    for(const candidate of s.players){
+      if(!candidate.bot || candidate.bankrupt)continue;
+      const bSeat=desk.seats[candidate.id];
+      const openBill=bSeat?.bills.find(entry=>entry.status==='open'&&entry.dueTurn<=bSeat.turns+2);
+      if(!openBill)continue;
+      const style=botStyle(candidate);
+      const opportunistic=style.name==='Bold bidder'||style.name==='Opportunist'||(style.name==='Deal maker'&&desk.round%2===1);
+      const tightCash=candidate.cash<openBill.amount+style.buildReserve+120;
+      return !tightCash&&!opportunistic&&candidate.cash>=openBill.amount+style.reserve
+        ? {type:'CITY_PAY_TAX',playerId:candidate.id,round:openBill.round}
+        : {type:'CITY_DEFER_TAX',playerId:candidate.id,round:openBill.round};
+    }
     const mayor=bot(desk.mayorId),active=bot(s.activePlayerId),term=desk.term;
-    if(mayor && s.players.filter(p=>!p.bankrupt).length>=3 && !desk.auditUsed && desk.round>1){
+    if(mayor && s.players.filter(p=>!p.bankrupt).length>=3 && !desk.auditUsed){
       if(!desk.tip && s.phase==='awaitingEndTurn')return {type:'CITY_TIP',playerId:mayor.id,term};
       const rivals=desk.tip?.map(id=>s.players.find(p=>p.id===id && !p.bankrupt)).filter(p=>p!==undefined);
       if(rivals?.length){
@@ -83,9 +95,6 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
       const wheel=desk.wheel;
       if(wheel?.playerId===playerId&&s.phase==='awaitingEndTurn')return wheel.section===5
         ? {type:'CITY_SCRATCH',playerId,wheelId:wheel.id} : {type:'CITY_SPIN',playerId,wheelId:wheel.id};
-      const bill=seat.bills.find(entry=>entry.status==='open'&&entry.dueTurn===seat.turns+2);
-      if(bill)return active.cash>=bill.amount+botStyle(active).reserve
-        ? {type:'CITY_PAY_TAX',playerId,round:bill.round} : {type:'CITY_DEFER_TAX',playerId,round:bill.round};
       if(active.cash<150 && cityLoanAvailable(s,playerId))return {type:'CITY_LOAN',playerId,round:desk.round};
       const train=trainOffer(s,playerId);
       if(train && active.cash>=train.fare){

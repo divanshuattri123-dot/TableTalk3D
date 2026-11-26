@@ -30,6 +30,7 @@ export interface TaxBill {
 interface CitySeat {
   turns: number;
   rent: number;
+  taxedRent?: number;
   bills: TaxBill[];
   borrowed?: true;
   loanDue?: number;
@@ -96,8 +97,24 @@ export function updateCitySeat(state: GameState, id: string, update: (seat: City
   return { ...state, mayor: { ...desk, seats: { ...desk.seats, [id]: update(seat) } } };
 }
 
+function accrueRentTax(seat: CitySeat, round: number, addedRent: number): CitySeat {
+  const prevTax = cityTax(seat.taxedRent ?? 0);
+  const rent = seat.rent + addedRent;
+  const delta = cityTax(rent) - prevTax;
+  if (delta <= 0) return { ...seat, rent, taxedRent: rent };
+  const index = seat.bills.findIndex(bill => bill.round === round && bill.status !== "paid");
+  if (index >= 0) {
+    const current = seat.bills[index]!;
+    const bills = seat.bills.map((bill, i) => i === index ? { ...current, amount: current.amount + delta } : bill);
+    return { ...seat, rent, taxedRent: rent, bills };
+  }
+  return { ...seat, rent, taxedRent: rent, bills: [...seat.bills, { round, amount: delta, dueTurn: seat.turns + 2, status: "open" }] };
+}
+
 export const recordRent = (state: GameState, id: string, amount: number) =>
-  state.mayor && amount > 0 ? updateCitySeat(state, id, seat => ({ ...seat, rent: seat.rent + amount })) : state;
+  state.mayor && amount > 0 && !state.players.find(p => p.id === id)?.bankrupt
+    ? updateCitySeat(state, id, seat => accrueRentTax(seat, state.mayor!.round, amount))
+    : state;
 
 export function fortPosition(state: Pick<GameState, "boardSize">) {
   return classicPosition(23, state.boardSize);
@@ -146,11 +163,11 @@ export function newTerm(desk: CityDesk, mayorId: string): CityDesk {
 }
 
 export const cityTax = (rent: number) =>
-  Math.min(200, Math.floor((
-    Math.max(0, Math.min(300, rent) - 100) * 2 +
-    Math.max(0, Math.min(600, rent) - 300) * 3 +
-    Math.max(0, rent - 600) * 4
-  ) / 10));
+  rent <= 0 ? 0 : Math.min(200, Math.max(1, Math.floor((
+    Math.min(200, rent) +
+    Math.max(0, Math.min(300, rent) - 200) * 2 +
+    Math.max(0, rent - 300) * 4
+  ) / 10)));
 
 export function advanceCityRound(state: GameState): GameState {
   const desk = state.mayor;
@@ -159,9 +176,9 @@ export function advanceCityRound(state: GameState): GameState {
   const seats = { ...desk.seats };
   for (const player of state.players) {
     const seat = seats[player.id]!;
-    const bill = cityTax(seat.rent);
+    const bill = Math.max(0, cityTax(seat.rent) - cityTax(seat.taxedRent ?? 0));
     seats[player.id] = {
-      ...seat, rent: 0,
+      ...seat, rent: 0, taxedRent: undefined,
       bills: bill && !player.bankrupt ? [...seat.bills, { round: desk.round, amount: bill, dueTurn: seat.turns + 2, status: "open" }] : seat.bills
     };
   }
@@ -288,7 +305,7 @@ export function projectCityState(state: GameState, seatId?: string): GameState {
   if (!desk) return state;
   const seats: CityDesk["seats"] = {};
   for (const [id, seat] of Object.entries(desk.seats)) {
-    seats[id] = id === seatId ? seat : { ...seat, rent: 0, bills: [], contract: seat.contractPaid ? seat.contract : undefined };
+    seats[id] = id === seatId ? seat : { ...seat, rent: 0, taxedRent: undefined, bills: [], contract: seat.contractPaid ? seat.contract : undefined };
   }
   const players = state.players.map(player => {
     if (player.id === seatId) return player;

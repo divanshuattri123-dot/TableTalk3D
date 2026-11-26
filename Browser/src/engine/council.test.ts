@@ -238,7 +238,7 @@ describe("Council rules", () => {
     state = adjust(end(nextRound(state)), "b", { cash: 480 });
     expect(cityLoanAvailable(state, "b")).toBe(false);
     const prepaid = step(state, { type: "CITY_PAY_TAX", playerId: "b", round: 1 });
-    expect(cash(prepaid, "b")).toBe(350);
+    expect(cash(prepaid, "b")).toBe(320);
     expect(cash(projectCityState(prepaid, "a"), "b")).toBe(480);
     expect(cityLoanAvailable(prepaid, "b")).toBe(false);
     expect(cityLoanAvailable(projectCityState(prepaid, "a"), "b")).toBe(false);

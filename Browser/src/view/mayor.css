@@ -129,3 +129,20 @@
 }
 .live-seats .seat-speaker { color: #285f67; }
 .bid-credit { border-left: 3px solid #248172; color: #163f36; background: #e2f0e6; border-radius: 5px; padding: 5px 7px; font-size: .78rem; line-height: 1.35; }
+.city-tax-prompt {
+  position: fixed; z-index: 35; left: 50%; top: 76px; transform: translateX(-50%);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px;
+  width: min(calc(100vw - 24px), 540px); padding: 10px 14px;
+  border: 1px solid #efd08b; border-left: 4px solid #f4c668; border-radius: 13px;
+  color: #fff4da; background: linear-gradient(135deg, #1b4447f7, #112d31f7);
+  box-shadow: 0 12px 30px #06181ab8;
+}
+.city-tax-copy { display: grid; gap: 1px; min-width: 180px; flex: 1 1 200px; }
+.city-tax-copy small { color: #f6d58e; font: 800 9px system-ui, sans-serif; letter-spacing: .12em; }
+.city-tax-copy b { color: #fff8e6; font: 800 14px/1.25 system-ui, sans-serif; }
+.city-tax-copy span { color: #d7e0d4; font: 500 11.5px/1.25 system-ui, sans-serif; }
+@media (pointer: coarse), (max-width: 780px), (max-height: 500px) {
+  .city-tax-prompt { top: auto; bottom: max(76px, calc(env(safe-area-inset-bottom) + 64px)); padding: 8px 11px; gap: 8px 10px; }
+  .city-tax-copy b { font-size: 13px; }
+  .city-tax-copy span { font-size: 11px; }
+}

@@ -30,16 +30,21 @@ function landAtWheel(state: GameState, id = state.activePlayerId!) {
 
 describe("Mayor rules", () => {
   it("applies marginal tax slabs and caps the total", () => {
-    expect([0, 100, 200, 300, 400, 600, 700, 800, 2000].map(cityTax)).toEqual([0, 0, 20, 40, 70, 130, 170, 200, 200]);
+    expect([0, 6, 50, 100, 200, 300, 400, 600, 700, 2000].map(cityTax)).toEqual([0, 1, 5, 10, 20, 40, 80, 160, 200, 200]);
   });
-  it("accrues actual paid rent and excludes unrelated cash", () => {
+  it("issues an immediate private bill when rent is collected and allows off-turn deferral", () => {
     const state = table();
     const owned = { ...state, properties: { ...state.properties, 23: { ownerId: "p2", houses: 3 as const, mortgaged: false } } };
     const rolled = send(patchPlayer(owned, "p1", { position: 16 }), { type: "ROLL", playerId: "p1", dice: [3, 4] });
     const landed = send(rolled, { type: "MOVE_RESULT", playerId: "p1" });
     expect(cash(landed, "p2")).toBe(2200);
     expect(landed.mayor!.seats.p2!.rent).toBe(700);
-    expect(newRound(landed).mayor!.seats.p2!.bills[0]?.amount).toBe(170);
+    expect(landed.mayor!.seats.p2!.bills).toEqual([{ round: 1, amount: 200, dueTurn: 2, status: "open" }]);
+    const deferredOffTurn = send(landed, { type: "CITY_DEFER_TAX", playerId: "p2", round: 1 });
+    expect(deferredOffTurn.mayor!.seats.p2!.bills[0]?.status).toBe("deferred");
+    const raided = send(deferredOffTurn, { type: "CITY_AUDIT", playerId: "p1", term: 1, targetId: "p2" });
+    expect(cash(raided, "p2")).toBe(1975);
+    expect(newRound(landed).mayor!.seats.p2!.bills).toHaveLength(1);
   });
   it("tracks two-round terms, survives an eliminated anchor and skips doubles", () => {
     let state = table(4, "p3");
@@ -61,7 +66,7 @@ describe("Mayor rules", () => {
     let state = end(newRound(withRent(table(), "p2", 600)));
     expect(state.activePlayerId).toBe("p2");
     state = send(state, { type: "CITY_PAY_TAX", playerId: "p2", round: 1 });
-    expect(cash(state, "p2")).toBe(1370);
+    expect(cash(state, "p2")).toBe(1340);
     expect(state.mayor?.treasury).toBe(400);
     expect(cash(projectCityState(state, "p1"), "p2")).toBe(1500);
     expect(projectCityState(state, "p1").mayor?.seats.p2?.bills).toEqual([]);
@@ -69,7 +74,7 @@ describe("Mayor rules", () => {
     const rejected = send(state, { type: "CITY_PAY_TAX", playerId: "p2", round: 1 });
     expect(projectCityState(rejected, "p1").notice).toBeUndefined();
     const due = end(end(end(end(state))));
-    expect(due.mayor?.treasury).toBe(530);
+    expect(due.mayor?.treasury).toBe(560);
     expect(due.mayor?.seats.p2?.bills).toEqual([]);
   });
   it("blocks a raid during bidding and restores the correct turn after a rival mortgages", () => {
@@ -81,12 +86,12 @@ describe("Mayor rules", () => {
     expect(send({ ...owing, phase: "awaitingAuction" }, audit).notice).toBeTruthy();
     const raided = send(owing, audit);
     expect(raided.phase).toBe("awaitingDebt");
-    expect(cash(raided, "p2")).toBe(-130);
+    expect(cash(raided, "p2")).toBe(-160);
     expect(raided.mayor?.treasury).toBe(425);
     const settled = send(raided, { type: "MORTGAGE", playerId: "p2", propertyId: 39, mortgage: true });
     expect(settled.phase).toBe("awaitingRoll");
     expect(settled.activePlayerId).toBe("p2");
-    expect(settled.mayor?.treasury).toBe(555);
+    expect(settled.mayor?.treasury).toBe(585);
     expect(send(settled, audit).notice).toBeTruthy();
   });
   it("automatically audits a deferral in a two-seat match", () => {
@@ -97,7 +102,7 @@ describe("Mayor rules", () => {
     // remaining warrant is applied at the close of the old term.
     state = end(state);
     expect(state.mayor!.round).toBe(3);
-    expect(cash(state, "p2")).toBe(1345);
+    expect(cash(state, "p2")).toBe(1315);
   });
   it("charges the Mayor for a failed raid and keeps current loans out of an audit", () => {
     const state = table();

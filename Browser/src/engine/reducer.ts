@@ -1232,7 +1232,19 @@ function startBackedAuction(state: GameState): GameState {
 }
 
 const updateBill = (state: GameState, id: string, round: number, update: (bill: TaxBill) => TaxBill) =>
-  updateCitySeat(state, id, seat => ({ ...seat, bills: seat.bills.map(bill => bill.round === round ? update(bill) : bill) }));
+  updateCitySeat(state, id, seat => {
+    let updated = false;
+    return {
+      ...seat,
+      bills: seat.bills.map(bill => {
+        if (!updated && bill.round === round && bill.status !== "paid") {
+          updated = true;
+          return update(bill);
+        }
+        return bill;
+      })
+    };
+  });
 
 function payTaxEarly(state: GameState, id: string, bill: TaxBill) {
   return updateBill(changeCash(state, id, -bill.amount), id, bill.round, entry => ({ ...entry, status: "paid" }));
@@ -1275,7 +1287,7 @@ function auditCity(state: GameState, targetId: string): GameState {
     return makePayment(next, mayor.id, target.id, AUDIT_FINE, "as compensation for a failed raid");
   }
   const due = bill.amount + AUDIT_FINE;
-  next = updateCitySeat(next, target.id, seat => ({ ...seat, bills: seat.bills.filter(entry => entry.round !== bill.round) }));
+  next = updateCitySeat(next, target.id, seat => ({ ...seat, bills: seat.bills.filter(entry => entry !== bill) }));
   next = civicEvent(next, `Raid on ${target.name}: unpaid levy found. ${formatRupees(due)} due with the fine.`, "raid",
     { playerId: target.id, position: target.position, amount: due });
   return makePayment(next, target.id, "bank", due, "for the city levy and audit fine", "city");
@@ -1297,7 +1309,11 @@ function closeWheel(state: GameState, reveal: boolean): GameState {
 function handleCityAction(original: GameState, action: CityAction): GameState {
   const desk = original.mayor;
   const player = playerById(original, action.playerId);
-  if (original.mode !== "mayor" || !desk || !player || player.bankrupt || !cityStable(original)) {
+  const taxDecision = action.type === "CITY_PAY_TAX" || action.type === "CITY_DEFER_TAX";
+  const allowedPhase = taxDecision
+    ? original.phase !== "lobby" && original.phase !== "gameOver" && original.phase !== "awaitingAuction"
+    : cityStable(original);
+  if (original.mode !== "mayor" || !desk || !player || player.bankrupt || !allowedPhase) {
     return reject(original, "City Hall actions are available during a regular turn in Mayor mode.");
   }
   const state = { ...original, notice: undefined };
@@ -1311,7 +1327,7 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
       if (!bill) return addEvent(state, "That private bill is no longer open.", "error", { privateTo: id });
       if (action.type === "CITY_PAY_TAX") return player.cash >= bill.amount
         ? payTaxEarly(state, id, bill) : addEvent(state, "Raise more cash before paying this bill.", "error", { privateTo: id });
-      if (!active || bill.status !== "open" || bill.dueTurn !== seat.turns + 2) return addEvent(state, "You can defer this bill once during your first turn with it.", "error", { privateTo: id });
+      if (bill.status !== "open" || bill.dueTurn > seat.turns + 2) return addEvent(state, "You can defer this bill once before it comes due.", "error", { privateTo: id });
       return updateBill(state, id, bill.round, entry => ({ ...entry, status: "deferred" }));
     }
     case "CITY_AUDIT":

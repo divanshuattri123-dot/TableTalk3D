@@ -28,7 +28,7 @@ import TapDice from './view/TapDice';
 import {rollDice} from './network/random';
 import { isPlayerColorTaken, playerColorKey } from "./engine/playerColors";
 import { usePresentation } from "./presentation/usePresentation";
-import { CityHall, CityHeadline, FortWheel } from "./view/MayorDesk";
+import { CityHall, CityHeadline, CityTaxPrompt, FortWheel } from "./view/MayorDesk";
 import { councilSpeaker, fortPosition, permitPaused, trainOffer } from "./engine/mayor";
 import { presentationInteractionBusy } from "./presentation/timeline";
 import { shouldSendMove } from "./presentation/plan";
@@ -444,6 +444,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
       {game.notice && <p className="global-error" role="status">{game.notice}</p>}
       {screenNotice && <p className="fullscreen-notice" role="status">{screenNotice}</p>}
       {game.rentClaim && game.rentClaim.ownerId === me?.id && !me?.bankrupt && <div className="rent-claim" role="status"><span><b>{getTile(game.rentClaim.propertyId, game.boardSize, game.city).name}</b><small>Claim before the next movement roll</small></span><button type="button" disabled={connection !== "connected" || motion.busy || !sceneUsable || ["awaitingTradeResponse", "awaitingDebt", "awaitingMortgageDecision"].includes(game.phase)} onClick={() => sendAction({ type: "CLAIM_RENT", playerId: me!.id, claimId: game.rentClaim!.id })}>Claim {formatMoney(game.rentClaim.amount)}</button></div>}
+      {game.mayor && me && !me.bankrupt && <CityTaxPrompt game={game} localId={me.id} available={connection === "connected" && !motion.busy && sceneUsable} hidden={cityOpen || !!wheelDialog || !!drawer || !!tablePanel || ["awaitingAuction", "awaitingBuy", "awaitingTradeResponse", "awaitingDebt", "awaitingMove"].includes(game.phase)} sendAction={sendAction} />}
 
       <section className="game-layout">
         {mobileLobby ? <MobileLobby configuringMap={configuringMap} game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} onCopy={copyRoomLink} copied={copied} colorPicker={<TokenColorPicker color={me?.color ?? session.player.color} players={game.players} localId={session.player.id} onChoose={color=>sendAction({type:'SET_APPEARANCE',playerId:session.player.id,color})}/>}/> : <BoardStage diceEnabled={isCurrent&&game.phase==="awaitingRoll"&&!diceToolsOpen&&!drawer&&!tablePanel&&!cityOpen&&!wheelDialog} onWheel={openWheel} onThrow={()=>{if(isCurrent&&me&&game.phase==="awaitingRoll")sendAction({type:"ROLL",playerId:me.id,dice:dice()});}} panel={tablePanel} onPanelChange={setTablePanel} game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />}

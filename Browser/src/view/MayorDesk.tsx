@@ -57,6 +57,8 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
   const bills = seat?.bills.filter(bill => bill.status !== "paid") ?? [];
   const here = game.activePlayerId === localId;
   const stable = available && cityStable(game) && !!local && !local.bankrupt;
+  const taxReady = available && !!local && !local.bankrupt && !game.debts?.length &&
+    game.phase !== "lobby" && game.phase !== "gameOver" && game.phase !== "awaitingAuction";
   const office = localId === desk.mayorId;
   const rivals = game.players.filter(player => !player.bankrupt && player.id !== localId);
   const proposal = desk.proposal;
@@ -91,11 +93,11 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
         {seat && <section aria-label="Your private bills">
           <h3>Your private bills</h3>
           {bills.length === 0 && seat.loanDue === undefined && <p>Nothing due.</p>}
-          {bills.map(bill => <div className="city-bill" key={bill.round}>
+          {bills.map((bill, idx) => <div className="city-bill" key={`${bill.round}-${idx}`}>
             <div><b>{money(bill.amount)} levy</b><small>{bill.status === "deferred" ? "Deferred · the Mayor can audit this bill" : "Open · pay now or defer for one turn"}</small></div>
             <div className="city-actions">
-              <button type="button" disabled={!stable || local!.cash < bill.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: bill.round })}>Pay {money(bill.amount)}</button>
-              {bill.status === "open" && here && bill.dueTurn === seat.turns + 2 && <button type="button" disabled={!stable} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: bill.round })}>Defer</button>}
+              <button type="button" disabled={!taxReady || local!.cash < bill.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: bill.round })}>Pay {money(bill.amount)}</button>
+              {bill.status === "open" && bill.dueTurn <= seat.turns + 2 && <button type="button" disabled={!taxReady} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: bill.round })}>Defer</button>}
             </div>
           </div>)}
           {seat.loanDue !== undefined && <p>City loan due <b>{money(seat.loanAmountDue ?? LOAN_REPAYMENT)}</b>{seat.loanDue <= seat.turns + 1 ? " at the end of your upcoming turn." : " within two of your turns."}</p>}
@@ -153,10 +155,32 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
         <section aria-label="City headlines"><h3>City headlines</h3>
           {journal.length ? <ol className="city-journal">{journal.map(event => <li key={event.id}>{event.text}</li>)}</ol> : <p>The city is watching the first deals.</p>}
         </section>
-        <details><summary>How the levy works</summary><p>Other players’ shown cash can include early levy payments until they post to the city fund.</p><p>Each round the first ₹100 of your rent is exempt. The next ₹200 is taxed at 20%, the next ₹300 at 30%, and the rest at 40%. The bill is capped at ₹200. A bill you leave open at the end of its first turn is paid automatically if you can afford it.</p></details>
+        <details><summary>How the levy works</summary><p>Whenever you collect rent, a city levy is issued immediately: 10% up to ₹200 of rent in the round (minimum ₹1), 20% from ₹200 to ₹300, and 40% above ₹300, capped at ₹200 per round.</p><p>Pay privately right away or defer for one turn. Other players’ shown cash masks early payments until they post, and deferred bills can be raided by the Mayor with a ₹25 fine.</p></details>
       </div>
     </CityModal>}
   </>;
+}
+
+export function CityTaxPrompt({ game, localId, available, hidden, sendAction }: {
+  game: GameState; localId: string; available: boolean; hidden: boolean; sendAction: SendCity;
+}) {
+  if (hidden || !game.mayor) return null;
+  const local = game.players.find(player => player.id === localId);
+  const seat = game.mayor.seats[localId];
+  const openBill = seat?.bills.find(bill => bill.status === "open" && bill.dueTurn <= seat.turns + 2);
+  if (!local || local.bankrupt || !openBill) return null;
+  const ready = available && !game.debts?.length && game.phase !== "lobby" && game.phase !== "gameOver" && game.phase !== "awaitingAuction";
+  return <aside className="city-tax-prompt" role="region" aria-label="City rent tax">
+    <div className="city-tax-copy">
+      <small>CITY HALL RENT TAX</small>
+      <b>{money(openBill.amount)} levy on rent received</b>
+      <span>Pay privately now, or defer 1 turn (Mayor can audit)</span>
+    </div>
+    <div className="city-actions">
+      <button type="button" disabled={!ready || local.cash < openBill.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: openBill.round })}>Pay {money(openBill.amount)}</button>
+      <button type="button" className="city-secondary" disabled={!ready} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: openBill.round })}>Defer 1 turn</button>
+    </div>
+  </aside>;
 }
 
 export function CityHeadline({ game, paused }: { game: GameState; paused: boolean }) {
