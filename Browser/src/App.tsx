@@ -52,7 +52,7 @@ import {usePublisher} from './publisher/PublisherShell';
 import {STORE_PRODUCTS} from './publisher/catalog';
 import {playerId as randomId} from './compat';
 import useMobileInterface from "./view/useMobileInterface";
-import { isPackagedHome, nativeMobileShell, roomShareUrl } from "./platform";
+import { isPackagedHome, nativeMobileShell, roomCodeFromSearch, roomShareUrl } from "./platform";
 import { enterGameFullscreen, exitGameFullscreen, fullscreenActive, releaseGameOrientation } from "./view/fullscreen";
 import LandscapeGate from "./view/LandscapeGate";
 import { useGameRoom } from "./network/useGameRoom";
@@ -71,10 +71,7 @@ const savedSession = (roomCode = roomFromUrl()) => readSeat(roomCode, seatStores
 const COLORS = PLAYER_COLORS;
 const TOKEN_SHAPES = ["●", "▲", "◆", "★", "✦", "✚"];
 
-const roomFromUrl = (): string => {
-  const value = new URLSearchParams(window.location.search).get("room")?.toUpperCase() ?? "";
-  return /^[A-Z]{4}$/.test(value) ? value : "";
-};
+const roomFromUrl = () => roomCodeFromSearch(window.location.search);
 
 const randomCode = (): string => {
   const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";

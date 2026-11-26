@@ -1,4 +1,9 @@
 export const PUBLIC_GAME_URL = 'https://divanshuattri123-dot.github.io/TableTalk3D/';
+export function roomCodeFromSearch(search: string) {
+  const room = new URLSearchParams(search).get('room')?.toUpperCase() ?? '';
+  return /^[A-Z]{4}$/.test(room) ? room : '';
+}
+
 export function roomShareUrl(room: string, href: string, packaged = import.meta.env.VITE_PACKAGED_APP === 'true') {
   const url = new URL(packaged ? PUBLIC_GAME_URL : href);
   url.search = new URLSearchParams({ room }).toString(); url.hash = '';

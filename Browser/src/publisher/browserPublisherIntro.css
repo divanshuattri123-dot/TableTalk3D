@@ -1,0 +1,491 @@
+/* Scoped exclusively to .bpi-stage for the public browser Da Publications studio ident.
+ * Motion timeline (< 3.2s total):
+ *   Beat 1 (0.00s - 0.70s): Etched board frame & hexagonal brass orbit trace.
+ *   Beat 2 (0.40s - 1.38s): Embossed DP monogram rise, "Da Publications" assembly, and brass foil pass.
+ *   Beat 3 (1.38s - 2.58s): Crisp stationary readable hold (1.20s full stillness; title legible for 1.52s).
+ *   Beat 4 (2.58s - 3.06s): Quiet exit dissolve onto the deep harbor-teal table surface (concludes at 3.06s).
+ */
+
+.bpi-stage {
+  --bpi-harbor: #0A1D30;
+  --bpi-slate: #122941;
+  --bpi-teal-glow: #183B56;
+  --bpi-paper: #F3E8CD;
+  --bpi-paper-bright: #FAF3E2;
+  --bpi-amber: #E7AE59;
+  --bpi-brick: #AD392C;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  box-sizing: border-box;
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: minmax(16px, 1fr) auto minmax(56px, 1fr);
+  align-items: center;
+  padding:
+    max(14px, env(safe-area-inset-top))
+    max(18px, env(safe-area-inset-right))
+    max(14px, env(safe-area-inset-bottom))
+    max(18px, env(safe-area-inset-left));
+  background:
+    radial-gradient(ellipse 68% 58% at 50% 46%, var(--bpi-teal-glow) 0%, var(--bpi-slate) 46%, var(--bpi-harbor) 100%);
+  color: var(--bpi-paper);
+  font-family: "Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Subtle static board-cloth cross-grain (pure CSS, zero particles or flashing) */
+.bpi-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.24;
+  background-image:
+    repeating-linear-gradient(0deg, #f3e8cd08 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, #00000014 0 1px, transparent 1px 4px);
+}
+
+/* Etched tabletop inner board ruling */
+.bpi-board-frame {
+  position: absolute;
+  inset: clamp(12px, 2.4vmin, 26px);
+  pointer-events: none;
+  z-index: 0;
+  animation: bpi-quiet-exit 0.48s cubic-bezier(0.4, 0, 0.2, 1) 2.58s forwards;
+}
+
+.bpi-rule {
+  position: absolute;
+  background: #e7ae5938;
+}
+
+.bpi-rule-top,
+.bpi-rule-bottom {
+  left: 14px;
+  right: 14px;
+  height: 1px;
+  transform: scaleX(0);
+  animation: bpi-trace-x 0.54s cubic-bezier(0.22, 1, 0.36, 1) 0.04s forwards;
+}
+
+.bpi-rule-top {
+  top: 0;
+  transform-origin: left center;
+}
+
+.bpi-rule-bottom {
+  bottom: 0;
+  transform-origin: right center;
+}
+
+.bpi-rule-left,
+.bpi-rule-right {
+  top: 14px;
+  bottom: 14px;
+  width: 1px;
+  transform: scaleY(0);
+  animation: bpi-trace-y 0.54s cubic-bezier(0.22, 1, 0.36, 1) 0.08s forwards;
+}
+
+.bpi-rule-left {
+  left: 0;
+  transform-origin: center bottom;
+}
+
+.bpi-rule-right {
+  right: 0;
+  transform-origin: center top;
+}
+
+.bpi-corner {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid #e7ae5978;
+  opacity: 0;
+  animation: bpi-corner-in 0.32s ease-out 0.32s forwards;
+}
+
+.bpi-corner-tl { top: -3px; left: -3px; border-right: 0; border-bottom: 0; }
+.bpi-corner-tr { top: -3px; right: -3px; border-left: 0; border-bottom: 0; }
+.bpi-corner-bl { bottom: -3px; left: -3px; border-right: 0; border-top: 0; }
+.bpi-corner-br { bottom: -3px; right: -3px; border-left: 0; border-top: 0; }
+
+/* Central studio lockup */
+.bpi-center-slot {
+  grid-row: 2;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+}
+
+.bpi-lockup {
+  display: grid;
+  justify-items: center;
+  gap: clamp(12px, 2.5dvh, 22px);
+  text-align: center;
+  padding: clamp(6px, 1.5dvh, 14px) 16px;
+  will-change: transform, opacity;
+  animation: bpi-quiet-exit 0.48s cubic-bezier(0.4, 0, 0.2, 1) 2.58s forwards;
+}
+
+.bpi-crest-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+/* Subtle warm ambient halo behind the embossed hex seal */
+.bpi-crest-wrap::before {
+  content: "";
+  position: absolute;
+  width: 138%;
+  height: 138%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #e7ae5924 0%, transparent 66%);
+  opacity: 0;
+  pointer-events: none;
+  animation: bpi-halo-in 0.6s ease-out 0.34s forwards;
+}
+
+.bpi-mark {
+  display: block;
+  width: clamp(82px, 19vmin, 136px);
+  height: auto;
+  filter: drop-shadow(0 12px 26px #030b1499);
+}
+
+.bpi-plinth {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bpi-plinth-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) 0.06s forwards;
+}
+
+.bpi-orbit {
+  stroke-dasharray: 466;
+  stroke-dashoffset: 466;
+  animation: bpi-orbit-trace 0.62s cubic-bezier(0.25, 0.9, 0.3, 1) 0.08s forwards;
+}
+
+.bpi-inner-hex {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bpi-inner-in 0.36s ease-out 0.34s forwards;
+}
+
+.bpi-monogram-group {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bpi-monogram-rise 0.46s cubic-bezier(0.2, 0.88, 0.28, 1) 0.40s forwards;
+}
+
+.bpi-pip {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bpi-pip-lock 0.32s cubic-bezier(0.2, 0.9, 0.3, 1) 0.38s forwards;
+}
+
+.bpi-foil-sweep {
+  opacity: 0;
+  transform: translate3d(-40px, 0, 0) skewX(-20deg);
+  animation: bpi-foil-pass 0.62s cubic-bezier(0.32, 0.04, 0.24, 1) 0.76s forwards;
+}
+
+/* Publisher Name & Brass Colophon */
+.bpi-wordmark-block {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: clamp(8px, 1.6dvh, 13px);
+}
+
+.bpi-title {
+  margin: 0;
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+  font-weight: 500;
+  font-size: clamp(1.85rem, 4.6vw, 3.25rem);
+  line-height: 1.08;
+  letter-spacing: 0.03em;
+  color: var(--bpi-paper-bright);
+  text-shadow: 0 3px 16px #040d18ad;
+}
+
+.bpi-word {
+  display: inline-block;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.bpi-word-da {
+  animation: bpi-word-assemble 0.40s cubic-bezier(0.2, 0.88, 0.28, 1) 0.56s forwards;
+}
+
+.bpi-word-pub {
+  animation: bpi-word-assemble 0.42s cubic-bezier(0.2, 0.88, 0.28, 1) 0.64s forwards;
+}
+
+.bpi-colophon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: min(220px, 58vw);
+}
+
+.bpi-colophon-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--bpi-amber), transparent);
+  transform: scaleX(0);
+  opacity: 0;
+  animation: bpi-rule-expand 0.42s cubic-bezier(0.22, 1, 0.36, 1) 0.70s forwards;
+}
+
+.bpi-colophon-gem {
+  width: 6px;
+  height: 6px;
+  background: var(--bpi-amber);
+  border: 1px solid var(--bpi-harbor);
+  box-shadow: 0 0 0 1px #e7ae5966;
+  transform: rotate(45deg) scale(0);
+  opacity: 0;
+  animation: bpi-gem-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1) 0.74s forwards;
+}
+
+/* Accessible >=44px Skip intro control in its own bottom track */
+.bpi-controls-row {
+  grid-row: 3;
+  align-self: end;
+  justify-self: end;
+  position: relative;
+  z-index: 2;
+}
+
+.bpi-skip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  min-width: 118px;
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1px solid #e7ae595c;
+  background: #0e2439db;
+  color: var(--bpi-paper-bright);
+  font: 700 0.84rem/1 "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.03em;
+  box-shadow: 0 6px 18px #040d1866;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+  animation: bpi-skip-quiet-exit 0.36s ease-out 2.70s forwards;
+}
+
+.bpi-skip:hover {
+  background: #173652;
+  border-color: var(--bpi-amber);
+}
+
+.bpi-skip:active {
+  transform: translateY(1px);
+}
+
+.bpi-skip:focus-visible {
+  outline: 3px solid var(--bpi-amber);
+  outline-offset: 3px;
+  background: #173652;
+  border-color: var(--bpi-paper-bright);
+}
+
+.bpi-skip-chevron {
+  color: var(--bpi-amber);
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+/* Short landscape safety (e.g. 844x390 and 568x320) */
+@media (orientation: landscape) and (max-height: 440px) {
+  .bpi-stage {
+    grid-template-rows: minmax(8px, 1fr) auto minmax(48px, 1fr);
+    padding-block: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-bottom));
+  }
+  .bpi-board-frame {
+    inset: 8px 12px;
+  }
+  .bpi-lockup {
+    gap: 8px;
+    padding-block: 2px;
+  }
+  .bpi-mark {
+    width: clamp(62px, 23dvh, 88px);
+  }
+  .bpi-title {
+    font-size: clamp(1.5rem, 7.2dvh, 2.15rem);
+  }
+  .bpi-wordmark-block {
+    gap: 6px;
+  }
+}
+
+/* Narrow portrait tuning (e.g. 390x844) */
+@media (max-width: 480px) and (orientation: portrait) {
+  .bpi-mark {
+    width: clamp(92px, 26vw, 118px);
+  }
+  .bpi-title {
+    font-size: clamp(1.8rem, 7.6vw, 2.35rem);
+  }
+}
+
+/* Keyframes (GPU-friendly transform, opacity, and SVG stroke-dashoffset only) */
+@keyframes bpi-trace-x {
+  from { transform: scaleX(0); opacity: 0; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+
+@keyframes bpi-trace-y {
+  from { transform: scaleY(0); opacity: 0; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+
+@keyframes bpi-corner-in {
+  from { opacity: 0; transform: scale(0.75); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes bpi-plinth-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes bpi-orbit-trace {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes bpi-inner-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes bpi-halo-in {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes bpi-monogram-rise {
+  from { opacity: 0; transform: translate3d(0, 5px, 0) scale(0.95); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes bpi-pip-lock {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes bpi-foil-pass {
+  0% { opacity: 0; transform: translate3d(-40px, 0, 0) skewX(-20deg); }
+  22% { opacity: 1; }
+  78% { opacity: 0.9; }
+  100% { opacity: 0; transform: translate3d(265px, 0, 0) skewX(-20deg); }
+}
+
+@keyframes bpi-word-assemble {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes bpi-rule-expand {
+  from { opacity: 0; transform: scaleX(0); }
+  to { opacity: 0.85; transform: scaleX(1); }
+}
+
+@keyframes bpi-gem-in {
+  from { opacity: 0; transform: rotate(45deg) scale(0); }
+  to { opacity: 1; transform: rotate(45deg) scale(1); }
+}
+
+@keyframes bpi-quiet-exit {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.986); }
+}
+
+@keyframes bpi-skip-quiet-exit {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* Fully legible static presentation for prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .bpi-board-frame,
+  .bpi-rule-top,
+  .bpi-rule-bottom,
+  .bpi-rule-left,
+  .bpi-rule-right,
+  .bpi-corner,
+  .bpi-lockup,
+  .bpi-crest-wrap::before,
+  .bpi-plinth,
+  .bpi-orbit,
+  .bpi-inner-hex,
+  .bpi-monogram-group,
+  .bpi-pip,
+  .bpi-foil-sweep,
+  .bpi-word,
+  .bpi-colophon-line,
+  .bpi-colophon-gem,
+  .bpi-skip {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .bpi-rule-top,
+  .bpi-rule-bottom,
+  .bpi-rule-left,
+  .bpi-rule-right,
+  .bpi-corner,
+  .bpi-crest-wrap::before,
+  .bpi-plinth,
+  .bpi-inner-hex,
+  .bpi-monogram-group,
+  .bpi-pip,
+  .bpi-word,
+  .bpi-lockup,
+  .bpi-board-frame,
+  .bpi-skip {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .bpi-orbit {
+    stroke-dashoffset: 0 !important;
+  }
+
+  .bpi-colophon-line {
+    opacity: 0.85 !important;
+    transform: none !important;
+  }
+
+  .bpi-colophon-gem {
+    opacity: 1 !important;
+    transform: rotate(45deg) !important;
+  }
+
+  .bpi-foil-sweep {
+    opacity: 0 !important;
+  }
+}

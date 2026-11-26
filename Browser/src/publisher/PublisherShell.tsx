@@ -4,9 +4,10 @@ import {assetUrl,useAssets} from '../assets';
 import {emptyWallet,owns,readPreviewWallet,reducePreviewWallet,STORE_PRODUCTS} from './catalog';
 import type {PreviewWallet,ProductId,WalletAction} from './catalog';
 import {storeCandidate} from './release';
+import BrowserPublisherIntro from './BrowserPublisherIntro';
 import PrivacySheet from './PrivacySheet';
 import {playerId} from '../compat';
-import {isPackagedHome} from '../platform';
+import {isPackagedHome,roomCodeFromSearch} from '../platform';
 
 type Guest={id:string;name:string};
 type PublisherState={guest?:Guest;wallet:PreviewWallet;openStore:()=>void;openAccount:()=>void;openPrivacy:()=>void;syncGuestName:(name:string)=>void};
@@ -19,7 +20,8 @@ function PublisherMark(){return <svg className="publisher-mark" viewBox="0 0 160
 
 export default function PublisherShell({children}:{children:ReactNode}){
   const packaged=isPackagedHome();
-  const [guest,setGuest]=useState(savedGuest),[intro,setIntro]=useState(()=>packaged),[account,setAccount]=useState(false),[store,setStore]=useState(false),[wallet,setWallet]=useState(()=>loadWallet(guest?.id));
+  const [intro,setIntro]=useState(()=>packaged||!roomCodeFromSearch(window.location.search));
+  const [guest,setGuest]=useState(savedGuest),[account,setAccount]=useState(false),[store,setStore]=useState(false),[wallet,setWallet]=useState(()=>loadWallet(guest?.id));
   const [privacy,setPrivacy]=useState(false);
   const opener=useRef<HTMLElement|null>(null);
   const rememberOpener=()=>{
@@ -31,7 +33,18 @@ export default function PublisherShell({children}:{children:ReactNode}){
       : focused;
   };
   const restoreOpener=useCallback(()=>{const node=opener.current;opener.current=null;if(node&&node.isConnected)window.requestAnimationFrame(()=>node.focus());},[]);
-  useEffect(()=>{if(!intro)return;const timer=window.setTimeout(()=>setIntro(false),3800);return()=>clearTimeout(timer);},[intro]);
+  useEffect(()=>{
+    if(!intro)return;
+    const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const duration=packaged?3800:reducedMotion?1200:3200;
+    const timer=window.setTimeout(()=>setIntro(false),duration);
+    const skip=(event:KeyboardEvent)=>{if(event.key==='Escape')setIntro(false);};
+    if(!packaged)window.addEventListener('keydown',skip);
+    return()=>{
+      window.clearTimeout(timer);
+      if(!packaged)window.removeEventListener('keydown',skip);
+    };
+  },[intro,packaged]);
   const syncGuestName=useCallback((rawName:string)=>{
     const trimmed=rawName.trim().slice(0,24);if(!trimmed)return;
     setGuest(prev=>{
@@ -55,10 +68,12 @@ export default function PublisherShell({children}:{children:ReactNode}){
   const closePrivacy=()=>{setPrivacy(false);restoreOpener();};
   const dispatch=(action:WalletAction)=>setWallet(previous=>reducePreviewWallet(previous,action));
   useEffect(()=>{try{if(guest)localStorage.setItem(walletKey(guest.id),JSON.stringify(wallet));}catch{/* Preview ownership remains usable for this session. */}},[wallet,guest]);
-  if(intro)return <PublisherIntro onContinue={()=>setIntro(false)}/>;
+  if(packaged&&intro)return <PublisherIntro onContinue={()=>setIntro(false)}/>;
   if(packaged&&(!guest||account))return <><GuestSignIn guest={guest} onContinue={signIn} onPrivacy={()=>setPrivacy(true)} onCancel={guest?closeAccount:undefined}/>{privacy&&<PrivacySheet onClose={()=>setPrivacy(false)}/>}</>;
   return <PublisherContext.Provider value={{guest,wallet,openStore,openAccount,openPrivacy,syncGuestName}}>
-    {packaged ? children : <div style={{display:account?'none':'contents'}}>{children}</div>}
+    {!packaged&&intro&&<BrowserPublisherIntro onContinue={()=>setIntro(false)}/>}
+    {/* Load the home artwork during the intro while keeping the covered controls out of the tab order. */}
+    {packaged ? children : <div inert={intro} style={{display:account?'none':'contents'}}>{children}</div>}
     {account&&<GuestSignIn guest={guest} onContinue={signIn} onPrivacy={()=>setPrivacy(true)} onCancel={privacy?undefined:closeAccount}/>}
     {store&&(storeCandidate?<StoreUnavailable onClose={closeStore}/>:<FamilyStore wallet={wallet} dispatch={dispatch} onClose={closeStore}/>)}
     {privacy&&<PrivacySheet onClose={account?()=>setPrivacy(false):closePrivacy}/>}

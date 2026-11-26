@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { isPackagedHome, roomShareUrl, PUBLIC_GAME_URL } from './platform';
+import { isPackagedHome, roomCodeFromSearch, roomShareUrl, PUBLIC_GAME_URL } from './platform';
 it('shares public room links from installed apps, never private app origins', () => {
   for (const origin of ['tabletalk://game/?build=old', 'https://localhost/index.html']) expect(roomShareUrl('ABCD', origin, true)).toBe(PUBLIC_GAME_URL + '?room=ABCD');
 });
@@ -10,4 +10,10 @@ it('routes packaged builds and native mobile shells to the packaged home while k
   expect(isPackagedHome(true, false)).toBe(true);
   expect(isPackagedHome(false, true)).toBe(true);
   expect(isPackagedHome(false, false)).toBe(false);
+});
+it('identifies room links that should go straight to the table', () => {
+  expect(roomCodeFromSearch('?room=abcd&build=latest')).toBe('ABCD');
+  for (const search of ['', '?build=latest', '?room=AS1D', '?room=SHORT']) {
+    expect(roomCodeFromSearch(search)).toBe('');
+  }
 });
