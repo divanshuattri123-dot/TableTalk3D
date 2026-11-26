@@ -1,4 +1,4 @@
-import { BOARD, colorGroupTiles, getPurchasableTile, isPurchasableTile, railroadPositions, utilityPositions } from "./board";
+import { BOARD, colorGroupTiles, getBoard, getPurchasableTile, isPurchasableTile, railroadPositions, utilityPositions } from "./board";
 import { CLASSIC_CARDS, jailCardIndex } from "./classicCards";
 import { formatRupees as money } from "./currency";
 import type { AuctionState, CardDeck, DebtResumePhase, Dice, GameAction, GameEvent, GameState, Player, StreetTile, TradeOffer } from "./types";
@@ -20,7 +20,7 @@ const normalPhases = ["awaitingRoll", "awaitingEndTurn", "awaitingBuy", "awaitin
 
 export const classicSpendableCash = (s: GameState, id: string) => (owner(s, id)?.cash ?? 0) -
   [s.auction, s.suspendedAuction].reduce((n, a) => n + (a?.highestBidderId === id ? a.currentBid : 0), 0);
-export const classicLiquidationValue = (s: GameState, id: string) => BOARD.reduce((n, tile) => {
+export const classicLiquidationValue = (s: GameState, id: string) => getBoard(s.boardSize).reduce((n, tile) => {
   const p = s.properties[tile.position];
   return !isPurchasableTile(tile) || p?.ownerId !== id ? n : n + (p.mortgaged ? 0 : tile.mortgageValue) +
     (tile.kind === "property" ? buildingValue(s,tile) / 2 : 0);

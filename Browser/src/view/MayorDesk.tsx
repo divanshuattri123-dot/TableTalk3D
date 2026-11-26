@@ -5,7 +5,8 @@ import { getBoard, getTile } from "../engine/board";
 import { formatRupees as money } from "../engine/currency";
 import {
   canChallengeCityProject, CITY_CONTRACTS, CITY_POLICIES, cityLoanAvailable, cityLoanReason, cityPolicyAvailable,
-  cityStable, councilSpeaker, districtName, fortPosition, LOAN_REPAYMENT, reserveLevy, WHEEL_SECTIONS
+  cityStable, councilSpeaker, councilVoteThreshold, districtName, DUEL_VETO_COST, fortPosition, LOAN_REPAYMENT,
+  MAX_AUDITS_PER_TERM, mayorAuditsLeft, nextAuditFine, reserveLevy, WHEEL_SECTIONS
 } from "../engine/mayor";
 import type { CityAction, CityPolicy, WheelDecision } from "../engine/mayor";
 import type { ColorGroup, GameState } from "../engine/types";
@@ -18,12 +19,12 @@ import "./mayor.css";
 const FortWheelCloseup = lazy(() => import("./FortWheelCloseup"));
 
 const projectDetails: Record<CityPolicy, string> = {
-  loans: "Players with ₹1,000 or less can use city funds on their turn to borrow ₹200 and repay ₹225.",
-  transit: "One free Express ride per player while the city has funds.",
-  wealth: "Once per match. A player with at least ₹2,000 and more than half the table’s shown cash pays 20% above ₹1,500, capped at ₹300.",
-  credit: "The next eligible deed auction backs cash-light players with up to ₹200. The winner repays only what they borrow, plus 12.5% interest rounded up.",
-  "rent-relief": "In one district, each player’s first rent is halved, with a discount of at most ₹250.",
-  permits: "New construction pauses in one district for a round. Existing rent, selling and trading continue."
+  loans: "Instant: Players with ₹1,000 or less (and the Mayor at any cash) can borrow ₹200 from City Funds on their turn and repay ₹225.",
+  transit: "Instant: One free Express ride per player while City Funds has ₹75 (Mayors always ride Express free).",
+  wealth: "Instant (once per match): Collects 20% above ₹1,500 (capped at ₹300) right now from a player holding ≥ ₹2,000 and over half the table’s cash.",
+  credit: "Instant: The next eligible deed auction backs cash-light bidders (≤ ₹400) with up to ₹200 at 12.5% interest.",
+  "rent-relief": "Instant: Turns one district BLUE right now and cuts all rent there by 50% (up to ₹250 off per landing).",
+  permits: "Instant: Freezes rival construction in one district while the Mayor remains free to build."
 };
 const wheelIcons = ["₹100", "₹150", "−₹50", "KEY", "GO", "✦"];
 const wheelDetails = ["Collect ₹100.", "Collect ₹150.", "Pay ₹50.", "Keep a Get Out of Jail card.", "Move to GO and collect ₹200.", "Scratch to uncover your prize."];
@@ -74,8 +75,13 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
   const canChooseContract = desk.council && seat && !seat.contract && desk.round <= 2 && local && !local.bankrupt;
   const loanAvailable = cityLoanAvailable(game, localId);
   const loanNote = cityLoanReason(game, localId);
+  const auditsLeft = mayorAuditsLeft(desk);
+  const myNextFine = nextAuditFine(seat);
+  const threshold = councilVoteThreshold(game);
+  const isDuel = seatCount === 2;
+  const canVote = canChallengeCityProject(game, localId);
   const hasActionDot = bills.length > 0 || Boolean(canChooseContract && here) || loanAvailable ||
-    Boolean(office && here && !desk.proposalUsed && !proposal) || canChallengeCityProject(game, localId);
+    Boolean(office && (!desk.proposalUsed || auditsLeft > 0)) || canVote;
   const estimate = selected === "wealth" ? reserveLevy(game) : undefined;
   const journal = game.eventLog.filter(event => event.kind === "civic").slice(0, 8);
 
@@ -89,21 +95,42 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
           <div><span>IN OFFICE · TERM {desk.term}</span><b>{mayor?.name ?? "Mayor"}{office ? " (you)" : ""}</b></div>
           <div><span>ROUND {desk.round} · CITY FUNDS</span><b>{money(desk.treasury)}</b></div>
         </div>
+        <p className="city-status"><b>Mayor Perks · {mayor?.name ?? "Mayor"}</b> · +₹100 stipend · 0% rent tax · Free Express · {MAX_AUDITS_PER_TERM} warrants · Instant decrees</p>
         {speaker && <p className="city-status"><b>Council Speaker · {localName(speaker)}{speaker === localId ? " (you)" : ""}</b>
-          {speaker === localId && (desk.speakerUsedTerm === desk.term ? " · Challenge used this term" : " · You can call one extra vote this term")}</p>}
-        {desk.policy && <p className="city-status"><b>{CITY_POLICIES[desk.policy.kind]}{desk.policy.district ? ` · ${districtName(game, desk.policy.district)}` : ""}</b>
-          {desk.policy.kind === "credit" && desk.policy.used ? " · Auction backing spent this round" :
-            desk.policy.kind === "wealth" ? " · Assessed when this round opened" : " · In effect this round"}</p>}
+          {proposal ? ` · Live vote open (${voteCount}/${threshold})` : " · Leads Council Vote whenever the Mayor enacts a decree"}</p>}
+        {desk.policy && <p className={`city-status${desk.policy.kind === "rent-relief" ? " city-status-blue" : ""}`}><b>{CITY_POLICIES[desk.policy.kind]}{desk.policy.district ? ` · ${districtName(game, desk.policy.district)}` : ""}</b>
+          {desk.policy.kind === "credit" && desk.policy.used ? " · Auction backing spent" :
+            desk.policy.kind === "wealth" ? " · Collected instantly" :
+            desk.policy.kind === "rent-relief" ? " · Active NOW (district tiles turned blue · 50% off rent)" : " · Active NOW"}</p>}
         {seat && <section aria-label="Your private bills">
           <h3>Your private bills</h3>
-          {bills.length === 0 && seat.loanDue === undefined && !loanAvailable && !loanNote && <p>Nothing due.</p>}
-          {bills.map((bill, idx) => <div className="city-bill" key={`${bill.round}-${bill.id ?? `legacy-${idx}`}`}>
-            <div><b>{money(bill.amount)} levy</b><small>{bill.status === "deferred" ? "Deferred · the Mayor can audit this bill" : "Open · pay now or defer for one turn"}</small></div>
-            <div className="city-actions">
-              <button type="button" disabled={!taxReady || local!.cash < bill.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: bill.round, billId: bill.id ?? null })}>Pay {money(bill.amount)}</button>
-              {bill.status === "open" && bill.dueTurn <= seat.turns + 2 && <button type="button" disabled={!taxReady} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: bill.round, billId: bill.id ?? null })}>Defer</button>}
-            </div>
-          </div>)}
+          {bills.length === 0 && seat.loanDue === undefined && !loanAvailable && !loanNote && <p>Nothing due.{seat.caughtCount ? ` Past audit catches: ${seat.caughtCount} (next fine if caught: ${money(myNextFine)}).` : ""}</p>}
+          {(() => {
+            const openBills = bills.filter(b => b.status === "open");
+            const deferredBills = bills.filter(b => b.status === "deferred");
+            const deferredTotal = deferredBills.reduce((s, b) => s + b.amount, 0);
+            return <>
+              {openBills.map((bill, idx) => <div className="city-bill" key={`open-${bill.round}-${bill.id ?? idx}`}>
+                <div><b>{money(bill.amount)} levy (Round {bill.round})</b><small>Open · pay now or defer (never auto-pays unless caught by Mayor)</small></div>
+                <div className="city-actions">
+                  <button type="button" disabled={!taxReady || local!.cash < bill.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: bill.round, billId: bill.id ?? null })}>Pay {money(bill.amount)}</button>
+                  <button type="button" disabled={!taxReady} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: bill.round, billId: bill.id ?? null })}>Defer</button>
+                </div>
+              </div>)}
+              {deferredBills.length === 1 && <div className="city-bill">
+                <div><b>{money(deferredBills[0]!.amount)} deferred levy (Round {deferredBills[0]!.round})</b><small>Deferred · never auto-pays! Pay yourself or risk {money(myNextFine)} fine if Mayor audits you</small></div>
+                <div className="city-actions">
+                  <button type="button" disabled={!taxReady || local!.cash < deferredBills[0]!.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: deferredBills[0]!.round, billId: deferredBills[0]!.id ?? null })}>Pay {money(deferredBills[0]!.amount)}</button>
+                </div>
+              </div>}
+              {deferredBills.length > 1 && <div className="city-bill">
+                <div><b>{money(deferredTotal)} total deferred tax ({deferredBills.length} bills)</b><small>Deferred · never auto-pays! Pay yourself or risk {money(myNextFine)} fine if Mayor audits you</small></div>
+                <div className="city-actions">
+                  <button type="button" disabled={!taxReady || local!.cash < deferredTotal} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: desk.round, billId: -1 })}>Pay all {money(deferredTotal)}</button>
+                </div>
+              </div>}
+            </>;
+          })()}
           {seat.loanDue !== undefined && <p>City loan due <b>{money(seat.loanAmountDue ?? LOAN_REPAYMENT)}</b>{seat.loanDue <= seat.turns + 1 ? " at the end of your upcoming turn." : " within two of your turns."}</p>}
           {loanAvailable && <div className="city-actions"><button type="button" disabled={!stable} onClick={() => sendAction({ type: "CITY_LOAN", playerId: localId, round: desk.round })}>Borrow ₹200 · repay ₹225</button></div>}
           {loanNote && <p><small>{loanNote}</small></p>}
@@ -120,15 +147,15 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
             <p><small>Develop a clear colour set or connect two stations with an Express ride.</small></p></>}
         </section>}
         {office && local && !local.bankrupt && game.phase !== "gameOver" && <section aria-label="Mayor's decisions">
-          <h3>Your decisions as Mayor</h3>
-          {desk.auditUsed ? <p>Your warrant has been used this term.</p> : rivals.length === 1 ? <p>In a two-player table, a deferred bill is audited automatically when your rival ends their turn if your warrant is still available.</p> :
-            <><p>One warrant per term. A deferred bill comes due with a ₹25 fine. Clear records cost you ₹25 in compensation.</p>
-              {desk.tip ? <p>{desk.tip.length ? `Your private tip named ${desk.tip.map(localName).join(" or ")}.` : "No deferred levies are open right now — auditing clean records costs you ₹25."}</p> :
-                <div className="city-actions"><button type="button" disabled={!stable} onClick={() => sendAction({ type: "CITY_TIP", playerId: localId, term: desk.term })}>Investigate for a tip</button></div>}
-              <div className="city-actions" aria-label="Choose a rival for the warrant">{rivals.map(player => <button type="button" key={player.id} disabled={!stable} onClick={() => sendAction({ type: "CITY_AUDIT", playerId: localId, term: desk.term, targetId: player.id })}>Audit {player.name}</button>)}</div>
+          <h3>Your overpowered Mayor desk</h3>
+          {auditsLeft <= 0 ? <p>Both audit warrants have been used this term.</p> :
+            <><p><b>{auditsLeft} of {MAX_AUDITS_PER_TERM} warrants left this term.</b> Deferred tax is only paid if they pay voluntarily or you catch them! Fines double every catch (₹25 → ₹50 → ₹100…) across the whole match, plus you earn a ₹25 raid bonus. Clear records cost you ₹25.</p>
+              {desk.tip ? <p>{desk.tip.length ? `Intelligence tip: unpaid deferred tax spotted on ${desk.tip.map(localName).join(" or ")}.` : "No deferred levies are open right now — auditing clean records costs you ₹25."}</p> :
+                <div className="city-actions"><button type="button" disabled={!taxReady} onClick={() => sendAction({ type: "CITY_TIP", playerId: localId, term: desk.term })}>Investigate for a tip</button></div>}
+              <div className="city-actions" aria-label="Choose a rival for the warrant">{rivals.map(player => <button type="button" key={player.id} disabled={!taxReady} onClick={() => sendAction({ type: "CITY_AUDIT", playerId: localId, term: desk.term, targetId: player.id })}>Audit {player.name} ({money(nextAuditFine(desk.seats[player.id]))} fine)</button>)}</div>
             </>}
-          {!desk.proposalUsed && !proposal && <>
-            <p>Propose one project on your turn. It takes effect next round.</p>
+          {!desk.proposalUsed ? <>
+            <p><b>Instant Executive Decree:</b> Enact one decree anytime during your term — it works <b>immediately</b>!</p>
             <div className="city-project-picker">
               <label>Project<select aria-label="City project" value={selected} onChange={event => setSelected(event.target.value as CityPolicy)}>
                 {(desk.council ? Object.keys(CITY_POLICIES) as CityPolicy[] : ["loans", "transit"] as const).map(policy =>
@@ -140,31 +167,65 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
             </div>
             <p>{projectDetails[selected]}</p>
             {selected === "wealth" && <p><small>{desk.reserveLevyUsed ? "The reserve levy has already been collected in this match." : estimate
-              ? `${localName(estimate.playerId)} would owe ${money(estimate.amount)} at current balances.` : "Nobody qualifies at current balances."}</small></p>}
-            <div className="city-actions"><button type="button" disabled={!stable || !here || !cityPolicyAvailable(game, selected, district)}
-              onClick={() => sendAction({ type: "CITY_PROPOSE", playerId: localId, term: desk.term, policy: selected, district })}>Propose {CITY_POLICIES[selected]}</button></div>
-          </>}
+              ? `${localName(estimate.playerId)} owes ${money(estimate.amount)} immediately right now!` : "Nobody qualifies at current balances."}</small></p>}
+            <div className="city-actions"><button type="button" disabled={!taxReady || !cityPolicyAvailable(game, selected, district)}
+              onClick={() => sendAction({ type: "CITY_PROPOSE", playerId: localId, term: desk.term, policy: selected, district })}>Enact {CITY_POLICIES[selected]} Now</button></div>
+          </> : <p>Executive decree used for Term {desk.term}.</p>}
         </section>}
-        {proposal && <section aria-label="Council proposal">
-          <h3>Next round · {CITY_POLICIES[proposal.kind]}</h3>
-          {proposal.district && <p>{districtName(game, proposal.district)}</p>}
-          <p><small>{projectDetails[proposal.kind]} Takes effect when Round {desk.round + 1} begins.</small></p>
-          <p>{challenged ? `${voteCount} of ${Math.floor(seatCount / 2) + 1} votes to ${competingPolicy ? "switch" : "stop"} the project.` :
-            "The vote closes when the next round starts."}</p>
-          {canChallengeCityProject(game, localId) &&
-            <div className="city-actions"><button type="button" disabled={!stable}
-              onClick={() => sendAction({ type: "CITY_VOTE", playerId: localId, term: proposal.term })}>
-              {competingPolicy ? `${challenged ? "Vote for" : "Challenge for"} ${CITY_POLICIES[competingPolicy]}` :
-                challenged ? "Vote against the project" : "Challenge the project"}
-            </button></div>}
-        </section>}
+        <section aria-label="Council proposal">
+          <h3>{proposal ? `Council Vote · ${CITY_POLICIES[proposal.kind]}` : "Council Chamber & Voting"}</h3>
+          {proposal ? <>
+            {proposal.district && <p>{districtName(game, proposal.district)}</p>}
+            <p><small>{projectDetails[proposal.kind]}</small></p>
+            <p>{isDuel
+              ? `1v1 Council Veto: rival can pay ${money(DUEL_VETO_COST)} into City Funds to ${competingPolicy ? `switch to ${CITY_POLICIES[competingPolicy]}` : "repeal this decree"} immediately.`
+              : `${voteCount} of ${threshold} votes cast to ${competingPolicy ? `switch to ${CITY_POLICIES[competingPolicy]}` : "repeal this decree"} immediately.`}</p>
+            {proposal.sponsorId === localId ? <p><small>You enacted this decree as Mayor. Other players may vote here.</small></p> :
+              proposal.votes.includes(localId) ? <p><small>Your vote is recorded ({voteCount}/{threshold}).</small></p> :
+              <div className="city-actions"><button type="button" disabled={!taxReady || !canVote}
+                onClick={() => sendAction({ type: "CITY_VOTE", playerId: localId, term: proposal.term })}>
+                {isDuel
+                  ? `${competingPolicy ? `Veto & Switch to ${CITY_POLICIES[competingPolicy]}` : `Veto ${CITY_POLICIES[proposal.kind]}`} (${money(DUEL_VETO_COST)})`
+                  : competingPolicy ? `Vote for ${CITY_POLICIES[competingPolicy]} (${voteCount}/${threshold})` :
+                    `Vote to Repeal ${CITY_POLICIES[proposal.kind]} (${voteCount}/${threshold})`}
+              </button></div>}
+          </> : <p>No decree vote is active right now. As soon as the Mayor enacts a decree, a live Council Vote opens here and on your screen.</p>}
+        </section>
         <section aria-label="City headlines"><h3>City headlines</h3>
           {journal.length ? <ol className="city-journal">{journal.map(event => <li key={event.id}>{event.text}</li>)}</ol> : <p>The city is watching the first deals.</p>}
         </section>
-        <details><summary>How the levy works</summary><p>Whenever you collect rent, a city levy is issued immediately: 10% up to ₹200 of rent in the round (minimum ₹1), 20% from ₹200 to ₹300, and 40% above ₹300, capped at ₹200 per round.</p><p>Pay privately right away or defer for one turn. Other players’ shown cash masks early payments until they post, and deferred bills can be raided by the Mayor with a ₹25 fine.</p></details>
+        <details><summary>How Mayor Mode & Levies work</summary><p>Classic 40-space Monopoly rules with an overpowered Mayor! Whenever a non-Mayor collects rent, a city levy is issued immediately (10% up to ₹200, 20% from ₹200–₹300, 40% above ₹300, max ₹200/round).</p><p>Deferred levies never pay automatically — you only pay if you choose to pay yourself or if the Mayor catches you with an Audit Warrant! Audit fines start at ₹25 and double every time you are caught (₹25 → ₹50 → ₹100 → ₹200…) across the entire match, even when the Mayor changes.</p></details>
       </div>
     </CityModal>}
   </>;
+}
+
+export function CityVotePrompt({ game, localId, available, hidden, sendAction }: {
+  game: GameState; localId: string; available: boolean; hidden: boolean; sendAction: SendCity;
+}) {
+  const proposal = game.mayor?.proposal;
+  const voteKey = proposal ? `${proposal.term}-${proposal.kind}-${proposal.district ?? ""}` : "";
+  const [dismissedKey, setDismissedKey] = useState("");
+  if (hidden || !game.mayor || !proposal || dismissedKey === voteKey || !canChallengeCityProject(game, localId)) return null;
+  const ready = available && !game.debts?.length && game.phase !== "lobby" && game.phase !== "gameOver" && game.phase !== "awaitingAuction";
+  const seatCount = game.players.filter(p => !p.bankrupt).length;
+  const isDuel = seatCount === 2;
+  const threshold = councilVoteThreshold(game);
+  const voteCount = proposal.votes.filter(id => game.players.some(p => p.id === id && !p.bankrupt)).length;
+  const competing = proposal.kind === "loans" ? "transit" : proposal.kind === "transit" ? "loans" : undefined;
+  return <aside className="city-tax-prompt city-vote-prompt" role="region" aria-label="Council decree vote">
+    <div className="city-tax-copy">
+      <small>COUNCIL VOTE · MAYOR DECREE ACTIVE</small>
+      <b>{CITY_POLICIES[proposal.kind]}{proposal.district ? ` · ${districtName(game, proposal.district)}` : ""}</b>
+      <span>{isDuel ? `Pay ${money(DUEL_VETO_COST)} to City Funds to override immediately, or keep` : `${voteCount}/${threshold} votes to ${competing ? `switch to ${CITY_POLICIES[competing]}` : "repeal immediately"}`}</span>
+    </div>
+    <div className="city-actions">
+      <button type="button" disabled={!ready} onClick={() => sendAction({ type: "CITY_VOTE", playerId: localId, term: proposal.term })}>
+        {isDuel ? `Veto (${money(DUEL_VETO_COST)})` : competing ? `Vote ${CITY_POLICIES[competing]}` : "Vote to Repeal"}
+      </button>
+      <button type="button" className="city-secondary" onClick={() => setDismissedKey(voteKey)}>Keep</button>
+    </div>
+  </aside>;
 }
 
 export function CityTaxPrompt({ game, localId, available, hidden, sendAction }: {
@@ -173,18 +234,19 @@ export function CityTaxPrompt({ game, localId, available, hidden, sendAction }: 
   if (hidden || !game.mayor) return null;
   const local = game.players.find(player => player.id === localId);
   const seat = game.mayor.seats[localId];
-  const openBill = seat?.bills.find(bill => bill.status === "open" && bill.dueTurn <= seat.turns + 2);
+  const openBill = seat?.bills.find(bill => bill.status === "open");
   if (!local || local.bankrupt || !openBill) return null;
   const ready = available && !game.debts?.length && game.phase !== "lobby" && game.phase !== "gameOver" && game.phase !== "awaitingAuction";
+  const fine = nextAuditFine(seat);
   return <aside className="city-tax-prompt" role="region" aria-label="City rent tax">
     <div className="city-tax-copy">
       <small>CITY HALL RENT TAX</small>
       <b>{money(openBill.amount)} levy on rent received</b>
-      <span>Pay privately now, or defer 1 turn (Mayor can audit)</span>
+      <span>Pay now, or defer (never auto-pays · {money(fine)} fine if Mayor audits you)</span>
     </div>
     <div className="city-actions">
       <button type="button" disabled={!ready || local.cash < openBill.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: openBill.round, billId: openBill.id ?? null })}>Pay {money(openBill.amount)}</button>
-      <button type="button" className="city-secondary" disabled={!ready} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: openBill.round, billId: openBill.id ?? null })}>Defer 1 turn</button>
+      <button type="button" className="city-secondary" disabled={!ready} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: openBill.round, billId: openBill.id ?? null })}>Defer tax</button>
     </div>
   </aside>;
 }

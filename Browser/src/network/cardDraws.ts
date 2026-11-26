@@ -3,7 +3,7 @@ import type {CardDraw,GameState,Player} from '../engine/types';
 import {randomIndex} from './random';
 
 export function makeCardDraws(state:GameState,player:Player,pick=(size:number)=>randomIndex(size)):CardDraw[]{
-  if(state.mode==='classic'||!state.pendingRoll)return [];
+  if(state.mode==='classic'||state.decks||!state.pendingRoll)return [];
   const draws:CardDraw[]=[];let position=(player.position+state.pendingRoll.total)%state.boardSize;
   for(let depth=0;depth<4;depth++){
     const tile=getTile(position,state.boardSize);if(tile.kind!=='chance'&&tile.kind!=='community')break;

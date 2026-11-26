@@ -61,7 +61,8 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
     }
     if (event.kind === "card") {
       const text = event.text.slice(event.text.indexOf(" drew: ") + 7);
-      const entry = event.deck && event.cardIndex !== undefined ? { deck: event.deck, card: cardAt(event.deck, event.cardIndex, next.mode) } : (["chance", "community"] as const).flatMap(deck => Array.from({ length: next.mode === "classic" ? 16 : 8 }, (_, index) => ({ deck, card: cardAt(deck, index, next.mode) }))).find(c => c.card?.text === text);
+      const cardMode = next.decks ? "classic" : next.mode;
+      const entry = event.deck && event.cardIndex !== undefined ? { deck: event.deck, card: cardAt(event.deck, event.cardIndex, cardMode) } : (["chance", "community"] as const).flatMap(deck => Array.from({ length: cardMode === "classic" ? 16 : 8 }, (_, index) => ({ deck, card: cardAt(deck, index, cardMode) }))).find(c => c.card?.text === text);
       backwards = entry?.card?.effect.kind === "moveRelative" && entry.card.effect.spaces < 0;
       const effect = entry?.card?.effect, position = positions.get(playerId ?? "") ?? 0;
       if (playerId && effect) {

@@ -28,8 +28,8 @@ import TapDice from './view/TapDice';
 import {rollDice} from './network/random';
 import { isPlayerColorTaken, playerColorKey } from "./engine/playerColors";
 import { usePresentation } from "./presentation/usePresentation";
-import { CityHall, CityHeadline, CityTaxPrompt, FortWheel } from "./view/MayorDesk";
-import { cityLoanAvailable, cityStable, councilSpeaker, fortPosition, permitPaused, trainOffer } from "./engine/mayor";
+import { CityHall, CityHeadline, CityTaxPrompt, CityVotePrompt, FortWheel } from "./view/MayorDesk";
+import { canChallengeCityProject, cityLoanAvailable, cityStable, councilSpeaker, fortPosition, mayorAuditsLeft, permitPaused, rentReliefActive, trainOffer } from "./engine/mayor";
 import { presentationInteractionBusy } from "./presentation/timeline";
 import { shouldSendMove } from "./presentation/plan";
 import EventStage, { PlayerPortrait } from "./view/EventStage";
@@ -445,6 +445,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
       {screenNotice && <p className="fullscreen-notice" role="status">{screenNotice}</p>}
       {game.rentClaim && game.rentClaim.ownerId === me?.id && !me?.bankrupt && <div className="rent-claim" role="status"><span><b>{getTile(game.rentClaim.propertyId, game.boardSize, game.city).name}</b><small>Claim before the next movement roll</small></span><button type="button" disabled={connection !== "connected" || motion.busy || !sceneUsable || ["awaitingTradeResponse", "awaitingDebt", "awaitingMortgageDecision"].includes(game.phase)} onClick={() => sendAction({ type: "CLAIM_RENT", playerId: me!.id, claimId: game.rentClaim!.id })}>Claim {formatMoney(game.rentClaim.amount)}</button></div>}
       {game.mayor && me && !me.bankrupt && <CityTaxPrompt game={game} localId={me.id} available={connection === "connected" && !motion.busy && sceneUsable} hidden={cityOpen || !!wheelDialog || !!drawer || !!tablePanel || ["awaitingAuction", "awaitingBuy", "awaitingTradeResponse", "awaitingDebt", "awaitingMove"].includes(game.phase)} sendAction={sendAction} />}
+      {game.mayor && me && !me.bankrupt && <CityVotePrompt game={game} localId={me.id} available={connection === "connected" && !motion.busy && sceneUsable} hidden={cityOpen || !!wheelDialog || !!drawer || !!tablePanel || ["awaitingAuction", "awaitingBuy", "awaitingTradeResponse", "awaitingDebt", "awaitingMove"].includes(game.phase)} sendAction={sendAction} />}
 
       <section className="game-layout">
         {mobileLobby ? <MobileLobby configuringMap={configuringMap} game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} onCopy={copyRoomLink} copied={copied} colorPicker={<TokenColorPicker color={me?.color ?? session.player.color} players={game.players} localId={session.player.id} onChoose={color=>sendAction({type:'SET_APPEARANCE',playerId:session.player.id,color})}/>}/> : <BoardStage diceEnabled={isCurrent&&game.phase==="awaitingRoll"&&!diceToolsOpen&&!drawer&&!tablePanel&&!cityOpen&&!wheelDialog} onWheel={openWheel} onThrow={()=>{if(isCurrent&&me&&game.phase==="awaitingRoll")sendAction({type:"ROLL",playerId:me.id,dice:dice()});}} panel={tablePanel} onPanelChange={setTablePanel} game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />}
@@ -509,7 +510,7 @@ function Lobby({
       {maps&&<MapPicker world={game.world} city={game.city} disabled={!canConfigure} onWorld={world=>sendAction({type:'SET_WORLD',playerId:localId,world})} onCity={city=>sendAction({type:'SET_CITY',playerId:localId,city})} onClose={()=>setMaps(false)}/>}
       <CityPicker value={game.city} disabled={!canConfigure} onSelect={city=>sendAction({type:'SET_CITY',playerId:localId,city})}/>
       <label className="field-label">Rules mode<select className="text-input" aria-label="Rules mode" value={game.rulesEdition === "hasbro-2025" ? "classic-2025" : game.mode ?? "expanding"} disabled={!canConfigure} onChange={e => sendAction({ type: "SET_MODE", playerId: localId, mode: e.target.value === "expanding" ? "expanding" : e.target.value === "mayor" ? "mayor" : "classic", rulesEdition: e.target.value === "classic-2025" ? "hasbro-2025" : undefined })}><option value="classic-2025">Classic · Hasbro 2025 · claim rent</option><option value="expanding">Expanding India · larger with friends</option><option value="classic">Classic traditional · automatic rent</option><option value="mayor">Mayor · City Hall Stories</option></select></label>
-      <div className="map-size-note"><b>{game.boardSize} spaces</b><span>{game.mode === "classic" ? "Classic India" : game.mode === "mayor" ? "Mayor · City Hall Stories" : "Expanding India"}</span><small>{game.mode === "classic" ? "40 spaces for 2–6 players. Shuffled 16-card decks, starting dice contest and off-turn finances." : game.mode === "mayor" ? "Rotating Mayor and Speaker, city projects, private contracts, Express Trains, and the Fort wheel." : "4 players → 48 · 5 → 56 · 6 → 64. Locks at start."}</small></div>
+      <div className="map-size-note"><b>{game.boardSize} spaces</b><span>{game.mode === "classic" ? "Classic India" : game.mode === "mayor" ? "Mayor · Classic 40 Spaces + City Hall" : "Expanding India"}</span><small>{game.mode === "classic" ? "40 spaces for 2–6 players. Shuffled 16-card decks, starting dice contest and off-turn finances." : game.mode === "mayor" ? "Full Classic 40-space rules with an overpowered Mayor: instant decrees, blue Rent Relief districts, live Council Votes, deferred levies with doubling audit fines, Express Trains, and the Fort wheel." : "4 players → 48 · 5 → 56 · 6 → 64. Locks at start."}</small></div>
       <BotLobbyControls disabled={!canConfigure} game={game} localId={localId} sendAction={sendAction}/><PlayerRoster game={game} localId={localId} />
       {local && <details className="lobby-colours"><summary>Your token colour</summary><TokenColorPicker color={local.color} players={game.players} localId={localId} onChoose={color => sendAction({ type: "SET_APPEARANCE", playerId: localId, color })} /></details>}
       {duplicateColours && <p className="inline-error" role="status">Every player needs a different colour. Open “Your token colour” to choose a free one.</p>}
@@ -541,13 +542,14 @@ function Board({ game, current, onSelect }: { game: GameState; current?: Player;
           const sideLength = game.boardSize / 4;
           const side = tile.position < sideLength ? "bottom" : tile.position < sideLength * 2 ? "left" : tile.position < sideLength * 3 ? "top" : "right";
           const tileStyle = { ...tileGridPosition(tile.position, game.boardSize), "--tile-color": stripe, "--owner-color": owner?.color } as CSSProperties;
+          const isRelief = rentReliefActive(game, tile);
           return (
             <article
-              className={`board-tile ${tile.kind} ${property?.ownerId ? "owned" : ""}`}
+              className={`board-tile ${tile.kind} ${property?.ownerId ? "owned" : ""} ${property?.mortgaged ? "mortgaged" : ""} ${isRelief ? "rent-relief" : ""}`}
               data-side={side}
               key={tile.position}
               style={tileStyle}
-              title={[tile.name, tile.region, tile.detail].filter(Boolean).join(" · ")}
+              title={[tile.name, tile.region, tile.detail, isRelief ? "Rent Relief active · 50% off rent" : ""].filter(Boolean).join(" · ")}
               role="button"
               tabIndex={0}
               aria-label={`Inspect ${tile.name}${tile.region ? `, ${tile.region}` : ""}${tile.detail ? `, ${tile.detail}` : ""}`}
@@ -566,6 +568,7 @@ function Board({ game, current, onSelect }: { game: GameState; current?: Player;
               {tile.kind === "tax" && <span className="tile-icon">₹</span>}
               {tile.kind === "goToJail" && <span className="tile-icon">⇢</span>}
               {property && propertyLabel(property) && <span className="improvement-mark">{propertyLabel(property)}</span>}
+              {isRelief && <span className="improvement-mark relief-mark">−50%</span>}
               {owner && <span className="owner-marker" title={`Owned by ${owner.name}`} />}
               <span className="token-stack">
                 {players.map((player) => (
@@ -665,8 +668,9 @@ function Controls({
   const debt = game.debts?.[0], settling = debt?.playerId === local.id;
   const train = trainOffer(game, local.id);
   const normalTurn = game.phase === "awaitingRoll" || game.phase === "awaitingEndTurn" || game.phase === "awaitingDebt" || game.phase === "awaitingJailPayment";
-  const managing = available && !local.bankrupt && (game.mode === "classic" ? canClassicManage(game, local.id) : normalTurn && isCurrent);
-  const canSurrender = game.mode !== "classic" || classicLiquidationValue(game, local.id) < 0;
+  const classicLike = game.mode === "classic" || game.mode === "mayor";
+  const managing = available && !local.bankrupt && (classicLike ? canClassicManage(game, local.id) : normalTurn && isCurrent);
+  const canSurrender = !classicLike || classicLiquidationValue(game, local.id) < 0;
   useEffect(() => {
     if (settling && game.phase === "awaitingDebt") { setShowBuild(true); setShowTrade(false); }
     if (!debt) { setShowBuild(false); setShowTrade(false); setConfirmBankruptcy(false); }
@@ -711,8 +715,9 @@ function Controls({
           <button className="secondary-button" type="button" onClick={() => { setShowBuild((value) => !value); setShowTrade(false); }}>{settling ? "Sell / mortgage" : "Build / mortgage"}</button>
           <button className="secondary-button" type="button" onClick={() => { setShowTrade((value) => !value); setShowBuild(false); }}>Trade</button>
           {!settling && cityLoanAvailable(game, local.id) && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={() => sendAction({ type: "CITY_LOAN", playerId: local.id, round: game.mayor!.round })}>Borrow ₹200 · repay ₹225</button>}
-          {!settling && onOpenCity && game.mayor && local.id === game.mayor.mayorId && cityStable(game) && !game.mayor.proposalUsed && !game.mayor.proposal && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={onOpenCity}>Mayor · Propose project</button>}
-          {!settling && onOpenCity && game.mayor?.council && cityStable(game) && game.mayor.round <= 2 && !game.mayor.seats[local.id]?.contract && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={onOpenCity}>Pick ₹150 Contract</button>}
+          {!settling && onOpenCity && game.mayor && local.id === game.mayor.mayorId && (!game.mayor.proposalUsed || mayorAuditsLeft(game.mayor) > 0) && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={onOpenCity}>{!game.mayor.proposalUsed ? "Mayor · Enact decree" : "Mayor · Audit rival"}</button>}
+          {!settling && onOpenCity && canChallengeCityProject(game, local.id) && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={onOpenCity}>Council · Vote</button>}
+          {!settling && onOpenCity && isCurrent && game.mayor?.council && cityStable(game) && game.mayor.round <= 2 && !game.mayor.seats[local.id]?.contract && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={onOpenCity}>Pick ₹150 Contract</button>}
           {onWheel && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={onWheel}>{game.mayor?.wheel?.section === 5 ? "Scratch your ticket" : "Fort wheel"}</button>}
           {game.phase === "awaitingEndTurn" && isCurrent && <button className="primary-button" type="button" disabled={showTrade || showBuild} onClick={() => sendAction({ type: "END_TURN", playerId: local.id })}>{game.lastRoll?.grantsExtraRoll && !local.inJail ? "Continue turn" : "End turn"}</button>}
           {settling && game.phase === "awaitingDebt" && <button className="bankrupt-button" disabled={!canSurrender} title={!canSurrender ? "Available building sales and mortgages can still clear your debt." : undefined} type="button" onClick={() => setConfirmBankruptcy(true)}>Declare bankruptcy</button>}
@@ -730,7 +735,7 @@ function Controls({
 function ClassicFinanceMenu({game,local,available,sendAction}:{game:GameState;local:Player;available:boolean;sendAction:(action:GameAction)=>void}) {
   const [tool,setTool]=useState<"build"|"trade">();
   useEffect(()=>{if(!tool)return;const close=(event:KeyboardEvent)=>{if(event.key==="Escape")setTool(undefined);};window.addEventListener("keydown",close);return()=>window.removeEventListener("keydown",close);},[tool]);
-  if(game.mode!=="classic" || !available || !canClassicManage(game,local.id))return null;
+  if((game.mode!=="classic" && game.mode!=="mayor") || !available || !canClassicManage(game,local.id))return null;
   const properties=getBoard(game.boardSize, game.city).filter(t=>isPurchasableTile(t) && game.properties[t.position]!.ownerId===local.id);
   return <div className="classic-finance-menu"><button className="event-secondary" type="button" onClick={()=>setTool("build")}>Manage deeds</button><button className="event-secondary" type="button" onClick={()=>setTool("trade")}>Propose trade</button>{tool && createPortal(<div className="finance-backdrop" onClick={()=>setTool(undefined)}><section className="finance-sheet" role="dialog" aria-modal="true" aria-label={tool==="build"?"Manage deeds during a decision":"Propose a trade during a decision"} onClick={e=>e.stopPropagation()}><header><h2>{tool==="build"?"Your property desk":"Make a deal"}</h2><button autoFocus type="button" aria-label="Close finance desk" onClick={()=>setTool(undefined)}>×</button></header>{tool==="build"?<PropertyTools game={game} player={local} properties={properties} sendAction={sendAction}/>:<TradeComposer game={game} local={local} sendAction={sendAction}/>}</section></div>,document.body)}</div>;
 }
@@ -754,20 +759,21 @@ function PropertyTools({
         if (!isPurchasableTile(tile)) return null;
         const property = game.properties[tile.position] as PropertyState;
         const district = tile.kind === "property" ? colorGroupTiles(tile.group, game.boardSize) : [];
-        const classic = game.mode === "classic", cash = classic ? classicSpendableCash(game, player.id) : player.cash;
+        const classic = game.mode === "classic", classicLike = classic || game.mode === "mayor", cash = classicLike ? classicSpendableCash(game, player.id) : player.cash;
         const liquidation = district.reduce((sum, member) => {const deed=game.properties[member.position]!;return sum+(classic && deed.buildingCosts ? deed.buildingCosts.reduce((n,c)=>n+c,0)/2 : Math.floor(deed.houses*member.houseCost/2));}, 0);
         const levels = district.map(member => game.properties[member.position]!.houses);
         const clearSet = district.every(member => game.properties[member.position]?.ownerId === player.id && !game.properties[member.position]?.mortgaged);
         const locked = classic && classicBuildingGroupLocked(game,tile.position,player.id);
-        const paused = tile.kind === "property" && permitPaused(game, tile.group);
+        const paused = tile.kind === "property" && permitPaused(game, tile.group, player.id);
+        const relief = rentReliefActive(game, tile);
         const canBuild = !paused && !locked && game.auction?.kind !== "house" && game.auction?.kind !== "hotel" && tile.kind === "property" && clearSet && game.phase !== "awaitingDebt" && property.houses < 5 && property.houses === Math.min(...levels) && cash >= tile.houseCost && (property.houses === 4 ? game.bankHotels > 0 : game.bankHouses > 0);
         const canSell = !locked && clearSet && property.houses > 0 && property.houses === Math.max(...levels) && (property.houses < 5 || game.bankHouses >= 4);
         const canMortgage = !locked && (property.mortgaged ? game.phase !== "awaitingDebt" && cash >= tile.mortgageValue + Math.ceil(tile.mortgageValue / 10) : !levels.some(level => level > 0));
         const buildReason=tile.kind!=="property"?"":paused?"City Hall paused building permits here this round.":locked?"This district is reserved by an active auction.":game.auction?.kind==="house"||game.auction?.kind==="hotel"?"Finish the building auction first.":!district.every(member=>game.properties[member.position]?.ownerId===player.id)?"Own every deed in this colour set to build.":!clearSet?"Unmortgage the whole colour set first.":game.phase==="awaitingDebt"?"Settle the debt before buying buildings.":property.houses>=5?"Hotel complete.":property.houses!==Math.min(...levels)?"Build evenly: improve the less developed deeds first.":cash<tile.houseCost?"You need more available cash to build.":property.houses===4&&game.bankHotels===0?"The bank has no hotels left.":property.houses<4&&game.bankHouses===0?"The bank has no houses left.":"";
         const refund = tile.kind === "property" ? classic && property.buildingCosts?.length ? property.buildingCosts[property.buildingCosts.length-1]!/2 : Math.floor(tile.houseCost/2) : 0;
         return (
-          <div className="deed-row" key={tile.position}>
-            <div><b>{tile.name}</b><small>{propertyLabel(property) || "Unimproved"}</small>{tile.kind==="property"&&<small className="deed-rule-note" id={`deed-build-${tile.position}`}>{buildReason||`${property.houses===4?"Hotel":"House"} costs ${formatMoney(tile.houseCost)}`}</small>}</div>
+          <div className={`deed-row${relief ? " deed-row-relief" : ""}`} key={tile.position}>
+            <div><b>{tile.name}</b><small>{propertyLabel(property) || "Unimproved"}{relief ? " · Rent Relief (blue · −50%)" : ""}</small>{tile.kind==="property"&&<small className="deed-rule-note" id={`deed-build-${tile.position}`}>{buildReason||`${property.houses===4?"Hotel":"House"} costs ${formatMoney(tile.houseCost)}`}</small>}</div>
             <div className="deed-actions">
               {tile.kind === "property" && <><button type="button" disabled={!canBuild} title={buildReason||"Build evenly on a complete colour set."} aria-describedby={`deed-build-${tile.position}`} aria-label={`Build on ${tile.name}`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "build" })}>{property.houses===4?"Hotel":"House"} {formatMoney(tile.houseCost)}</button><button type="button" disabled={!canSell} title={property.houses === 5 && game.bankHouses < 4 ? "No replacement houses: use Sell district buildings instead." : "Sell evenly from the most developed properties."} aria-label={`Sell a building on ${tile.name}`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "sell" })}>Sell {formatMoney(refund)}</button></>}
               {tile.kind === "property" && !locked && property.houses === 5 && game.bankHouses < 4 && <button type="button" aria-label={`Sell all buildings in ${tile.group} district`} onClick={() => sendAction({ type: "BUILD", playerId: player.id, propertyId: tile.position, operation: "sellGroup" })}>Sell district buildings {formatMoney(liquidation)}</button>}

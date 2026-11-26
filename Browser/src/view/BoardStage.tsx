@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { getBoard, getTile, isPurchasableTile, isStreetTile } from "../engine/board";
 import type { GameAction, GameState } from "../engine/types";
 import { formatRupees } from "../engine/currency";
+import { rentReliefActive } from "../engine/mayor";
 import { decisionPlayerId } from "../engine/reducer";
 import { useAssets, useViewSettings } from "../assets";
 import type { GameAsset } from "../assets";
@@ -121,7 +122,7 @@ function TileInspector({ game, position, onClose }: { game: GameState; position:
     <button className="icon-button" type="button" onClick={onClose} aria-label="Close property details">×</button><p className="eyebrow">Space {position + 1} / {game.boardSize} · {tile.region ?? tile.kind}</p><h2 id="deed-title">{tile.name}</h2>
     {tile.region && <p className="deed-region">{tile.region}</p>}
     {tile.detail && <p className="deed-detail">{tile.detail}</p>}
-    {isPurchasableTile(tile) ? <><div className="deed-summary"><span>Bank price<b>{money(tile.price)}</b></span><span>Mortgage<b>{money(tile.mortgageValue)}</b></span></div><p className="ownership-note">{owner ? `Owned by ${owner.name}${property?.mortgaged ? " · mortgaged (no rent)" : property?.houses === 5 ? " · hotel" : property?.houses ? ` · ${property.houses} houses` : ""}` : "Available from the bank"}</p>
+    {isPurchasableTile(tile) ? <><div className="deed-summary"><span>Bank price<b>{money(tile.price)}</b></span><span>Mortgage<b>{money(tile.mortgageValue)}</b></span></div><p className="ownership-note">{owner ? `Owned by ${owner.name}${property?.mortgaged ? " · mortgaged (no rent)" : property?.houses === 5 ? " · hotel" : property?.houses ? ` · ${property.houses} houses` : ""}` : "Available from the bank"}{rentReliefActive(game, tile) ? " · Rent Relief active (blue · 50% off rent)" : ""}</p>
       {isStreetTile(tile) && <><dl className="rent-table">{["Base rent", "1 house", "2 houses", "3 houses", "4 houses", "Hotel"].map((label, index) => <div key={label}><dt>{label}</dt><dd>{money(tile.rent[index]!)}</dd></div>)}</dl><p>Full colour set with no buildings: {money(tile.rent[0] * 2)} rent. Build cost: {money(tile.houseCost)} each, evenly across the group.</p></>}
       {tile.kind === "railroad" && <p>Rent with 1 / 2 / 3 / 4 railroads: ₹25 / ₹50 / ₹100 / ₹200.</p>}
       {tile.kind === "utility" && <p>Rent is 4× the dice total. Own both utilities for 10× the dice total.</p>}

@@ -7,6 +7,9 @@ export const LOAN_REPAYMENT = 225;
 export const LOAN_CASH_LIMIT = 1000;
 export const AUCTION_CREDIT_CASH_LIMIT = 400;
 export const AUDIT_FINE = 25;
+export const MAYOR_STIPEND = 100;
+export const MAX_AUDITS_PER_TERM = 2;
+export const DUEL_VETO_COST = 150;
 export const WHEEL_SECTIONS = ["Bank dividend", "Building loan matures", "Doctor’s fee", "Jail release", "Advance to GO", "Lucky Scratch"] as const;
 
 export const CITY_POLICIES = {
@@ -21,7 +24,7 @@ export type CityPolicy = keyof typeof CITY_POLICIES;
 export type CityContract = "build" | "transit";
 export const CITY_CONTRACTS = { build: "Develop a District", transit: "Connect the City" } as const;
 export const CITY_CONTRACT_REWARD = 150;
-interface CityProject { kind: CityPolicy; sponsorId: string; district?: ColorGroup; used?: true }
+interface CityProject { kind: CityPolicy; sponsorId: string; district?: ColorGroup; used?: true; expiresRound?: number }
 export interface TaxBill {
   id?: number;
   round: number;
@@ -34,6 +37,7 @@ interface CitySeat {
   rent: number;
   taxedRent?: number;
   bills: TaxBill[];
+  caughtCount?: number;
   borrowed?: true;
   loanDue?: number;
   loanAmountDue?: number;
@@ -59,6 +63,7 @@ export interface CityDesk {
   round: number;
   treasury: number;
   auditUsed?: true;
+  auditsUsed?: number;
   tip?: string[];
   proposalUsed?: true;
   voteUsed?: true;
@@ -116,9 +121,15 @@ function accrueRentTax(seat: CitySeat, round: number, addedRent: number): CitySe
 }
 
 export const recordRent = (state: GameState, id: string, amount: number) =>
-  state.mayor && amount > 0 && !state.players.find(p => p.id === id)?.bankrupt
+  state.mayor && amount > 0 && id !== state.mayor.mayorId && !state.players.find(p => p.id === id)?.bankrupt
     ? updateCitySeat(state, id, seat => accrueRentTax(seat, state.mayor!.round, amount))
     : state;
+
+export const nextAuditFine = (seat?: { caughtCount?: number }) =>
+  AUDIT_FINE * (2 ** (seat?.caughtCount ?? 0));
+
+export const mayorAuditsLeft = (desk?: CityDesk) =>
+  !desk || desk.auditUsed ? 0 : Math.max(0, MAX_AUDITS_PER_TERM - (desk.auditsUsed ?? 0));
 
 export function fortPosition(state: Pick<GameState, "boardSize">) {
   return classicPosition(23, state.boardSize);
@@ -135,8 +146,9 @@ export function trainOffer(state: GameState, playerId: string) {
   const stations = railroadPositions(state.boardSize);
   if (!player || player.bankrupt || player.inJail || !stations.includes(player.position) || desk.seats[playerId]?.rodeExpress) return;
   const seat = desk.seats[playerId];
-  const free = desk.policy?.kind === "transit" && seat?.freeRideRound !== desk.round && desk.treasury >= TRAIN_FARE;
-  return { to: stations.find(position => position > player.position) ?? stations[0]!, fare: free ? 0 : TRAIN_FARE };
+  const mayorFree = desk.mayorId === playerId;
+  const transitFree = desk.policy?.kind === "transit" && seat?.freeRideRound !== desk.round && desk.treasury >= TRAIN_FARE;
+  return { to: stations.find(position => position > player.position) ?? stations[0]!, fare: mayorFree || transitFree ? 0 : TRAIN_FARE, mayorFree };
 }
 
 const unpostedTax = (seat?: CitySeat) =>
@@ -145,8 +157,9 @@ const unpostedTax = (seat?: CitySeat) =>
 export function cityLoanAvailable(state: GameState, playerId: string) {
   const desk = state.mayor;
   const player = state.players.find(candidate => candidate.id === playerId);
+  const isMayor = desk?.mayorId === playerId;
   return cityStable(state) && state.activePlayerId === playerId && !!player && !player.bankrupt &&
-    !!desk && player.cash + unpostedTax(desk.seats[playerId]) <= LOAN_CASH_LIMIT && desk.policy?.kind === "loans" &&
+    !!desk && (isMayor || player.cash + unpostedTax(desk.seats[playerId]) <= LOAN_CASH_LIMIT) && desk.policy?.kind === "loans" &&
     desk.treasury >= LOAN_AMOUNT && !desk.seats[playerId]?.borrowed;
 }
 
@@ -156,7 +169,7 @@ export function cityLoanReason(state: GameState, playerId: string): string | und
   if (!desk || desk.policy?.kind !== "loans" || !player || player.bankrupt || cityLoanAvailable(state, playerId)) return;
   if (desk.seats[playerId]?.borrowed) return "You already used your 1 city loan this match.";
   if (desk.treasury < LOAN_AMOUNT) return "City Funds needs at least ₹200 to issue an emergency loan.";
-  if (player.cash + unpostedTax(desk.seats[playerId]) > LOAN_CASH_LIMIT) return "Emergency loans are for players with ₹1,000 or less in posted cash.";
+  if (desk.mayorId !== playerId && player.cash + unpostedTax(desk.seats[playerId]) > LOAN_CASH_LIMIT) return "Emergency loans are for players with ₹1,000 or less (Mayors have no cash cap).";
   if (state.activePlayerId !== playerId) return "Borrowing opens on your turn (₹200 loan · repay ₹225).";
   return "Finish the current board decision to borrow ₹200.";
 }
@@ -173,7 +186,7 @@ export function nextMayor(state: GameState, after: string) {
 export function newTerm(desk: CityDesk, mayorId: string): CityDesk {
   return {
     ...desk, mayorId, term: desk.term + 1, termStart: desk.round,
-    auditUsed: undefined, tip: undefined, proposalUsed: undefined, proposal: undefined
+    auditUsed: undefined, auditsUsed: undefined, tip: undefined, proposalUsed: undefined, proposal: undefined
   };
 }
 
@@ -191,24 +204,33 @@ export function advanceCityRound(state: GameState): GameState {
   const seats = { ...desk.seats };
   for (const player of state.players) {
     const seat = seats[player.id]!;
-    const bill = Math.max(0, cityTax(seat.rent) - cityTax(seat.taxedRent ?? 0));
+    const bill = player.id === desk.mayorId ? 0 : Math.max(0, cityTax(seat.rent) - cityTax(seat.taxedRent ?? 0));
     seats[player.id] = {
       ...seat, rent: 0, taxedRent: undefined,
-      bills: bill && !player.bankrupt ? [...seat.bills, { round: desk.round, amount: bill, dueTurn: seat.turns + 2, status: "open" }] : seat.bills
+      bills: bill && !player.bankrupt ? [...seat.bills, { id: seat.rent, round: desk.round, amount: bill, dueTurn: seat.turns + 2, status: "open" }] : seat.bills
     };
   }
   const active = state.players.filter(player => !player.bankrupt);
-  const proposal = active.some(player => player.id === desk.proposal?.sponsorId) ? desk.proposal : undefined;
-  const switchPolicy = proposal && active.filter(player => proposal.votes.includes(player.id)).length > active.length / 2;
-  let policy: CityProject | undefined;
-  if (proposal && (!switchPolicy || proposal.kind === "loans" || proposal.kind === "transit")) {
-    policy = {
-      kind: switchPolicy ? proposal.kind === "loans" ? "transit" : "loans" : proposal.kind,
-      sponsorId: proposal.sponsorId,
-      district: proposal.district
-    };
+  const keepPolicy = desk.policy && desk.policy.expiresRound !== undefined && round <= desk.policy.expiresRound
+    ? desk.policy
+    : undefined;
+  let policy: CityProject | undefined = keepPolicy;
+  let proposal = keepPolicy && desk.proposal && active.some(player => player.id === desk.proposal?.sponsorId)
+    ? desk.proposal
+    : undefined;
+  if (!keepPolicy && desk.proposal && active.some(player => player.id === desk.proposal?.sponsorId)) {
+    const legacyProposal = desk.proposal;
+    const switchPolicy = active.filter(player => legacyProposal.votes.includes(player.id)).length > active.length / 2;
+    if (!switchPolicy || legacyProposal.kind === "loans" || legacyProposal.kind === "transit") {
+      policy = {
+        kind: switchPolicy ? legacyProposal.kind === "loans" ? "transit" : "loans" : legacyProposal.kind,
+        sponsorId: legacyProposal.sponsorId,
+        district: legacyProposal.district
+      };
+    }
+    proposal = undefined;
   }
-  const advanced: CityDesk = { ...desk, round, seats, proposal: undefined, policy, pendingRoundAdvance: undefined };
+  const advanced: CityDesk = { ...desk, round, seats, proposal, policy, pendingRoundAdvance: undefined };
   return { ...state, mayor: round - desk.termStart >= 2 ? newTerm(advanced, nextMayor(state, desk.mayorId)) : advanced };
 }
 
@@ -228,17 +250,24 @@ export function nextCityTurn(state: GameState, actor: string, nextId: string): G
 
 export function councilSpeaker(state: GameState) {
   const desk = state.mayor;
-  if (!desk?.council || state.players.filter(player => !player.bankrupt).length < 3) return;
+  if (!desk?.council || state.players.filter(player => !player.bankrupt).length < 2) return;
   return nextMayor(state, desk.mayorId);
+}
+
+export function councilVoteThreshold(state: GameState) {
+  const active = state.players.filter(player => !player.bankrupt).length;
+  return active <= 2 ? 1 : Math.floor(active / 2) + 1;
 }
 
 export function canChallengeCityProject(state: GameState, playerId: string) {
   const desk = state.mayor;
   const proposal = desk?.proposal;
-  if (!desk || !proposal || !state.players.some(p => p.id === playerId && !p.bankrupt) ||
-      state.players.filter(p => !p.bankrupt).length < 3 || proposal.sponsorId === playerId || proposal.votes.includes(playerId)) return false;
-  return proposal.votes.length > 0 || !desk.voteUsed ||
-    (desk.speakerUsedTerm !== desk.term && councilSpeaker(state) === playerId);
+  const player = state.players.find(p => p.id === playerId && !p.bankrupt);
+  if (!desk || !proposal || !player || proposal.sponsorId === playerId || proposal.votes.includes(playerId)) return false;
+  const activeCount = state.players.filter(p => !p.bankrupt).length;
+  if (activeCount < 2) return false;
+  if (activeCount === 2) return player.cash >= DUEL_VETO_COST;
+  return true;
 }
 
 export function reserveLevy(state: GameState) {
@@ -269,15 +298,17 @@ export function cityPolicyAvailable(state: GameState, kind: CityPolicy, district
   return kind === "wealth" ? !desk.reserveLevyUsed && !!reserveLevy(state) : desk.treasury > 0;
 }
 
-export function rentRelief(state: GameState, playerId: string, tile: Tile, rent: number) {
-  const desk = state.mayor;
-  if (tile.kind !== "property" || desk?.policy?.kind !== "rent-relief" || desk.policy.district !== tile.group ||
-    desk.seats[playerId]?.rentReliefRound === desk.round) return 0;
+export const rentReliefActive = (state: GameState, tile: Tile) =>
+  tile.kind === "property" && state.mayor?.policy?.kind === "rent-relief" && state.mayor.policy.district === tile.group;
+
+export function rentRelief(state: GameState, _playerId: string, tile: Tile, rent: number) {
+  if (!rentReliefActive(state, tile)) return 0;
   return Math.min(250, Math.floor(rent / 2));
 }
 
-export const permitPaused = (state: GameState, district: ColorGroup) =>
-  state.mayor?.policy?.kind === "permits" && state.mayor.policy.district === district;
+export const permitPaused = (state: GameState, district: ColorGroup, playerId?: string) =>
+  state.mayor?.policy?.kind === "permits" && state.mayor.policy.district === district &&
+  (!playerId || playerId !== state.mayor.mayorId);
 
 export function cityAuctionBacking(state: GameState) {
   const desk = state.mayor, auction = state.auction;

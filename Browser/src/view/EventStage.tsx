@@ -112,8 +112,8 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
     const chosenTarget=targets.includes(Number(buildTarget))?Number(buildTarget):targets[0];
     const position=sold?frame.tileId??auction.propertyId:building?chosenTarget??auction.winningTarget??auction.propertyId:auction.propertyId;
     const tile = getPurchasableTile(position, game.boardSize, game.city);
-    const eligible = Boolean(!sold && game.auction && me && !me.bankrupt && auction.eligiblePlayerIds.includes(me.id) && (game.mode === "classic" || !auction.passedPlayerIds.includes(me.id)) && auction.highestBidderId !== me.id);
-    const minimum = Math.max(game.mode === "classic"?10:1,auction.currentBid + 1);
+    const eligible = Boolean(!sold && game.auction && me && !me.bankrupt && auction.eligiblePlayerIds.includes(me.id) && (game.mode === "classic" || game.mode === "mayor" || !auction.passedPlayerIds.includes(me.id)) && auction.highestBidderId !== me.id);
+    const minimum = Math.max(game.mode === "classic" || game.mode === "mayor" ? 10 : 1, auction.currentBid + 1);
     const credit = auctionCredit(auction, localId);
     const ownCash = (me?.cash ?? 0) - (game.suspendedAuction?.highestBidderId === localId ? game.suspendedAuction.currentBid : 0);
     const available = ownCash + credit;
