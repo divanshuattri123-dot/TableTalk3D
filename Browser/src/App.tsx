@@ -29,7 +29,7 @@ import {rollDice} from './network/random';
 import { isPlayerColorTaken, playerColorKey } from "./engine/playerColors";
 import { usePresentation } from "./presentation/usePresentation";
 import { CityHall, CityHeadline, CityTaxPrompt, FortWheel } from "./view/MayorDesk";
-import { councilSpeaker, fortPosition, permitPaused, trainOffer } from "./engine/mayor";
+import { cityLoanAvailable, cityStable, councilSpeaker, fortPosition, permitPaused, trainOffer } from "./engine/mayor";
 import { presentationInteractionBusy } from "./presentation/timeline";
 import { shouldSendMove } from "./presentation/plan";
 import EventStage, { PlayerPortrait } from "./view/EventStage";
@@ -455,7 +455,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
           ) : (
             <>
               {me ? (
-                <Controls onWheel={openWheel} nativeDice={unityReady} onToolsOpen={setDiceToolsOpen} game={game} local={me} isCurrent={isCurrent} available={connection === "connected" && !motion.busy && sceneUsable} presenting={motion.busy} sendAction={sendAction} />
+                <Controls onWheel={openWheel} onOpenCity={game.mayor ? () => { setOpenWheelId(undefined); setCityOpen(true); } : undefined} nativeDice={unityReady} onToolsOpen={setDiceToolsOpen} game={game} local={me} isCurrent={isCurrent} available={connection === "connected" && !motion.busy && sceneUsable} presenting={motion.busy} sendAction={sendAction} />
               ) : (
                 <p className="spectator-note">Spectating only — this table had already started before you arrived.</p>
               )}
@@ -637,6 +637,7 @@ function PlayerRoster({ game, localId }: { game: GameState; localId: string }) {
 
 function Controls({
   onWheel,
+  onOpenCity,
   nativeDice,
   onToolsOpen,
   game,
@@ -647,6 +648,7 @@ function Controls({
   sendAction
 }: {
   onWheel?: () => void;
+  onOpenCity?: () => void;
   nativeDice:boolean;
   onToolsOpen:(open:boolean)=>void;
   game: GameState;
@@ -708,6 +710,9 @@ function Controls({
         <div className="utility-actions">
           <button className="secondary-button" type="button" onClick={() => { setShowBuild((value) => !value); setShowTrade(false); }}>{settling ? "Sell / mortgage" : "Build / mortgage"}</button>
           <button className="secondary-button" type="button" onClick={() => { setShowTrade((value) => !value); setShowBuild(false); }}>Trade</button>
+          {!settling && cityLoanAvailable(game, local.id) && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={() => sendAction({ type: "CITY_LOAN", playerId: local.id, round: game.mayor!.round })}>Borrow ₹200 · repay ₹225</button>}
+          {!settling && onOpenCity && game.mayor && local.id === game.mayor.mayorId && cityStable(game) && !game.mayor.proposalUsed && !game.mayor.proposal && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={onOpenCity}>Mayor · Propose project</button>}
+          {!settling && onOpenCity && game.mayor?.council && cityStable(game) && game.mayor.round <= 2 && !game.mayor.seats[local.id]?.contract && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={onOpenCity}>Pick ₹150 Contract</button>}
           {onWheel && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={onWheel}>{game.mayor?.wheel?.section === 5 ? "Scratch your ticket" : "Fort wheel"}</button>}
           {game.phase === "awaitingEndTurn" && isCurrent && <button className="primary-button" type="button" disabled={showTrade || showBuild} onClick={() => sendAction({ type: "END_TURN", playerId: local.id })}>{game.lastRoll?.grantsExtraRoll && !local.inJail ? "Continue turn" : "End turn"}</button>}
           {settling && game.phase === "awaitingDebt" && <button className="bankrupt-button" disabled={!canSurrender} title={!canSurrender ? "Available building sales and mortgages can still clear your debt." : undefined} type="button" onClick={() => setConfirmBankruptcy(true)}>Declare bankruptcy</button>}

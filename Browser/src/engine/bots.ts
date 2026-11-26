@@ -95,7 +95,7 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
       const wheel=desk.wheel;
       if(wheel?.playerId===playerId&&s.phase==='awaitingEndTurn')return wheel.section===5
         ? {type:'CITY_SCRATCH',playerId,wheelId:wheel.id} : {type:'CITY_SPIN',playerId,wheelId:wheel.id};
-      if(active.cash<150 && cityLoanAvailable(s,playerId))return {type:'CITY_LOAN',playerId,round:desk.round};
+      if(active.cash<250 && cityLoanAvailable(s,playerId))return {type:'CITY_LOAN',playerId,round:desk.round};
       const train=trainOffer(s,playerId);
       if(train && active.cash>=train.fare){
         const owner=s.properties[train.to]?.ownerId;

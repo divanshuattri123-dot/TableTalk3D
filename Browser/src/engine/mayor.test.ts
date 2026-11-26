@@ -94,7 +94,7 @@ describe("Mayor rules", () => {
     expect(settled.mayor?.treasury).toBe(585);
     expect(send(settled, audit).notice).toBeTruthy();
   });
-  it("automatically audits a deferral in a two-seat match", () => {
+  it("automatically audits a deferral in a two-seat match, including off-turn deferrals on the Mayor's final turn", () => {
     let state = end(newRound(withRent(table(2), "p2", 600)));
     state = send(state, { type: "CITY_DEFER_TAX", playerId: "p2", round: 1 });
     expect(cash(state, "p2")).toBe(1500);
@@ -103,6 +103,21 @@ describe("Mayor rules", () => {
     state = end(state);
     expect(state.mayor!.round).toBe(3);
     expect(cash(state, "p2")).toBe(1315);
+
+    // Term 2: p2 is Mayor for rounds 3 and 4. On p2's final turn (round 4), p1 collects rent and defers off-turn.
+    state = newRound(state);
+    expect(state.mayor!.round).toBe(4);
+    expect(state.mayor!.mayorId).toBe("p2");
+    state = end(state, "p1");
+    state = { ...state, properties: { ...state.properties, 23: { ownerId: "p1", houses: 3 as const, mortgaged: false } } };
+    const rolled = send(patchPlayer(state, "p2", { position: 16 }), { type: "ROLL", playerId: "p2", dice: [3, 4] });
+    const landed = send(rolled, { type: "MOVE_RESULT", playerId: "p2" });
+    const deferred = send(landed, { type: "CITY_DEFER_TAX", playerId: "p1", round: 4 });
+    expect(deferred.mayor!.seats.p1!.bills[0]?.status).toBe("deferred");
+    const rotated = end(deferred, "p2");
+    expect(rotated.mayor!.round).toBe(5);
+    expect(rotated.mayor!.mayorId).toBe("p1");
+    expect(cash(rotated, "p1")).toBe(2200 - 225);
   });
   it("charges the Mayor for a failed raid and keeps current loans out of an audit", () => {
     const state = table();

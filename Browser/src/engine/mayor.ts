@@ -4,7 +4,8 @@ import type { AuctionState, ColorGroup, GameState, Player, Tile } from "./types"
 export const TRAIN_FARE = 75;
 export const LOAN_AMOUNT = 200;
 export const LOAN_REPAYMENT = 225;
-export const LOAN_CASH_LIMIT = 400;
+export const LOAN_CASH_LIMIT = 1000;
+export const AUCTION_CREDIT_CASH_LIMIT = 400;
 export const AUDIT_FINE = 25;
 export const WHEEL_SECTIONS = ["Bank dividend", "Building loan matures", "Doctor’s fee", "Jail release", "Advance to GO", "Lucky Scratch"] as const;
 
@@ -143,7 +144,18 @@ export function cityLoanAvailable(state: GameState, playerId: string) {
   const player = state.players.find(candidate => candidate.id === playerId);
   return cityStable(state) && state.activePlayerId === playerId && !!player && !player.bankrupt &&
     !!desk && player.cash + unpostedTax(desk.seats[playerId]) <= LOAN_CASH_LIMIT && desk.policy?.kind === "loans" &&
-    desk.policy.sponsorId !== playerId && desk.treasury >= LOAN_AMOUNT && !desk.seats[playerId]?.borrowed;
+    desk.treasury >= LOAN_AMOUNT && !desk.seats[playerId]?.borrowed;
+}
+
+export function cityLoanReason(state: GameState, playerId: string): string | undefined {
+  const desk = state.mayor;
+  const player = state.players.find(candidate => candidate.id === playerId);
+  if (!desk || desk.policy?.kind !== "loans" || !player || player.bankrupt || cityLoanAvailable(state, playerId)) return;
+  if (desk.seats[playerId]?.borrowed) return "You already used your 1 city loan this match.";
+  if (desk.treasury < LOAN_AMOUNT) return "City Funds needs at least ₹200 to issue an emergency loan.";
+  if (player.cash + unpostedTax(desk.seats[playerId]) > LOAN_CASH_LIMIT) return "Emergency loans are for players with ₹1,000 or less in posted cash.";
+  if (state.activePlayerId !== playerId) return "Borrowing opens on your turn (₹200 loan · repay ₹225).";
+  return "Finish the current board decision to borrow ₹200.";
 }
 
 export function nextMayor(state: GameState, after: string) {
@@ -270,7 +282,7 @@ export function cityAuctionBacking(state: GameState) {
       desk.policy?.kind !== "credit" || desk.policy.used || desk.treasury <= 0) return;
   const limit = Math.min(desk.treasury, LOAN_AMOUNT);
   const playerIds = state.players.filter(player => auction.eligiblePlayerIds.includes(player.id) &&
-    !player.bankrupt && player.cash >= 0 && player.cash + unpostedTax(desk.seats[player.id]) <= LOAN_CASH_LIMIT &&
+    !player.bankrupt && player.cash >= 0 && player.cash + unpostedTax(desk.seats[player.id]) <= AUCTION_CREDIT_CASH_LIMIT &&
     !desk.seats[player.id]?.borrowed).map(p => p.id);
   if (playerIds.length) return { limit, playerIds };
 }

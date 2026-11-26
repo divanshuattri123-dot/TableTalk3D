@@ -1056,6 +1056,17 @@ const handleEndTurn = (
       pendingTrade: undefined
     };
   }
+  const curDesk = state.mayor;
+  if (curDesk && !curDesk.auditUsed && curDesk.mayorId === player.id &&
+      state.players.filter(candidate => !candidate.bankrupt).length === 2 &&
+      curDesk.seats[nextPlayer.id]?.bills.some(bill => bill.status === "deferred")) {
+    const start = state.players.findIndex(candidate => candidate.id === curDesk.firstId);
+    const order = (id: string) => (state.players.findIndex(candidate => candidate.id === id) - start + state.players.length) % state.players.length;
+    if (order(nextPlayer.id) <= order(player.id) && curDesk.round + 1 - curDesk.termStart >= 2) {
+      state = auditCity(state, nextPlayer.id);
+      if (state.phase === "gameOver" || state.debts?.some(debt => !playerById(state, debt.playerId)?.bankrupt)) return state;
+    }
+  }
   return addEvent(
     {
       ...nextCityTurn(state, action.playerId, nextPlayer.id),

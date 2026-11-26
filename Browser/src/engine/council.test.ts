@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { auctionCredit, cityLoanAvailable, councilSpeaker, projectCityState, reserveLevy } from "./mayor";
+import { auctionCredit, cityLoanAvailable, cityLoanReason, councilSpeaker, projectCityState, reserveLevy } from "./mayor";
 import { createInitialState, reduceGame } from "./reducer";
 import type { GameAction, GameState, PropertyState } from "./types";
 
@@ -235,13 +235,28 @@ describe("Council rules", () => {
   it("uses posted cash for emergency loan eligibility across private and public snapshots", () => {
     let state: GameState = { ...table(), mayor: { ...table().mayor!, seats: { ...table().mayor!.seats, b: { ...table().mayor!.seats.b!, rent: 600 } } } };
     state = step(state, { type: "CITY_PROPOSE", playerId: "a", term: 1, policy: "loans" });
-    state = adjust(end(nextRound(state)), "b", { cash: 480 });
+    state = adjust(end(nextRound(state)), "b", { cash: 1080 });
     expect(cityLoanAvailable(state, "b")).toBe(false);
+    expect(cityLoanReason(state, "b")).toContain("1,000");
     const prepaid = step(state, { type: "CITY_PAY_TAX", playerId: "b", round: 1 });
-    expect(cash(prepaid, "b")).toBe(320);
-    expect(cash(projectCityState(prepaid, "a"), "b")).toBe(480);
+    expect(cash(prepaid, "b")).toBe(920);
+    expect(cash(projectCityState(prepaid, "a"), "b")).toBe(1080);
     expect(cityLoanAvailable(prepaid, "b")).toBe(false);
     expect(cityLoanAvailable(projectCityState(prepaid, "a"), "b")).toBe(false);
     expect(step(prepaid, { type: "CITY_LOAN", playerId: "b", round: 2 }).notice).toBeTruthy();
+  });
+
+  it("allows the proposing Mayor and players up to ₹1,000 to borrow emergency loans and explains ineligible states", () => {
+    let state = nextRound(step(table(), { type: "CITY_PROPOSE", playerId: "a", term: 1, policy: "loans" }));
+    expect(cityLoanAvailable(state, "a")).toBe(false);
+    expect(cityLoanReason(state, "a")).toContain("1,000");
+    state = adjust(state, "a", { cash: 950 });
+    expect(cityLoanAvailable(state, "a")).toBe(true);
+    expect(cityLoanReason(state, "a")).toBeUndefined();
+    expect(cityLoanReason(adjust(state, "b", { cash: 800 }), "b")).toContain("your turn");
+    const borrowed = step(state, { type: "CITY_LOAN", playerId: "a", round: 2 });
+    expect(cash(borrowed, "a")).toBe(1150);
+    expect(cityLoanAvailable(borrowed, "a")).toBe(false);
+    expect(cityLoanReason(borrowed, "a")).toContain("already used");
   });
 });
