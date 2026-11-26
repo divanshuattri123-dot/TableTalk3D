@@ -185,6 +185,7 @@ export function cityText(text:string,city:CityId|undefined,size:BoardSize=40) {
   if(!city || city==='india')return text;
   const target=getBoard(size,city);
   const names=BOARDS[size].flatMap((tile,i)=>tile.name===target[i]!.name?[]:[{from:tile.name,to:target[i]!.name},...(tile.boardLabel&&tile.boardLabel!==tile.name?[{from:tile.boardLabel,to:target[i]!.name}]:[])]).sort((a,b)=>b.from.length-a.from.length);
+  if(!names.length)return text;
   // One replacement pass prevents a translated name from matching another source name.
   const pattern=new RegExp(names.map(n=>n.from.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'),'g');
   return text.replace(pattern,match=>names.find(n=>n.from===match)!.to);

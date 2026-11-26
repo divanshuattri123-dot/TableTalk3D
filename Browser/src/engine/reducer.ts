@@ -304,7 +304,8 @@ const makePayment = (
   if (scratch?.playerId === fromPlayerId && scratch.prize && (playerById(state, fromPlayerId)?.cash ?? 0) < amount) {
     state = closeWheel(state, true);
   }
-  const available = Math.max(0, playerById(state, fromPlayerId)?.cash ?? 0);
+  const beforeCash = playerById(state, fromPlayerId)?.cash ?? 0;
+  const available = Math.max(0, beforeCash);
   let next = changeCash(state, fromPlayerId, -amount);
   if (target !== "bank") {
     next = changeCash(next, target, Math.min(available, amount));
@@ -313,10 +314,28 @@ const makePayment = (
   if (kind === "rent") next = recordRent(next, target, paid);
   if (kind === "city" && next.mayor) next = { ...next, mayor: { ...next.mayor, treasury: next.mayor.treasury + paid } };
   if ((playerById(next, fromPlayerId)?.cash ?? 0) < 0) {
-    next = { ...next, debts: [...(next.debts ?? []), {
-      playerId: fromPlayerId, creditorId: target, reason,
-      ...(kind === "city" ? { city: true } : kind === "rent" && state.mayor ? { rent: true } : {})
-    }] };
+    const existing = next.debts ?? [];
+    const hasPriorForDebtor = existing.some((debt) => debt.playerId === fromPlayerId);
+    const updatedExisting = hasPriorForDebtor
+      ? existing.map((debt) =>
+          debt.playerId === fromPlayerId && debt.amount === undefined
+            ? { ...debt, amount: Math.max(0, -beforeCash) }
+            : debt
+        )
+      : existing;
+    next = {
+      ...next,
+      debts: [
+        ...updatedExisting,
+        {
+          playerId: fromPlayerId,
+          creditorId: target,
+          reason,
+          ...(hasPriorForDebtor ? { amount: amount - paid } : {}),
+          ...(kind === "city" ? { city: true } : kind === "rent" && state.mayor ? { rent: true } : {})
+        }
+      ]
+    };
   }
   next = addEvent(
     next,
@@ -477,13 +496,17 @@ const resolveCard = (
         });
         return finishLanding(next);
       case "collectFromEach":
-        for (const other of next.players) {
-          if (other.id !== playerId && !other.bankrupt) next = makePayment(next, other.id, playerId, effect.amount, `to ${playerName(next, playerId)}`);
+        for (const otherId of next.players.map((p) => p.id)) {
+          if (next.phase === "gameOver") break;
+          const other = playerById(next, otherId);
+          if (other && other.id !== playerId && !other.bankrupt) next = makePayment(next, other.id, playerId, effect.amount, `to ${playerName(next, playerId)}`);
         }
         return finishLanding(next);
       case "payEach":
-        for (const other of next.players) {
-          if (other.id !== playerId && !other.bankrupt) next = makePayment(next, playerId, other.id, effect.amount, `to ${other.name}`);
+        for (const otherId of next.players.map((p) => p.id)) {
+          if (next.phase === "gameOver" || playerById(next, playerId)?.bankrupt) break;
+          const other = playerById(next, otherId);
+          if (other && other.id !== playerId && !other.bankrupt) next = makePayment(next, playerId, other.id, effect.amount, `to ${other.name}`);
         }
         return finishLanding(next);
       case "repairs": {
@@ -576,8 +599,10 @@ const resolveCard = (
       }));
       return finishLanding(next);
     case "collectFromEach": {
-      for (const player of next.players) {
-        if (player.id !== playerId && !player.bankrupt) {
+      for (const otherId of next.players.map((p) => p.id)) {
+        if (next.phase === "gameOver") break;
+        const player = playerById(next, otherId);
+        if (player && player.id !== playerId && !player.bankrupt) {
           next = makePayment(next, player.id, playerId, card.effect.amount, "to another player");
         }
       }
@@ -1247,7 +1272,19 @@ const handleTradeOffer = (
 const handleTradeCounter = (state: GameState, action: Extract<GameAction, { type: "TRADE_COUNTER" }>): GameState => {
   const previous = state.pendingTrade;
   if (state.phase !== "awaitingTradeResponse" || !previous || previous.id !== action.previousOfferId || previous.toPlayerId !== action.playerId || !action.offerId || action.offerId === previous.id) return reject(state, "Only the recipient may counter the current offer with a new ID.");
-  const offer: TradeOffer = { ...action, id: action.offerId, counterOfId: previous.id, fromPlayerId: action.playerId, toPlayerId: previous.fromPlayerId, resumePhase: previous.resumePhase };
+  const offer: TradeOffer = {
+    id: action.offerId,
+    counterOfId: previous.id,
+    fromPlayerId: action.playerId,
+    toPlayerId: previous.fromPlayerId,
+    offeredCash: action.offeredCash,
+    offeredPropertyIds: [...action.offeredPropertyIds],
+    requestedCash: action.requestedCash,
+    requestedPropertyIds: [...action.requestedPropertyIds],
+    ...(action.offeredJailCards ? { offeredJailCards: [...action.offeredJailCards] } : {}),
+    ...(action.requestedJailCards ? { requestedJailCards: [...action.requestedJailCards] } : {}),
+    resumePhase: previous.resumePhase
+  };
   if (!offer.offeredCash && !offer.requestedCash && !offer.offeredPropertyIds.length && !offer.requestedPropertyIds.length) return reject(state, "A counter-offer must include cash or a deed.");
   const error = validTradeTerms(state, offer);
   return error ? reject(state, error) : addEvent({ ...state, pendingTrade: offer }, `${playerName(state, action.playerId)} counter-offered to ${playerName(state, offer.toPlayerId)}.`, "info", { playerId: action.playerId });
@@ -1760,7 +1797,7 @@ const synchronizeDebt = (state: GameState): GameState => {
   for (const debt of debts) next = bankruptPlayer(next, debt.playerId, debt.creditorId);
   if (next.phase === "gameOver") return { ...next, debts: undefined, debtResumePhase: undefined };
   if (playerById(next, next.activePlayerId ?? "")?.bankrupt) next = finishLanding({ ...next, debtResumePhase: undefined, pendingTrade: undefined, pendingRoll: undefined });
-  const outstanding = debts.filter(debt => { const player = playerById(next, debt.playerId); return player && !player.bankrupt && player.cash < 0; });
+  const outstanding = debts.filter(debt => { const player = playerById(next, debt.playerId); return player && !player.bankrupt && player.cash < 0 && (debt.amount === undefined || debt.amount > 0); });
   if (!outstanding.length) {
     if (!next.debts && !next.debtResumePhase && next.phase !== "awaitingDebt") return next;
     return { ...next, phase: next.phase === "awaitingDebt" ? next.debtResumePhase ?? "awaitingEndTurn" : next.phase, debts: undefined, debtResumePhase: undefined };
@@ -1787,18 +1824,37 @@ const reduceCore = (state: GameState, action: GameAction): GameState => {
     if (!reply && !managing && action.type !== "JOIN" && action.type !== "SET_APPEARANCE") return reject(before, "Settle the outstanding debt before normal play can continue.");
   }
   let next = applyAction(before, action);
-  // Raised cash repays the creditor first. Unpaid rent must never become free money.
+  // Raised cash repays creditors in order without duplicating funds across multiple debts.
+  const raisedByDebtor = new Map<string, number>();
+  const remainingDebts = [];
   for (const pending of before.debts ?? []) {
     const oldPlayer = playerById(before, pending.playerId), player = playerById(next, pending.playerId);
-    const creditor = playerById(next, pending.creditorId);
     if (!oldPlayer || !player || player.bankrupt) continue;
-    const paid = Math.min(-oldPlayer.cash, Math.max(0, player.cash - oldPlayer.cash));
-    if (paid <= 0) continue;
-    if (pending.city && next.mayor) next = { ...next, mayor: { ...next.mayor, treasury: next.mayor.treasury + paid } };
-    if (creditor && !creditor.bankrupt) {
-      next = changeCash(next, creditor.id, paid);
-      if (pending.rent) next = recordRent(next, creditor.id, paid);
+    let available = raisedByDebtor.get(pending.playerId);
+    if (available === undefined) {
+      available = Math.min(-oldPlayer.cash, Math.max(0, player.cash - oldPlayer.cash));
     }
+    const owed = pending.amount ?? available;
+    const paid = Math.min(available, owed);
+    raisedByDebtor.set(pending.playerId, available - paid);
+    if (paid > 0) {
+      const creditor = playerById(next, pending.creditorId);
+      if (pending.city && next.mayor) next = { ...next, mayor: { ...next.mayor, treasury: next.mayor.treasury + paid } };
+      if (creditor && !creditor.bankrupt) {
+        next = changeCash(next, creditor.id, paid);
+        if (pending.rent) next = recordRent(next, creditor.id, paid);
+      }
+    }
+    if (pending.amount !== undefined) {
+      const left = pending.amount - paid;
+      if (left > 0) remainingDebts.push({ ...pending, amount: left });
+    } else if (player.cash < 0) {
+      remainingDebts.push(pending);
+    }
+  }
+  if (before.debts?.length) {
+    const newlyAdded = (next.debts ?? []).slice(before.debts.length);
+    next = { ...next, debts: [...remainingDebts, ...newlyAdded] };
   }
   next = synchronizeDebt(next);
   if (next.phase !== "gameOver" && !next.notice && !next.debts?.length && !next.auction && !next.bankAuctionQueue?.length && next.mayor?.pendingRoundAdvance) {

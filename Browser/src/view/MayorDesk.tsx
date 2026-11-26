@@ -28,7 +28,7 @@ const projectDetails: Record<CityPolicy, string> = {
 };
 const wheelIcons = ["₹100", "₹150", "−₹50", "KEY", "GO", "✦"];
 const wheelDetails = ["Collect ₹100.", "Collect ₹150.", "Pay ₹50.", "Keep a Get Out of Jail card.", "Move to GO and collect ₹200.", "Scratch to uncover your prize."];
-type SendCity = (action: CityAction) => void;
+type SendCity = (action: CityAction) => boolean | void;
 
 function CityModal({ title, kind = "ledger", onClose, children }: { title: string; kind?: "ledger" | "wheel"; onClose: () => void; children: ReactNode }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -271,7 +271,7 @@ export function CityHeadline({ game, paused }: { game: GameState; paused: boolea
   </aside>;
 }
 
-function ScratchCard({ onReveal, disabled }: { onReveal: () => void; disabled: boolean }) {
+function ScratchCard({ onReveal, disabled }: { onReveal: () => boolean | void; disabled: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const flakes = useRef<HTMLCanvasElement>(null);
   const flakeFrames = useRef(0), scratchCount = useRef(0);
@@ -313,7 +313,7 @@ function ScratchCard({ onReveal, disabled }: { onReveal: () => void; disabled: b
       cleared.current.add(cell);
     }
     last.current = { x, y };
-    if (cleared.current.size >= 24) { done.current = true; onReveal(); }
+    if (cleared.current.size >= 24 && onReveal() !== false) { done.current = true; }
   }
   return <><div className="scratch-ticket"><span aria-hidden="true">✧ LUCKY SCRATCH ✧</span><canvas ref={canvas} width={420} height={155} aria-hidden="true"
     onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); last.current = undefined; active.current = true; remove(event); }}
@@ -333,8 +333,9 @@ export function FortWheel({ game, decision, localId, available, onClose, sendAct
   const spinStyle = { "--wheel-rotation": `${rolled === undefined ? 0 : 1440 - rolled * 60}deg` } as CSSProperties;
   const send = (type: "CITY_SCRATCH" | "CITY_SPIN" | "CITY_SKIP_WHEEL") => {
     if (type === "CITY_SPIN") wheelSound.unlock();
-    sendAction({ type, playerId: localId, wheelId: decision.id });
-    if (type === "CITY_SKIP_WHEEL") onClose();
+    const accepted = sendAction({ type, playerId: localId, wheelId: decision.id }) !== false;
+    if (accepted && type === "CITY_SKIP_WHEEL") onClose();
+    return accepted;
   };
   return <CityModal title={`${getTile(fortPosition(game), game.boardSize, game.city).name} wheel`} kind="wheel" onClose={onClose}>
     <div className="wheel-layout">

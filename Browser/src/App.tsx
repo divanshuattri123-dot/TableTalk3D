@@ -193,14 +193,16 @@ function App() {
 
   const begin = (roomCode: string) => {
     const normalized = roomCode.trim().toUpperCase();
-    if (!name.trim() || !/^[A-Z]{4}$/.test(normalized)) return;
-    saveProfile();
+    const saved = savedSession(normalized);
+    const seatName = (name.trim() || saved?.player.name || "").slice(0, 24);
+    if (!seatName || !/^[A-Z]{4}$/.test(normalized)) return;
+    if (name.trim()) saveProfile();
     setRecentRoom(normalized);
     setWelcomeMenu(false);
     void enterGameFullscreen();
     const nextSession: Session = {
       roomCode: normalized,
-      player: { id: savedSession(normalized)?.player.id ?? randomId(), name: name.trim().slice(0, 24), color, tokenId: token?.id, diceId: die?.id }
+      player: { id: saved?.player.id ?? randomId(), name: seatName, color, tokenId: token?.id, diceId: die?.id }
     };
     window.history.replaceState({}, "", `${window.location.pathname}?room=${normalized}`);
     writeSeat(nextSession, seatStores());
@@ -371,9 +373,22 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
     ? `${game.nextEventId}-${game.pendingRoll.dice.join("-")}` : "";
 
   useEffect(() => {
-    if (!game || !me || !sceneUsable || !moveKey || sentMove.current === moveKey || !shouldSendMove(game, me.id, motion.busy, motion.visible)) return;
-    if (connection === "connected" && sendAction({ type: "MOVE_RESULT", playerId: me.id, cardDraws: makeCardDraws(game, me) })) sentMove.current = moveKey;
-  }, [game, me, moveKey, motion.busy, motion.visible, sceneUsable, sendAction, connection]);
+    if (!game || !me || !sceneUsable || !moveKey || sentMove.current === moveKey || connection !== "connected" || !shouldSendMove(game, me.id, motion.busy, motion.visible)) return;
+    const dispatchMove = () => {
+      if (sentMove.current === moveKey) return true;
+      if (sendAction({ type: "MOVE_RESULT", playerId: me.id, cardDraws: makeCardDraws(game, me) })) {
+        sentMove.current = moveKey;
+        return true;
+      }
+      return false;
+    };
+    if (dispatchMove()) return;
+    // Another in-flight action may briefly hold the pending ack slot; retry until it clears.
+    const timer = window.setInterval(() => {
+      if (dispatchMove()) window.clearInterval(timer);
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [game, me, moveKey, motion.busy, motion.visible, sceneUsable, sendAction, connection, error]);
 
   const copyRoomLink = async () => {
     const link = roomShareUrl(session.roomCode, usesCloudAccount() ? PUBLIC_GAME_URL : window.location.href);
@@ -677,7 +692,7 @@ function Controls({
   }, [game.phase, debt?.playerId, local.id]);
   const ownProperties = useMemo(
     () => getBoard(game.boardSize, game.city).filter((tile) => isPurchasableTile(tile) && game.properties[tile.position]?.ownerId === local.id),
-    [game.properties, game.boardSize, local.id]
+    [game.properties, game.boardSize, game.city, local.id]
   );
 
   return (
@@ -817,7 +832,7 @@ function TradeComposer({ game, local, sendAction, counterTrade }: { game: GameSt
   const [offeredIds, setOfferedIds] = useState<number[]>(counterTrade?.requestedPropertyIds ?? []);
   const [requestedIds, setRequestedIds] = useState<number[]>(counterTrade?.offeredPropertyIds ?? []);
   const [offeredCards,setOfferedCards]=useState<CardDeck[]>(counterTrade?.requestedJailCards ?? []),[requestedCards,setRequestedCards]=useState<CardDeck[]>(counterTrade?.offeredJailCards ?? []);
-  const target = game.players.find((player) => player.id === toPlayerId);
+  const target = otherPlayers.find((player) => player.id === toPlayerId);
   const classic=game.mode==="classic", round=(s:string)=>Math.max(0,classic?Math.round((Number(s)||0)*100)/100:Math.floor(Number(s)||0));
   const giving = round(offeredCash), asking = round(requestedCash);
   const hasAsset=offeredIds.length+requestedIds.length+offeredCards.length+requestedCards.length>0;

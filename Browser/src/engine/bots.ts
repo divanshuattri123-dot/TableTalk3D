@@ -67,8 +67,11 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
         return {type:'CITY_PROPOSE',playerId,term,policy:'loans'};
       if(desk.council && s.phase==='awaitingRoll'){
         const ahead=[5,6,7,8,9].map(n=>getPurchasableTile((mayor.position+n)%s.boardSize,s.boardSize));
-        const danger=ahead.find(tile=>tile?.kind==='property' && s.properties[tile.position]?.ownerId!==playerId &&
-          calculateRent(s,tile.position,7)>=Math.min(500,mayor.cash*.6));
+        const danger=ahead.find(tile=>{
+          const owner=tile?.kind==='property'?s.properties[tile.position]?.ownerId:undefined;
+          const rent=owner && owner!==playerId?calculateRent(s,tile!.position,7):0;
+          return rent>0 && rent>=Math.min(500,mayor.cash*.6);
+        });
         if(danger?.kind==='property' && cityPolicyAvailable(s,'rent-relief',danger.group))
           return {type:'CITY_PROPOSE',playerId,term,policy:'rent-relief',district:danger.group};
       }

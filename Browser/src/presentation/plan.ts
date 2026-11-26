@@ -96,7 +96,7 @@ export function planPresentation(previous: GameState | undefined, next: GameStat
     if (event.text.includes("accepted the trade") || event.text.includes("declined the trade") || event.text.includes("withdrew the trade")) { add("trade", event.text, 1500, { playerId }); continue; }
     if (event.text.includes("bankrupt")) { add("bankrupt", event.text, 2200, { playerId }); continue; }
     if (event.kind === "money") {
-      const amount = event.amount ?? Number(event.text.match(/[₹$](\d+)/)?.[1] ?? 0);
+      const amount = event.amount ?? Number(event.text.match(/[₹$]([\d,]+(?:\.\d+)?)/)?.[1]?.replace(/,/g, "") ?? 0);
       const recipient = next.players.find(p => event.text.includes(` to ${p.name} `) || event.text.endsWith(` to ${p.name}.`));
       add("money", event.text, 1500, { playerId, amount, recipientId: event.recipientId ?? recipient?.id, tileId: player ? positions.get(player.id) : undefined });
     }
