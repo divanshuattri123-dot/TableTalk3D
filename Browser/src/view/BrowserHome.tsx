@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useViewSettings } from "../assets";
 import type { ViewSettings } from "../assets";
@@ -8,6 +8,8 @@ import { worldInfo } from "../engine/worlds";
 import type { WorldId } from "../engine/worlds";
 import { GROUP_COLORS } from "./palette";
 import { usePublisher } from "../publisher/PublisherShell";
+import { flushCloudAccount, usesCloudAccount } from "../network/accountStorage";
+import { CHATGPT_GAME_URL } from "../platform";
 
 const DEED_STRIP_COLORS = [
   GROUP_COLORS.brown,
@@ -31,6 +33,7 @@ export interface BrowserHomeProps {
   roomCode: string;
   inviteCode?: string;
   onName: (name: string) => void;
+  onSaveName?: () => void;
   onRoomCode: (code: string) => void;
   colorPicker: ReactNode;
   joinReady: boolean;
@@ -57,6 +60,7 @@ export default function BrowserHome({
   roomCode,
   inviteCode,
   onName,
+  onSaveName,
   onRoomCode,
   colorPicker,
   joinReady,
@@ -174,6 +178,7 @@ export default function BrowserHome({
                 value={name}
                 maxLength={24}
                 onChange={event => onName(event.target.value)}
+                onBlur={onSaveName}
                 onKeyDown={event => {
                   if (event.key === "Enter") {
                     event.preventDefault();
@@ -314,6 +319,8 @@ export function BrowserMenuPanel({
   const cityEntry = CITIES.find(entry => entry.id === city) ?? CITIES[0];
   const worldEntry = worldInfo(world);
   const guestLabel = publisher.guest?.name?.trim() || "Local nickname";
+  const cloud = usesCloudAccount();
+  const [saveError, setSaveError] = useState(false);
 
   useEffect(() => { closeBtnRef.current?.focus(); }, []);
   useEffect(() => {
@@ -433,7 +440,7 @@ export function BrowserMenuPanel({
               <small>{displayAssetName(diceLabel)}</small>
             </button>
             <button type="button" onClick={() => { publisher.openAccount(); onSwitchDialog(); }}>
-              <span>Guest profile</span>
+              <span>{cloud ? "Player profile" : "Guest profile"}</span>
               <small>{guestLabel}</small>
             </button>
             <button type="button" onClick={() => { publisher.openStore(); onSwitchDialog(); }}>
@@ -447,8 +454,17 @@ export function BrowserMenuPanel({
           </nav>
 
           <p className="browser-menu-note">
-            Your view and sound preferences apply only on this browser.
+            {cloud ? "Your profile, settings and saved seats sync with your account." : "Your view and sound preferences apply only on this browser."}
+            {" "}
+            {cloud
+              ? <a href="/signout-with-chatgpt?return_to=%2F" onClick={event => {
+                  event.preventDefault();
+                  const href = event.currentTarget.href;
+                  void flushCloudAccount().then(() => window.location.assign(href)).catch(() => setSaveError(true));
+                }}>Sign out</a>
+              : <a href={CHATGPT_GAME_URL}>Continue with ChatGPT</a>}
           </p>
+          {saveError && <p role="alert" className="browser-menu-note">Some changes couldn’t sync. Try signing out again when connected.</p>}
         </div>
       </section>
     </div>

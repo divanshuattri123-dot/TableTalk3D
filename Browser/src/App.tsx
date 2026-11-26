@@ -52,15 +52,17 @@ import {usePublisher} from './publisher/PublisherShell';
 import {STORE_PRODUCTS} from './publisher/catalog';
 import {playerId as randomId} from './compat';
 import useMobileInterface from "./view/useMobileInterface";
-import { isPackagedHome, nativeMobileShell, roomCodeFromSearch, roomShareUrl } from "./platform";
+import { isPackagedHome, nativeMobileShell, PUBLIC_GAME_URL, roomCodeFromSearch, roomShareUrl } from "./platform";
 import { enterGameFullscreen, exitGameFullscreen, fullscreenActive, releaseGameOrientation } from "./view/fullscreen";
 import LandscapeGate from "./view/LandscapeGate";
 import { useGameRoom } from "./network/useGameRoom";
 import type { Session } from "./network/useGameRoom";
 import { readSeat, writeSeat } from "./network/seats";
+import { playerStorage, usesCloudAccount } from "./network/accountStorage";
 const AssetStudio = lazy(() => import("./view/AssetStudio"));
 
-const seatStores = (): Storage[] => {
+const seatStores = (): Array<Pick<Storage, "getItem" | "setItem">> => {
+  if (usesCloudAccount()) return [playerStorage()];
   const stores: Storage[] = [];
   try { stores.push(window.sessionStorage); } catch { /* Storage can be blocked. */ }
   try { stores.push(window.localStorage); } catch { /* No account is required to play. */ }
@@ -99,7 +101,7 @@ const phaseLabel = (phase: GameState["phase"]): string =>
 const dice=rollDice;
 const packagedApp=import.meta.env.VITE_PACKAGED_APP==='true';
 function savedMapChoice():{world:WorldId;city:CityId} {
-  try{const choice=JSON.parse(localStorage.getItem('table-talk-map-choice')??'{}');return{world:isWorldId(choice.world)?choice.world:'theme000',city:isCityId(choice.city)?choice.city:'india'};}catch{return{world:'theme000',city:'india'};}
+  try{const choice=JSON.parse(playerStorage().getItem('table-talk-map-choice')??'{}');return{world:isWorldId(choice.world)?choice.world:'theme000',city:isCityId(choice.city)?choice.city:'india'};}catch{return{world:'theme000',city:'india'};}
 }
 
 const tileGridPosition = (position: number, size: BoardSize): CSSProperties => {
@@ -128,13 +130,13 @@ function App() {
   const publisher=usePublisher();
   const packagedHome = isPackagedHome();
   const equippedToken=STORE_PRODUCTS.find(p=>p.id===publisher.wallet.equipped)?.assetId;
-  const [name, setName] = useState(() => { try { return String(JSON.parse(localStorage.getItem('table-talk-profile') ?? '{}').name || publisher.guest?.name || '').slice(0,24); } catch { return publisher.guest?.name ?? ''; } });
+  const [name, setName] = useState(() => { try { return String(JSON.parse(playerStorage().getItem('table-talk-profile') ?? '{}').name || publisher.guest?.name || '').slice(0,24); } catch { return publisher.guest?.name ?? ''; } });
   const [initialInvite] = useState(() => packagedApp ? '' : roomFromUrl());
   const [roomInput, setRoomInput] = useState(()=>packagedApp?'':roomFromUrl());
-  const [color, setColor] = useState(() => { try { return playerColorKey(JSON.parse(localStorage.getItem('table-talk-profile') ?? '{}').color ?? '') || COLORS[0]; } catch { return COLORS[0]; } });
+  const [color, setColor] = useState(() => { try { return playerColorKey(JSON.parse(playerStorage().getItem('table-talk-profile') ?? '{}').color ?? '') || COLORS[0]; } catch { return COLORS[0]; } });
   const [session, setSession] = useState<Session | undefined>(()=>packagedApp?undefined:savedSession());
   const [mapChoice,setMapChoice]=useState(savedMapChoice),[mapsOpen,setMapsOpen]=useState(false);
-  const chooseMap=(patch:Partial<typeof mapChoice>)=>setMapChoice(previous=>{const next={...previous,...patch};try{localStorage.setItem('table-talk-map-choice',JSON.stringify(next));}catch{}return next;});
+  const chooseMap=(patch:Partial<typeof mapChoice>)=>setMapChoice(previous=>{const next={...previous,...patch};try{playerStorage().setItem('table-talk-map-choice',JSON.stringify(next));}catch{}return next;});
   const previewCode = /^[A-Z]{4}$/.test(roomInput) ? roomInput : "";
   const preview = useGameRoom(undefined, session ? "" : previewCode);
   const returningId = savedSession(previewCode)?.player.id;
@@ -169,13 +171,13 @@ function App() {
     dialogOpener.current = null;
     if (target?.isConnected) window.requestAnimationFrame(() => target.focus());
   };
-  const [recentRoom,setRecentRoom]=useState(()=>{try{return localStorage.getItem('table-talk-recent-room')??'';}catch{return '';}});
-  useEffect(() => { if (session) { writeSeat(session, seatStores()); setRecentRoom(session.roomCode); try { localStorage.setItem('table-talk-recent-room',session.roomCode); } catch { /* The existing per-room seat is still usable. */ } } }, [session]);
+  const [recentRoom,setRecentRoom]=useState(()=>{try{return playerStorage().getItem('table-talk-recent-room')??'';}catch{return '';}});
+  useEffect(() => { if (session) { writeSeat(session, seatStores()); setRecentRoom(session.roomCode); try { playerStorage().setItem('table-talk-recent-room',session.roomCode); } catch { /* The existing per-room seat is still usable. */ } } }, [session]);
   const token = byId.get(tokenId ?? catalog?.featured.tokens[0] ?? "");
   const die = byId.get(diceId ?? catalog?.featured.dice[0] ?? "");
   const saveProfile = () => {
     const trimmed = name.trim().slice(0, 24);
-    try { localStorage.setItem('table-talk-profile',JSON.stringify({name:trimmed,color})); } catch { /* A player can still join with blocked storage. */ }
+    try { playerStorage().setItem('table-talk-profile',JSON.stringify({name:trimmed,color})); } catch { /* A player can still join with blocked storage. */ }
     if (trimmed) publisher.syncGuestName(trimmed);
   };
   const chooseAsset = (asset: GameAsset, use: AssetUse) => {
@@ -192,7 +194,6 @@ function App() {
     if (!name.trim() || !/^[A-Z]{4}$/.test(normalized)) return;
     saveProfile();
     setRecentRoom(normalized);
-    try{localStorage.setItem('table-talk-recent-room',normalized);}catch{/* The open seat still works without persistent storage. */}
     setWelcomeMenu(false);
     void enterGameFullscreen();
     const nextSession: Session = {
@@ -252,6 +253,7 @@ function App() {
         roomCode={roomInput}
         inviteCode={initialInvite || undefined}
         onName={setName}
+        onSaveName={usesCloudAccount() && name.trim() ? saveProfile : undefined}
         onRoomCode={setRoomInput}
         colorPicker={<TokenColorPicker color={color} players={preview.game?.players} localId={returningId} onChoose={setColor} />}
         joinReady={Boolean(joinReady)}
@@ -359,7 +361,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
   }, [game, me, moveKey, motion.busy, motion.visible, sceneUsable, sendAction, connection]);
 
   const copyRoomLink = async () => {
-    const link = roomShareUrl(session.roomCode, window.location.href);
+    const link = roomShareUrl(session.roomCode, usesCloudAccount() ? PUBLIC_GAME_URL : window.location.href);
     try {
       await navigator.clipboard.writeText(link);
       setCopied(true);

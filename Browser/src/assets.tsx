@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { PropsWithChildren } from "react";
+import { playerStorage } from "./network/accountStorage";
 
 export interface GameAsset {
   id: string;
@@ -65,14 +66,14 @@ const DEFAULT_SETTINGS: ViewSettings = { quality: "auto", theme: "day", view: "3
 export function useViewSettings() {
   const [settings, setSettings] = useState<ViewSettings>(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("table-talk-view") ?? "{}");
+      const saved = JSON.parse(playerStorage().getItem("table-talk-view") ?? "{}");
       return { ...DEFAULT_SETTINGS, ...saved, renderer: saved.schema === 4 ? saved.renderer ?? "unity" : "unity", view: saved.schema === 4 ? saved.view ?? "3d" : "3d", camera: saved.camera ?? "top" };
     }
     catch { return DEFAULT_SETTINGS; }
   });
   const update = (patch: Partial<ViewSettings>) => setSettings((previous) => {
     const next = { ...previous, ...patch };
-    try { localStorage.setItem("table-talk-view", JSON.stringify({ ...next, schema: 4 })); } catch { /* Playing does not depend on storage. */ }
+    try { playerStorage().setItem("table-talk-view", JSON.stringify({ ...next, schema: 4 })); } catch { /* Playing does not depend on storage. */ }
     return next;
   });
   return { settings, update };
