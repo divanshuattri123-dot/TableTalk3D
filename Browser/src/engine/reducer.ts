@@ -1242,23 +1242,13 @@ function startBackedAuction(state: GameState): GameState {
   }, `City Hall reserved up to ${formatRupees(cityBacking.limit)} to back an eligible bidder.`, "auction");
 }
 
-const updateBill = (state: GameState, id: string, round: number, update: (bill: TaxBill) => TaxBill) =>
-  updateCitySeat(state, id, seat => {
-    let updated = false;
-    return {
-      ...seat,
-      bills: seat.bills.map(bill => {
-        if (!updated && bill.round === round && bill.status !== "paid") {
-          updated = true;
-          return update(bill);
-        }
-        return bill;
-      })
-    };
-  });
+const updateBill = (state: GameState, id: string, bill: TaxBill, status: TaxBill["status"]) =>
+  updateCitySeat(state, id, seat => ({
+    ...seat, bills: seat.bills.map(entry => entry === bill ? { ...entry, status } : entry)
+  }));
 
 function payTaxEarly(state: GameState, id: string, bill: TaxBill) {
-  return updateBill(changeCash(state, id, -bill.amount), id, bill.round, entry => ({ ...entry, status: "paid" }));
+  return updateBill(changeCash(state, id, -bill.amount), id, bill, "paid");
 }
 
 function settleCityEnd(state: GameState, id: string): GameState {
@@ -1281,7 +1271,7 @@ function settleCityEnd(state: GameState, id: string): GameState {
     if (bill.status !== "open" || bill.dueTurn !== cutoff + 1 || playerById(next, id)!.bankrupt) continue;
     next = playerById(next, id)!.cash >= bill.amount
       ? payTaxEarly(next, id, bill)
-      : updateBill(next, id, bill.round, entry => ({ ...entry, status: "deferred" }));
+      : updateBill(next, id, bill, "deferred");
   }
   return next;
 }
@@ -1297,8 +1287,9 @@ function auditCity(state: GameState, targetId: string): GameState {
       { playerId: mayor.id, recipientId: target.id, position: target.position, amount: AUDIT_FINE });
     return makePayment(next, mayor.id, target.id, AUDIT_FINE, "as compensation for a failed raid");
   }
-  const due = bill.amount + AUDIT_FINE;
-  next = updateCitySeat(next, target.id, seat => ({ ...seat, bills: seat.bills.filter(entry => entry !== bill) }));
+  const audited = (entry: TaxBill) => entry.round === bill.round && entry.status === "deferred";
+  const due = desk.seats[targetId]!.bills.filter(audited).reduce((total, entry) => total + entry.amount, AUDIT_FINE);
+  next = updateCitySeat(next, target.id, seat => ({ ...seat, bills: seat.bills.filter(entry => !audited(entry)) }));
   next = civicEvent(next, `Raid on ${target.name}: unpaid levy found. ${formatRupees(due)} due with the fine.`, "raid",
     { playerId: target.id, position: target.position, amount: due });
   return makePayment(next, target.id, "bank", due, "for the city levy and audit fine", "city");
@@ -1334,12 +1325,14 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
   switch (action.type) {
     case "CITY_PAY_TAX":
     case "CITY_DEFER_TAX": {
-      const bill = seat.bills.find(entry => entry.round === action.round && entry.status !== "paid");
+      const bill = seat.bills.find(entry => entry.round === action.round &&
+        (action.billId === undefined || action.billId === (entry.id ?? null)) &&
+        (action.type === "CITY_DEFER_TAX" ? entry.status === "open" : entry.status !== "paid"));
       if (!bill) return addEvent(state, "That private bill is no longer open.", "error", { privateTo: id });
       if (action.type === "CITY_PAY_TAX") return player.cash >= bill.amount
         ? payTaxEarly(state, id, bill) : addEvent(state, "Raise more cash before paying this bill.", "error", { privateTo: id });
-      if (bill.status !== "open" || bill.dueTurn > seat.turns + 2) return addEvent(state, "You can defer this bill once before it comes due.", "error", { privateTo: id });
-      return updateBill(state, id, bill.round, entry => ({ ...entry, status: "deferred" }));
+      if (bill.dueTurn > seat.turns + 2) return addEvent(state, "You can defer this bill once before it comes due.", "error", { privateTo: id });
+      return updateBill(state, id, bill, "deferred");
     }
     case "CITY_AUDIT":
       if (!office || desk.auditUsed || solvent.length <= 2 || action.targetId === id || !solvent.some(candidate => candidate.id === action.targetId)) {
@@ -1455,7 +1448,11 @@ function afterCityAction(before: GameState, state: GameState): GameState {
       const text = CITY_POLICIES[desk.policy.kind] + (desk.policy.district ? ` for ${districtName(next, desk.policy.district)}` : "");
       next = civicEvent(next, `${text} is in effect this round.`, "policy");
     } else if (before.mayor?.proposal) {
-      next = civicEvent(next, `The council rejected ${CITY_POLICIES[before.mayor.proposal.kind]}.`, "policy");
+      const proposal = before.mayor.proposal;
+      const name = CITY_POLICIES[proposal.kind];
+      next = civicEvent(next, playerById(next, proposal.sponsorId)?.bankrupt
+        ? `${name} was withdrawn after the proposing Mayor went bankrupt.`
+        : `The council rejected ${name}.`, "policy");
     }
   }
   if (desk.council) for (const player of next.players) {

@@ -23,6 +23,7 @@ export const CITY_CONTRACTS = { build: "Develop a District", transit: "Connect t
 export const CITY_CONTRACT_REWARD = 150;
 interface CityProject { kind: CityPolicy; sponsorId: string; district?: ColorGroup; used?: true }
 export interface TaxBill {
+  id?: number;
   round: number;
   amount: number;
   dueTurn: number;
@@ -73,7 +74,7 @@ export interface CityDesk {
   pendingRoundAdvance?: true;
 }
 export type CityAction =
-  | { type: "CITY_PAY_TAX" | "CITY_DEFER_TAX"; playerId: string; round: number }
+  | { type: "CITY_PAY_TAX" | "CITY_DEFER_TAX"; playerId: string; round: number; billId?: number | null }
   | { type: "CITY_AUDIT"; playerId: string; term: number; targetId: string }
   | { type: "CITY_TIP"; playerId: string; term: number }
   | { type: "CITY_PROPOSE"; playerId: string; term: number; policy: CityPolicy; district?: ColorGroup }
@@ -103,13 +104,15 @@ function accrueRentTax(seat: CitySeat, round: number, addedRent: number): CitySe
   const rent = seat.rent + addedRent;
   const delta = cityTax(rent) - prevTax;
   if (delta <= 0) return { ...seat, rent, taxedRent: rent };
-  const index = seat.bills.findIndex(bill => bill.round === round && bill.status !== "paid");
+  const index = seat.bills.findIndex(bill => bill.round === round && bill.status === "open");
   if (index >= 0) {
     const current = seat.bills[index]!;
     const bills = seat.bills.map((bill, i) => i === index ? { ...current, amount: current.amount + delta } : bill);
     return { ...seat, rent, taxedRent: rent, bills };
   }
-  return { ...seat, rent, taxedRent: rent, bills: [...seat.bills, { round, amount: delta, dueTurn: seat.turns + 2, status: "open" }] };
+  // A new bill stays payable even when the player deferred an earlier one this round.
+  const bill: TaxBill = { id: seat.rent, round, amount: delta, dueTurn: seat.turns + 2, status: "open" };
+  return { ...seat, rent, taxedRent: rent, bills: [...seat.bills, bill] };
 }
 
 export const recordRent = (state: GameState, id: string, amount: number) =>
@@ -194,8 +197,8 @@ export function advanceCityRound(state: GameState): GameState {
       bills: bill && !player.bankrupt ? [...seat.bills, { round: desk.round, amount: bill, dueTurn: seat.turns + 2, status: "open" }] : seat.bills
     };
   }
-  const proposal = desk.proposal;
   const active = state.players.filter(player => !player.bankrupt);
+  const proposal = active.some(player => player.id === desk.proposal?.sponsorId) ? desk.proposal : undefined;
   const switchPolicy = proposal && active.filter(player => proposal.votes.includes(player.id)).length > active.length / 2;
   let policy: CityProject | undefined;
   if (proposal && (!switchPolicy || proposal.kind === "loans" || proposal.kind === "transit")) {

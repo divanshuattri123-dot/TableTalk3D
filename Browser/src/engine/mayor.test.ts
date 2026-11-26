@@ -39,7 +39,7 @@ describe("Mayor rules", () => {
     const landed = send(rolled, { type: "MOVE_RESULT", playerId: "p1" });
     expect(cash(landed, "p2")).toBe(2200);
     expect(landed.mayor!.seats.p2!.rent).toBe(700);
-    expect(landed.mayor!.seats.p2!.bills).toEqual([{ round: 1, amount: 200, dueTurn: 2, status: "open" }]);
+    expect(landed.mayor!.seats.p2!.bills).toEqual([{ id: 0, round: 1, amount: 200, dueTurn: 2, status: "open" }]);
     const deferredOffTurn = send(landed, { type: "CITY_DEFER_TAX", playerId: "p2", round: 1 });
     expect(deferredOffTurn.mayor!.seats.p2!.bills[0]?.status).toBe("deferred");
     const raided = send(deferredOffTurn, { type: "CITY_AUDIT", playerId: "p1", term: 1, targetId: "p2" });
@@ -193,4 +193,28 @@ describe("Mayor rules", () => {
     expect(state.mayor!.wheel?.prize).toBe(250);
     expect(cash(end(state), "p2")).toBe(1732);
   });
+});
+
+it("keeps new rent payable after another levy in the same round was deferred", () => {
+  let state = table();
+  state = { ...state, properties: { ...state.properties, 5: { ownerId: "p3", houses: 0, mortgaged: false } } };
+  const payRent = (game: GameState, playerId: string) => send(
+    send(patchPlayer(game, playerId, { position: 0 }), { type: "ROLL", playerId, dice: [2, 3] }),
+    { type: "MOVE_RESULT", playerId }
+  );
+  state = payRent(state, "p1");
+  state = send(state, { type: "CITY_DEFER_TAX", playerId: "p3", round: 1 });
+  state = payRent(end(state), "p2");
+  const bills = state.mayor!.seats.p3!.bills;
+  expect(bills.map(({ amount, status }) => ({ amount, status }))).toEqual([
+    { amount: 2, status: "deferred" }, { amount: 3, status: "open" }
+  ]);
+  const paid = send(state, { type: "CITY_PAY_TAX", playerId: "p3", round: 1, billId: bills[1]!.id });
+  expect(cash(paid, "p3")).toBe(1547);
+  expect(paid.mayor!.seats.p3!.bills.map(bill => bill.status)).toEqual(["deferred", "paid"]);
+  const duplicate = send(paid, { type: "CITY_PAY_TAX", playerId: "p3", round: 1, billId: bills[1]!.id });
+  expect(cash(duplicate, "p3")).toBe(1547);
+  const audited = send(paid, { type: "CITY_AUDIT", playerId: "p1", term: 1, targetId: "p3" });
+  expect(cash(audited, "p3")).toBe(1520);
+  expect(audited.mayor!.seats.p3!.bills.map(bill => bill.status)).toEqual(["paid"]);
 });

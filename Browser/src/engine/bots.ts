@@ -45,8 +45,8 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
       const opportunistic=style.name==='Bold bidder'||style.name==='Opportunist'||(style.name==='Deal maker'&&desk.round%2===1);
       const tightCash=candidate.cash<openBill.amount+style.buildReserve+120;
       return !tightCash&&!opportunistic&&candidate.cash>=openBill.amount+style.reserve
-        ? {type:'CITY_PAY_TAX',playerId:candidate.id,round:openBill.round}
-        : {type:'CITY_DEFER_TAX',playerId:candidate.id,round:openBill.round};
+        ? {type:'CITY_PAY_TAX',playerId:candidate.id,round:openBill.round,billId:openBill.id??null}
+        : {type:'CITY_DEFER_TAX',playerId:candidate.id,round:openBill.round,billId:openBill.id??null};
     }
     const mayor=bot(desk.mayorId),active=bot(s.activePlayerId),term=desk.term;
     if(mayor && s.players.filter(p=>!p.bankrupt).length>=3 && !desk.auditUsed){

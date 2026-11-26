@@ -97,11 +97,11 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
         {seat && <section aria-label="Your private bills">
           <h3>Your private bills</h3>
           {bills.length === 0 && seat.loanDue === undefined && !loanAvailable && !loanNote && <p>Nothing due.</p>}
-          {bills.map((bill, idx) => <div className="city-bill" key={`${bill.round}-${idx}`}>
+          {bills.map((bill, idx) => <div className="city-bill" key={`${bill.round}-${bill.id ?? `legacy-${idx}`}`}>
             <div><b>{money(bill.amount)} levy</b><small>{bill.status === "deferred" ? "Deferred · the Mayor can audit this bill" : "Open · pay now or defer for one turn"}</small></div>
             <div className="city-actions">
-              <button type="button" disabled={!taxReady || local!.cash < bill.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: bill.round })}>Pay {money(bill.amount)}</button>
-              {bill.status === "open" && bill.dueTurn <= seat.turns + 2 && <button type="button" disabled={!taxReady} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: bill.round })}>Defer</button>}
+              <button type="button" disabled={!taxReady || local!.cash < bill.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: bill.round, billId: bill.id ?? null })}>Pay {money(bill.amount)}</button>
+              {bill.status === "open" && bill.dueTurn <= seat.turns + 2 && <button type="button" disabled={!taxReady} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: bill.round, billId: bill.id ?? null })}>Defer</button>}
             </div>
           </div>)}
           {seat.loanDue !== undefined && <p>City loan due <b>{money(seat.loanAmountDue ?? LOAN_REPAYMENT)}</b>{seat.loanDue <= seat.turns + 1 ? " at the end of your upcoming turn." : " within two of your turns."}</p>}
@@ -183,8 +183,8 @@ export function CityTaxPrompt({ game, localId, available, hidden, sendAction }: 
       <span>Pay privately now, or defer 1 turn (Mayor can audit)</span>
     </div>
     <div className="city-actions">
-      <button type="button" disabled={!ready || local.cash < openBill.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: openBill.round })}>Pay {money(openBill.amount)}</button>
-      <button type="button" className="city-secondary" disabled={!ready} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: openBill.round })}>Defer 1 turn</button>
+      <button type="button" disabled={!ready || local.cash < openBill.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: openBill.round, billId: openBill.id ?? null })}>Pay {money(openBill.amount)}</button>
+      <button type="button" className="city-secondary" disabled={!ready} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: openBill.round, billId: openBill.id ?? null })}>Defer 1 turn</button>
     </div>
   </aside>;
 }

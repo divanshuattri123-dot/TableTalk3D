@@ -260,3 +260,20 @@ describe("Council rules", () => {
     expect(cityLoanReason(borrowed, "a")).toContain("already used");
   });
 });
+
+it("discards the outgoing Mayor’s proposal if bankruptcy itself starts the next round", () => {
+  let state = table();
+  for (let round = 1; round < 5; round++) state = nextRound(state);
+  state = end(end(state));
+  expect(state.mayor!.mayorId).toBe("c");
+  expect(state.activePlayerId).toBe("c");
+  state = step(state, { type: "CITY_PROPOSE", playerId: "c", term: 3, policy: "loans" });
+  expect(state.mayor!.proposal?.kind).toBe("loans");
+  state = adjust(state, "c", { cash: 10 });
+  state = step(step(state, { type: "ROLL", playerId: "c", dice: [1, 3] }), { type: "MOVE_RESULT", playerId: "c" });
+  expect(state.players.find(player => player.id === "c")?.bankrupt).toBe(true);
+  expect(state.mayor!.round).toBe(6);
+  expect(state.mayor!.mayorId).toBe("a");
+  expect(state.mayor!.policy).toBeUndefined();
+  expect(state.eventLog.find(event => event.text.includes("Emergency Loans was withdrawn"))).toBeDefined();
+});

@@ -70,11 +70,14 @@ try {
   for (const [client, id] of [[a, "p1"], [b, "p2"], [c, "p3"]]) {
     await move(client, id, [4, 6]);
     if (id === "p1") await act(client, id, "BUY", { propertyId: 25 });
+    if (id === "p2") await until(() => a.state.mayor.seats.p1.bills.find(bill => bill.round === 3 && bill.amount === 10));
     await act(client, id, "END_TURN");
   }
-  assert.equal((await until(() => a.state.mayor.round === 4 && a.state)).mayor.seats.p1.bills[0].amount, 20);
-  const def = await act(a, "p1", "CITY_DEFER_TAX", { round: 3 });
-  assert.equal(def.mayor.seats.p1.bills[0].status, "deferred");
+  const roundFour = await until(() => a.state.mayor.round === 4 && a.state);
+  const rentBill = roundFour.mayor.seats.p1.bills.find(bill => bill.round === 3);
+  assert.equal(rentBill?.amount, 20);
+  const def = await act(a, "p1", "CITY_DEFER_TAX", { round: 3, billId: rentBill.id });
+  assert.equal(def.mayor.seats.p1.bills.find(bill => bill.round === 3)?.status, "deferred");
   assert.deepEqual(b.state.mayor.seats.p1.bills, []);
   const tip = await act(b, "p2", "CITY_TIP", { term: 2 });
   assert.ok(tip.mayor.tip.includes("p1"));
