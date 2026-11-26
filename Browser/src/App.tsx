@@ -330,12 +330,23 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
   const sentMove = useRef("");
   const mapConfigured=useRef(false);
   const initialMapRequests=useRef({world:false,city:false});
-  useEffect(()=>{
-    if(mapConfigured.current||!game||game.phase!=='lobby'||game.players[0]?.id!==session.player.id||game.mode===undefined||connection!=='connected')return;
-    if(game.world===undefined){if(!initialMapRequests.current.world)initialMapRequests.current.world=sendAction({type:'SET_WORLD',playerId:session.player.id,world:preferredMap.world});return;}
-    if(game.city===undefined){if(!initialMapRequests.current.city)initialMapRequests.current.city=sendAction({type:'SET_CITY',playerId:session.player.id,city:preferredMap.city});return;}
-    mapConfigured.current=true;
-  },[game,connection,preferredMap,session.player.id,sendAction]);
+  const needsWorld = game?.world === undefined && preferredMap.world !== "theme000";
+  const needsCity = game?.city === undefined && preferredMap.city !== "india";
+  const configuringMap = !mapConfigured.current && (needsWorld || needsCity);
+  useEffect(() => {
+    if (mapConfigured.current || !game || game.phase !== "lobby" || game.players[0]?.id !== session.player.id || connection !== "connected") return;
+    // Mobile saves its default rules first. Avoid competing with that action for the next reply.
+    if ((mobile || packagedApp) && game.mode === undefined) return;
+    if (needsWorld) {
+      if (!initialMapRequests.current.world) initialMapRequests.current.world = sendAction({ type: "SET_WORLD", playerId: session.player.id, world: preferredMap.world });
+      return;
+    }
+    if (needsCity) {
+      if (!initialMapRequests.current.city) initialMapRequests.current.city = sendAction({ type: "SET_CITY", playerId: session.player.id, city: preferredMap.city });
+      return;
+    }
+    mapConfigured.current = true;
+  }, [game, connection, mobile, needsWorld, needsCity, preferredMap, session.player.id, sendAction]);
 
   useEffect(() => {
     document.body.classList.add("in-game");
@@ -434,11 +445,11 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
       {game.rentClaim && game.rentClaim.ownerId === me?.id && !me?.bankrupt && <div className="rent-claim" role="status"><span><b>{getTile(game.rentClaim.propertyId, game.boardSize, game.city).name}</b><small>Claim before the next movement roll</small></span><button type="button" disabled={connection !== "connected" || motion.busy || !sceneUsable || ["awaitingTradeResponse", "awaitingDebt", "awaitingMortgageDecision"].includes(game.phase)} onClick={() => sendAction({ type: "CLAIM_RENT", playerId: me!.id, claimId: game.rentClaim!.id })}>Claim {formatMoney(game.rentClaim.amount)}</button></div>}
 
       <section className="game-layout">
-        {mobileLobby ? <MobileLobby game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} onCopy={copyRoomLink} copied={copied} colorPicker={<TokenColorPicker color={me?.color ?? session.player.color} players={game.players} localId={session.player.id} onChoose={color=>sendAction({type:'SET_APPEARANCE',playerId:session.player.id,color})}/>}/> : <BoardStage diceEnabled={isCurrent&&game.phase==="awaitingRoll"&&!diceToolsOpen&&!drawer&&!tablePanel&&!cityOpen&&!wheelDialog} onWheel={openWheel} onThrow={()=>{if(isCurrent&&me&&game.phase==="awaitingRoll")sendAction({type:"ROLL",playerId:me.id,dice:dice()});}} panel={tablePanel} onPanelChange={setTablePanel} game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />}
+        {mobileLobby ? <MobileLobby configuringMap={configuringMap} game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} onCopy={copyRoomLink} copied={copied} colorPicker={<TokenColorPicker color={me?.color ?? session.player.color} players={game.players} localId={session.player.id} onChoose={color=>sendAction({type:'SET_APPEARANCE',playerId:session.player.id,color})}/>}/> : <BoardStage diceEnabled={isCurrent&&game.phase==="awaitingRoll"&&!diceToolsOpen&&!drawer&&!tablePanel&&!cityOpen&&!wheelDialog} onWheel={openWheel} onThrow={()=>{if(isCurrent&&me&&game.phase==="awaitingRoll")sendAction({type:"ROLL",playerId:me.id,dice:dice()});}} panel={tablePanel} onPanelChange={setTablePanel} game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />}
         {game.phase !== "lobby" && <div className="live-seats" aria-label="Live player balances">{game.players.map(player => <button type="button" key={player.id} className={`${player.id === decisionPlayerId(game) ? "seat-active" : ""} ${player.bankrupt ? "seat-out" : ""}`} style={{ "--player-color": player.color } as CSSProperties} onClick={() => setDrawer("players")}><PlayerPortrait player={player} /><span><b>{player.name}{player.id === session.player.id ? " · you" : ""}</b><strong>{player.bankrupt ? "Out" : `${game.mayor && player.id !== session.player.id ? "≈" : ""}${formatMoney(player.cash)}`}</strong>{player.id === game.mayor?.mayorId && <small className="seat-mayor">Mayor</small>}{player.inJail && <small>In jail</small>}</span></button>)}</div>}
         {!mobileLobby && <aside className="side-rail" aria-label="Game controls and status">
           {game.phase === "lobby" ? (
-            <Lobby game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} />
+            <Lobby configuringMap={configuringMap} game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} />
           ) : (
             <>
               {me ? (
@@ -465,11 +476,13 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
 }
 
 function Lobby({
+  configuringMap,
   game,
   localId,
   isHost,
   sendAction
 }: {
+  configuringMap: boolean;
   game: GameState;
   localId: string;
   isHost: boolean;
@@ -484,22 +497,23 @@ function Lobby({
     sendAction(makeStartAction(game, localId));
   };
   const local = game.players.find(player => player.id === localId);
+  const canConfigure = isHost && !configuringMap && (!packagedApp || game.mode !== undefined);
   const duplicateColours = game.players.some(player => isPlayerColorTaken(game.players, player.color, player.id));
   return (
     <section className="lobby-panel">
       <p className="eyebrow">Seats at the table</p>
       <h2>{game.players.length} / 6 players</h2>
-      <button type="button" className="lobby-world-trigger" onClick={()=>setMaps(true)}>Choose 3D map</button>
-      {maps&&<MapPicker world={game.world} city={game.city} disabled={!isHost} onWorld={world=>sendAction({type:'SET_WORLD',playerId:localId,world})} onCity={city=>sendAction({type:'SET_CITY',playerId:localId,city})} onClose={()=>setMaps(false)}/>}
-      <CityPicker value={game.city} disabled={!isHost} onSelect={city=>sendAction({type:'SET_CITY',playerId:localId,city})}/>
-      <label className="field-label">Rules mode<select className="text-input" aria-label="Rules mode" value={game.rulesEdition === "hasbro-2025" ? "classic-2025" : game.mode ?? "expanding"} disabled={!isHost} onChange={e => sendAction({ type: "SET_MODE", playerId: localId, mode: e.target.value === "expanding" ? "expanding" : e.target.value === "mayor" ? "mayor" : "classic", rulesEdition: e.target.value === "classic-2025" ? "hasbro-2025" : undefined })}><option value="classic-2025">Classic · Hasbro 2025 · claim rent</option><option value="expanding">Expanding India · larger with friends</option><option value="classic">Classic traditional · automatic rent</option><option value="mayor">Mayor · City Hall Stories</option></select></label>
+      <button type="button" className="lobby-world-trigger" disabled={isHost && !canConfigure} onClick={()=>setMaps(true)}>Choose 3D map</button>
+      {maps&&<MapPicker world={game.world} city={game.city} disabled={!canConfigure} onWorld={world=>sendAction({type:'SET_WORLD',playerId:localId,world})} onCity={city=>sendAction({type:'SET_CITY',playerId:localId,city})} onClose={()=>setMaps(false)}/>}
+      <CityPicker value={game.city} disabled={!canConfigure} onSelect={city=>sendAction({type:'SET_CITY',playerId:localId,city})}/>
+      <label className="field-label">Rules mode<select className="text-input" aria-label="Rules mode" value={game.rulesEdition === "hasbro-2025" ? "classic-2025" : game.mode ?? "expanding"} disabled={!canConfigure} onChange={e => sendAction({ type: "SET_MODE", playerId: localId, mode: e.target.value === "expanding" ? "expanding" : e.target.value === "mayor" ? "mayor" : "classic", rulesEdition: e.target.value === "classic-2025" ? "hasbro-2025" : undefined })}><option value="classic-2025">Classic · Hasbro 2025 · claim rent</option><option value="expanding">Expanding India · larger with friends</option><option value="classic">Classic traditional · automatic rent</option><option value="mayor">Mayor · City Hall Stories</option></select></label>
       <div className="map-size-note"><b>{game.boardSize} spaces</b><span>{game.mode === "classic" ? "Classic India" : game.mode === "mayor" ? "Mayor · City Hall Stories" : "Expanding India"}</span><small>{game.mode === "classic" ? "40 spaces for 2–6 players. Shuffled 16-card decks, starting dice contest and off-turn finances." : game.mode === "mayor" ? "Rotating Mayor, raids, city projects, Express Trains, and the Fort wheel." : "4 players → 48 · 5 → 56 · 6 → 64. Locks at start."}</small></div>
-      <BotLobbyControls game={game} localId={localId} sendAction={sendAction}/><PlayerRoster game={game} localId={localId} />
+      <BotLobbyControls disabled={!canConfigure} game={game} localId={localId} sendAction={sendAction}/><PlayerRoster game={game} localId={localId} />
       {local && <details className="lobby-colours"><summary>Your token colour</summary><TokenColorPicker color={local.color} players={game.players} localId={localId} onChoose={color => sendAction({ type: "SET_APPEARANCE", playerId: localId, color })} /></details>}
       {duplicateColours && <p className="inline-error" role="status">Every player needs a different colour. Open “Your token colour” to choose a free one.</p>}
       {isHost ? (
-        <button className="primary-button full-width" disabled={game.players.length < 2 || duplicateColours} onClick={start} type="button">
-          {game.players.length < 2 ? "Add AI or invite a friend" : "Start the game"}
+        <button className="primary-button full-width" disabled={game.players.length < 2 || duplicateColours || !canConfigure} onClick={start} type="button">
+          {!canConfigure ? "Setting up the table…" : game.players.length < 2 ? "Add AI or invite a friend" : "Start the game"}
         </button>
       ) : (
         <p className="spectator-note">The room creator starts after everyone has joined.</p>

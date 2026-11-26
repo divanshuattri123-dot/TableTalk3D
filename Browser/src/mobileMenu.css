@@ -90,7 +90,7 @@
 .mobile-lobby-title p { font-size:10px; margin:4px 0 0; }
 .lobby-rules-row { display:flex; align-items:center; justify-content:center; gap:8px; }
 .lobby-rule-buttons { display:flex; border:1px solid #c1cbd0; border-radius:24px; padding:3px; background:#e1e7e9; }
-.lobby-rule-buttons button { min-height:35px; padding:7px 13px; border:0; border-radius:20px; color:#4a6171; background:transparent; font-size:11px; font-weight:800; }
+.lobby-rule-buttons button { min-height:44px; padding:7px 13px; border:0; border-radius:20px; color:#4a6171; background:transparent; font-size:11px; font-weight:800; }
 .lobby-rule-buttons button[aria-pressed="true"] { background:#fff; box-shadow:0 2px 2px #57677442; color:#d7233a; }
 .lobby-rule-buttons button:disabled { opacity:1; }
 .lobby-info { min-width:35px; min-height:35px; padding:0; border:0; color:#cd293f; background:white; border-radius:50%; font-size:23px; }

@@ -20,3 +20,14 @@ it('includes an AI option in the desktop lobby and disables adding at six seats'
   let game=host();for(let i=0;i<5;i++)game=reduceGame(game,{type:'ADD_BOT',playerId:'h'});
   const html=renderToStaticMarkup(createElement(BotLobbyControls,{game,localId:'h',sendAction:vi.fn()}));expect(html).toContain('Add AI player');expect(html).toContain('disabled');expect(html).toContain('Remove AI Zoya');
 });
+
+it('enables the Mayor selector only after the new lobby has saved its defaults', () => {
+  const state = host();
+  const props = { game: state, localId: 'h', isHost: true, sendAction: vi.fn(), onCopy: vi.fn(), copied: false, colorPicker: null };
+  const button = (options: typeof props & { configuringMap?: boolean }) =>
+    renderToStaticMarkup(createElement(MobileLobby, options)).match(/<button[^>]*>Mayor<\/button>/)?.[0];
+  expect(button(props)).toContain('disabled');
+  const classic = reduceGame(state, { type: 'SET_MODE', playerId: 'h', mode: 'classic' });
+  expect(button({ ...props, game: classic, configuringMap: true })).toContain('disabled');
+  expect(button({ ...props, game: classic })).not.toContain('disabled');
+});
