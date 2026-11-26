@@ -15,7 +15,7 @@ import {
 import { formatRupees } from "./currency";
 import {
   AUDIT_FINE, CITY_CONTRACTS, CITY_CONTRACT_REWARD, CITY_POLICIES, LOAN_AMOUNT, LOAN_REPAYMENT, TRAIN_FARE, WHEEL_SECTIONS,
-  auctionCredit, canChallengeCityProject, cityAuctionBacking, cityContractReady, cityLoanAvailable, cityLoanTotal,
+  advanceCityRound, auctionCredit, canChallengeCityProject, cityAuctionBacking, cityContractReady, cityLoanAvailable, cityLoanTotal,
   cityPolicyAvailable, cityStable, councilSpeaker, districtName, fortPosition, newTerm, nextCityTurn,
   nextMayor, permitPaused, recordRent, rentRelief, reserveLevy, startCity, trainOffer, updateCitySeat
 } from "./mayor";
@@ -1253,6 +1253,7 @@ function settleCityEnd(state: GameState, id: string): GameState {
     loanAmountDue: loanDue ? undefined : record.loanAmountDue
   }));
   next = makePayment(next, id, "bank", owed, "to settle City Hall dues", "city");
+  if ((playerById(next, id)?.cash ?? 0) < 0) return next;
   for (const bill of pending) {
     if (bill.status !== "open" || bill.dueTurn !== cutoff + 1 || playerById(next, id)!.bankrupt) continue;
     next = playerById(next, id)!.cash >= bill.amount
@@ -1603,6 +1604,9 @@ const reduceCore = (state: GameState, action: GameAction): GameState => {
     }
   }
   next = synchronizeDebt(next);
+  if (next.phase !== "gameOver" && !next.notice && !next.debts?.length && !next.auction && !next.bankAuctionQueue?.length && next.mayor?.pendingRoundAdvance) {
+    next = advanceCityRound(next);
+  }
   if (next.mayor && !next.notice) next = synchronizeDebt(afterCityAction(before, next));
   if (next.phase !== "gameOver" && !next.debts?.length && !next.auction && next.bankAuctionQueue?.length) {
     const [propertyId, ...bankAuctionQueue] = next.bankAuctionQueue;

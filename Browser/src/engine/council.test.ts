@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { auctionCredit, councilSpeaker, projectCityState, reserveLevy } from "./mayor";
+import { auctionCredit, cityLoanAvailable, councilSpeaker, projectCityState, reserveLevy } from "./mayor";
 import { createInitialState, reduceGame } from "./reducer";
 import type { GameAction, GameState, PropertyState } from "./types";
 
@@ -162,5 +162,86 @@ describe("Council rules", () => {
     expect(councilSpeaker(saved)).toBeUndefined();
     const transit = step(saved, { type: "CITY_PROPOSE", playerId: "a", term: 1, policy: "transit" });
     expect(nextRound(transit).mayor!.policy?.kind).toBe("transit");
+  });
+
+  it("clears a bankrupt Mayor's pending proposal so the incoming Mayor can propose", () => {
+    let state = own(propose(table(), "permits", "brown"), "b", 39, 5);
+    state = adjust(state, "a", { position: 32, cash: 50 });
+    state = step(step(state, { type: "ROLL", playerId: "a", dice: [3, 4] }), { type: "MOVE_RESULT", playerId: "a" });
+    expect(state.players[0]!.bankrupt).toBe(true);
+    expect(state.mayor!.mayorId).toBe("b");
+    expect(state.mayor!.term).toBe(2);
+    expect(state.mayor!.proposal).toBeUndefined();
+    const next = step(state, { type: "CITY_PROPOSE", playerId: "b", term: 2, policy: "transit" });
+    expect(next.notice).toBeUndefined();
+    expect(next.mayor!.proposal).toMatchObject({ term: 2, kind: "transit", sponsorId: "b" });
+  });
+
+  it("finishes bank repossession auctions within the active round before advancing round policies", () => {
+    // Round 1 repossession auctions must not steal Round 2's proposed City-Backed Auction
+    let round1 = adjust(end(end(propose(table(), "credit"))), "b", { cash: 350 });
+    round1 = {
+      ...adjust(round1, "c", { position: 0, cash: 10 }),
+      properties: { ...round1.properties, 6: { ownerId: "c", houses: 0, mortgaged: true }, 8: { ownerId: "c", houses: 0, mortgaged: true } }
+    };
+    round1 = step(step(round1, { type: "ROLL", playerId: "c", dice: [1, 3] }), { type: "MOVE_RESULT", playerId: "c" });
+    expect(round1.mayor!.round).toBe(1);
+    expect(round1.mayor!.policy).toBeUndefined();
+    expect(round1.phase).toBe("awaitingAuction");
+    expect(round1.auction?.propertyId).toBe(6);
+    expect(round1.auction?.cityBacking).toBeUndefined();
+    round1 = step(step(round1, { type: "AUCTION_BID", playerId: "a", pass: true }), { type: "AUCTION_BID", playerId: "b", pass: true });
+    expect(round1.mayor!.round).toBe(1);
+    expect(round1.auction?.propertyId).toBe(8);
+    round1 = step(step(round1, { type: "AUCTION_BID", playerId: "a", pass: true }), { type: "AUCTION_BID", playerId: "b", pass: true });
+    expect(round1.mayor!.round).toBe(2);
+    expect(round1.activePlayerId).toBe("a");
+    expect(round1.phase).toBe("awaitingRoll");
+    expect(round1.mayor!.policy?.kind).toBe("credit");
+    expect(round1.mayor!.policy?.used).toBeUndefined();
+
+    // Conversely, an active Round 2 City-Backed Auction backs a Round 2 repossession before Round 3 opens
+    let round2 = adjust(end(end(nextRound(propose(table(), "credit")))), "b", { cash: 350 });
+    round2 = {
+      ...adjust(round2, "c", { position: 0, cash: 10 }),
+      properties: { ...round2.properties, 6: { ownerId: "c", houses: 0, mortgaged: true } }
+    };
+    round2 = step(step(round2, { type: "ROLL", playerId: "c", dice: [1, 3] }), { type: "MOVE_RESULT", playerId: "c" });
+    expect(round2.mayor!.round).toBe(2);
+    expect(round2.auction?.cityBacking).toEqual({ limit: 200, playerIds: ["b"] });
+  });
+
+  it("keeps open tax bills open while a maturing city loan is settled in awaitingDebt", () => {
+    let state = step(table(), { type: "CITY_PROPOSE", playerId: "a", term: 1, policy: "loans" });
+    state = adjust(end(nextRound(state)), "b", { cash: 100 });
+    state = step(state, { type: "CITY_LOAN", playerId: "b", round: 2 });
+    state = { ...state, mayor: { ...state.mayor!, seats: { ...state.mayor!.seats, b: { ...state.mayor!.seats.b!, rent: 300 } } } };
+    state = end(nextRound(state)); // Round 3, b's turn (loan ₹225 due at end of turn, plus open ₹40 Round 2 bill)
+    state = adjust(own(state, "b", 39), "b", { cash: 200 });
+    state = end(state);
+    expect(state.phase).toBe("awaitingDebt");
+    expect(cash(state, "b")).toBe(-25);
+    expect(state.mayor!.seats.b!.bills).toEqual([{ round: 2, amount: 40, dueTurn: 4, status: "open" }]);
+    state = step(state, { type: "MORTGAGE", playerId: "b", propertyId: 39, mortgage: true });
+    expect(state.phase).toBe("awaitingEndTurn");
+    expect(cash(state, "b")).toBe(175);
+    expect(state.mayor!.seats.b!.bills[0]?.status).toBe("open");
+    const finished = end(state);
+    expect(finished.activePlayerId).toBe("c");
+    expect(cash(finished, "b")).toBe(135);
+    expect(finished.mayor!.seats.b!.bills[0]?.status).toBe("paid");
+  });
+
+  it("uses posted cash for emergency loan eligibility across private and public snapshots", () => {
+    let state: GameState = { ...table(), mayor: { ...table().mayor!, seats: { ...table().mayor!.seats, b: { ...table().mayor!.seats.b!, rent: 600 } } } };
+    state = step(state, { type: "CITY_PROPOSE", playerId: "a", term: 1, policy: "loans" });
+    state = adjust(end(nextRound(state)), "b", { cash: 480 });
+    expect(cityLoanAvailable(state, "b")).toBe(false);
+    const prepaid = step(state, { type: "CITY_PAY_TAX", playerId: "b", round: 1 });
+    expect(cash(prepaid, "b")).toBe(350);
+    expect(cash(projectCityState(prepaid, "a"), "b")).toBe(480);
+    expect(cityLoanAvailable(prepaid, "b")).toBe(false);
+    expect(cityLoanAvailable(projectCityState(prepaid, "a"), "b")).toBe(false);
+    expect(step(prepaid, { type: "CITY_LOAN", playerId: "b", round: 2 }).notice).toBeTruthy();
   });
 });

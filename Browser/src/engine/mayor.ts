@@ -68,6 +68,7 @@ export interface CityDesk {
   wheel?: WheelDecision;
   wheelResult?: WheelDecision;
   jackpotUsed?: true;
+  pendingRoundAdvance?: true;
 }
 export type CityAction =
   | { type: "CITY_PAY_TAX" | "CITY_DEFER_TAX"; playerId: string; round: number }
@@ -117,11 +118,14 @@ export function trainOffer(state: GameState, playerId: string) {
   return { to: stations.find(position => position > player.position) ?? stations[0]!, fare: free ? 0 : TRAIN_FARE };
 }
 
+const unpostedTax = (seat?: CitySeat) =>
+  seat?.bills.reduce((sum, bill) => sum + (bill.status === "paid" ? bill.amount : 0), 0) ?? 0;
+
 export function cityLoanAvailable(state: GameState, playerId: string) {
   const desk = state.mayor;
   const player = state.players.find(candidate => candidate.id === playerId);
   return cityStable(state) && state.activePlayerId === playerId && !!player && !player.bankrupt &&
-    player.cash <= LOAN_CASH_LIMIT && desk?.policy?.kind === "loans" &&
+    !!desk && player.cash + unpostedTax(desk.seats[playerId]) <= LOAN_CASH_LIMIT && desk.policy?.kind === "loans" &&
     desk.policy.sponsorId !== playerId && desk.treasury >= LOAN_AMOUNT && !desk.seats[playerId]?.borrowed;
 }
 
@@ -135,7 +139,10 @@ export function nextMayor(state: GameState, after: string) {
 }
 
 export function newTerm(desk: CityDesk, mayorId: string): CityDesk {
-  return { ...desk, mayorId, term: desk.term + 1, termStart: desk.round, auditUsed: undefined, tip: undefined, proposalUsed: undefined };
+  return {
+    ...desk, mayorId, term: desk.term + 1, termStart: desk.round,
+    auditUsed: undefined, tip: undefined, proposalUsed: undefined, proposal: undefined
+  };
 }
 
 export const cityTax = (rent: number) =>
@@ -145,15 +152,9 @@ export const cityTax = (rent: number) =>
     Math.max(0, rent - 600) * 4
   ) / 10));
 
-export function nextCityTurn(state: GameState, actor: string, nextId: string): GameState {
-  let desk = state.mayor;
+export function advanceCityRound(state: GameState): GameState {
+  const desk = state.mayor;
   if (!desk) return state;
-  state = updateCitySeat(state, actor, seat => ({ ...seat, turns: seat.turns + 1 }));
-  desk = state.mayor!;
-  const start = state.players.findIndex(player => player.id === desk!.firstId);
-  const index = (id: string) => (state.players.findIndex(player => player.id === id) - start + state.players.length) % state.players.length;
-  if (index(nextId) > index(actor)) return state;
-
   const round = desk.round + 1;
   const seats = { ...desk.seats };
   for (const player of state.players) {
@@ -175,8 +176,22 @@ export function nextCityTurn(state: GameState, actor: string, nextId: string): G
       district: proposal.district
     };
   }
-  const advanced = { ...desk, round, seats, proposal: undefined, policy };
+  const advanced: CityDesk = { ...desk, round, seats, proposal: undefined, policy, pendingRoundAdvance: undefined };
   return { ...state, mayor: round - desk.termStart >= 2 ? newTerm(advanced, nextMayor(state, desk.mayorId)) : advanced };
+}
+
+export function nextCityTurn(state: GameState, actor: string, nextId: string): GameState {
+  let desk = state.mayor;
+  if (!desk) return state;
+  state = updateCitySeat(state, actor, seat => ({ ...seat, turns: seat.turns + 1 }));
+  desk = state.mayor!;
+  const start = state.players.findIndex(player => player.id === desk!.firstId);
+  const index = (id: string) => (state.players.findIndex(player => player.id === id) - start + state.players.length) % state.players.length;
+  if (index(nextId) > index(actor)) return state;
+  if (state.bankAuctionQueue?.length) {
+    return { ...state, mayor: { ...desk, pendingRoundAdvance: true } };
+  }
+  return advanceCityRound(state);
 }
 
 export function councilSpeaker(state: GameState) {
@@ -193,9 +208,6 @@ export function canChallengeCityProject(state: GameState, playerId: string) {
   return proposal.votes.length > 0 || !desk.voteUsed ||
     (desk.speakerUsedTerm !== desk.term && councilSpeaker(state) === playerId);
 }
-
-const unpostedTax = (seat?: CitySeat) =>
-  seat?.bills.reduce((sum, bill) => sum + (bill.status === "paid" ? bill.amount : 0), 0) ?? 0;
 
 export function reserveLevy(state: GameState) {
   const solvent = state.players.filter(player => !player.bankrupt).map(player => ({
