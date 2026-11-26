@@ -5,7 +5,7 @@ import { getPurchasableTile, getTile, isStreetTile } from "../engine/board";
 import { calculateRent } from "../engine/reducer";
 import { formatRupees } from "../engine/currency";
 import { classicSpendableCash } from "../engine/classic";
-import { auctionCredit, cityLoanTotal, permitPaused } from "../engine/mayor";
+import { auctionCredit, cityLoanTotal, permitPaused, propertyPermitLocked } from "../engine/mayor";
 import type { GameAction, GameState, Player } from "../engine/types";
 import type { PresentationFrame } from "../presentation/plan";
 import { GROUP_COLORS } from "./palette";
@@ -42,6 +42,7 @@ export function TitleDeed({ game, position, rent }: { game: GameState; position:
     <header><small>{tile.kind === "property" ? `${tile.region?.split(" · ")[0] ?? tile.group} DISTRICT · TITLE DEED` : `${tile.kind.toUpperCase()} · TITLE DEED`}</small><h2>{tile.name}</h2></header>
     {tile.region && <p className="title-deed-region">{tile.region}</p>}
     {tile.detail && <p className="title-deed-detail">{tile.detail}</p>}
+    {propertyPermitLocked(game, position) && <p className="title-deed-detail">Building permits paused until the Mayor changes</p>}
     {tile.kind === "property" && permitPaused(game, tile.group) && <p className="title-deed-detail">Building permits paused this round</p>}
     {tile.kind === "property" && game.mayor?.policy?.kind === "rent-relief" && game.mayor.policy.district === tile.group &&
       <p className="title-deed-detail">First rent payment here qualifies for district relief this round</p>}

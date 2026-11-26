@@ -17,7 +17,8 @@ import {
   AUDIT_FINE, CITY_CONTRACTS, CITY_CONTRACT_REWARD, CITY_POLICIES, LOAN_AMOUNT, LOAN_REPAYMENT, TRAIN_FARE, WHEEL_SECTIONS,
   advanceCityRound, auctionCredit, canChallengeCityProject, cityAuctionBacking, cityContractReady, cityLoanAvailable, cityLoanTotal,
   cityPolicyAvailable, cityStable, councilSpeaker, districtName, fortPosition, newTerm, nextCityTurn,
-  nextMayor, permitPaused, recordRent, rentRelief, reserveLevy, startCity, trainOffer, updateCitySeat
+  MAYOR_MOVE_SPACES, PERMIT_LOCK_COUNT, mayorCanGrantLoan, nextMayor, permitPaused, propertyPermitLocked,
+  recordRent, rentRelief, reserveLevy, startCity, trainOffer, updateCitySeat
 } from "./mayor";
 import type { CityAction, TaxBill } from "./mayor";
 import { isPlayerColorTaken, playerColorKey, PLAYER_COLORS } from "./playerColors";
@@ -612,7 +613,7 @@ const handleStart = (state: GameState, action: Extract<GameAction, { type: "STAR
   if (state.mode === "classic") return startClassic(state, action);
   return addEvent(
     { ...state, phase: "awaitingRoll", activePlayerId: action.firstPlayerId,
-      ...(state.mode === "mayor" ? { mayor: startCity(state.players, action.firstPlayerId) } : {}) },
+      ...(state.mode === "mayor" ? { mayor: startCity(state.players, action.firstPlayerId, state.mayorOffice) } : {}) },
     `${playerName(state, action.firstPlayerId)} goes first.`,
     "turn"
   );
@@ -868,6 +869,7 @@ const handleBuild = (state: GameState, action: Extract<GameAction, { type: "BUIL
   const maximum = Math.max(...levels);
 
   if (action.operation === "build") {
+    if (propertyPermitLocked(state, tile.position)) return reject(state, "City Hall paused building permits on this deed until the Mayor changes.");
     if (permitPaused(state, tile.group)) return reject(state, "City Hall paused building permits in this district for the round.");
     if (property.houses >= 5 || property.houses !== minimum || player.cash < tile.houseCost) {
       return reject(state, "Build evenly and make sure you can pay the house cost.");
@@ -1035,7 +1037,7 @@ const handleEndTurn = (
     );
   }
   const desk = state.mayor;
-  if (desk && !desk.auditUsed && desk.mayorId !== player.id && !player.bankrupt &&
+  if (desk && !desk.office && !desk.auditUsed && desk.mayorId !== player.id && !player.bankrupt &&
       state.players.filter(candidate => !candidate.bankrupt).length === 2 &&
       desk.seats[player.id]?.bills.some(bill => bill.status === "deferred")) {
     state = auditCity(state, player.id);
@@ -1057,7 +1059,7 @@ const handleEndTurn = (
     };
   }
   const curDesk = state.mayor;
-  if (curDesk && !curDesk.auditUsed && curDesk.mayorId === player.id &&
+  if (curDesk && !curDesk.office && !curDesk.auditUsed && curDesk.mayorId === player.id &&
       state.players.filter(candidate => !candidate.bankrupt).length === 2 &&
       curDesk.seats[nextPlayer.id]?.bills.some(bill => bill.status === "deferred")) {
     const start = state.players.findIndex(candidate => candidate.id === curDesk.firstId);
@@ -1281,7 +1283,7 @@ function auditCity(state: GameState, targetId: string): GameState {
   const mayor = playerById(state, desk.mayorId)!;
   const target = playerById(state, targetId)!;
   const bill = desk.seats[targetId]?.bills.find(entry => entry.status === "deferred");
-  let next: GameState = { ...state, mayor: { ...desk, auditUsed: true } };
+  let next: GameState = { ...state, mayor: { ...desk, ...(desk.office ? { tip: undefined } : { auditUsed: true }) } };
   if (!bill) {
     next = civicEvent(next, `Clear records. ${mayor.name} owes ${target.name} ${formatRupees(AUDIT_FINE)} for the failed raid.`, "raid",
       { playerId: mayor.id, recipientId: target.id, position: target.position, amount: AUDIT_FINE });
@@ -1334,22 +1336,59 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
       if (bill.dueTurn > seat.turns + 2) return addEvent(state, "You can defer this bill once before it comes due.", "error", { privateTo: id });
       return updateBill(state, id, bill, "deferred");
     }
+    case "CITY_LOCK_PERMITS": {
+      if (!office || !desk.office || desk.office.permitPropertyIds) {
+        return reject(state, "Only the sitting Mayor can lock three deeds until the office changes.");
+      }
+      const ids = action.propertyIds;
+      if (!Array.isArray(ids) || ids.length !== PERMIT_LOCK_COUNT || !uniqueValues(ids) ||
+          ids.some(propertyId => !Number.isInteger(propertyId) || getPurchasableTile(propertyId, state.boardSize)?.kind !== "property")) {
+        return reject(state, "Choose three different street deeds.");
+      }
+      const next = { ...state, mayor: { ...desk, office: { ...desk.office, permitPropertyIds: [...ids] } } };
+      const names = ids.map(propertyId => getTile(propertyId, state.boardSize).name).join(", ");
+      return civicEvent(next, `${player.name} locked building permits at ${names} until the Mayor changes.`, "policy", { playerId: id });
+    }
+    case "CITY_GRANT_LOAN": {
+      if (!office || !mayorCanGrantLoan(state, action.targetId)) {
+        return reject(state, "City Funds must have ₹200 and the borrower must be solvent with no outstanding city loan.");
+      }
+      const next = fundCityLoan(state, action.targetId, LOAN_AMOUNT, LOAN_REPAYMENT);
+      return civicEvent(next, `${player.name} issued ${formatRupees(LOAN_AMOUNT)} to ${playerName(state, action.targetId)}. Repayment is ${formatRupees(LOAN_REPAYMENT)}.`,
+        "policy", { playerId: id, recipientId: action.targetId, amount: LOAN_AMOUNT });
+    }
+    case "CITY_MOVE_RIVALS": {
+      if (!office || !desk.office || !active || desk.office.rivalMoveTerm === desk.term) {
+        return reject(state, "The Mayor can move rivals forward once per term on their own turn.");
+      }
+      let next: GameState = { ...state, mayor: { ...desk, office: { ...desk.office, rivalMoveTerm: desk.term } } };
+      next = civicEvent(next, `${player.name} ordered every rival to move ${MAYOR_MOVE_SPACES} spaces forward.`, "policy", { playerId: id });
+      for (const rival of solvent) {
+        if (rival.id === id) continue;
+        if (rival.inJail) next = withPlayer(next, rival.id, candidate => ({ ...candidate, inJail: false, jailTurns: 0 }));
+        next = moveForward(next, rival.id, MAYOR_MOVE_SPACES);
+      }
+      return next;
+    }
     case "CITY_AUDIT":
-      if (!office || desk.auditUsed || solvent.length <= 2 || action.targetId === id || !solvent.some(candidate => candidate.id === action.targetId)) {
-        return reject(state, "Choose one solvent rival while your warrant is available.");
+      if (!office || (!desk.office && (desk.auditUsed || solvent.length <= 2)) ||
+          action.targetId === id || !solvent.some(candidate => candidate.id === action.targetId)) {
+        return reject(state, "Choose a solvent rival while your warrant is available.");
       }
       return auditCity(state, action.targetId);
     case "CITY_TIP": {
-      if (!office || desk.auditUsed || desk.tip || solvent.length < 3) return reject(state, "One investigation is available per term while your warrant is unused.");
+      if (!office || desk.auditUsed || desk.tip || desk.office?.investigationUsed || solvent.length < 3) return reject(state, "One investigation is available per term while your warrant is unused.");
       const rivals = solvent.filter(candidate => candidate.id !== id);
       const suspect = rivals.find(candidate => desk.seats[candidate.id]?.bills.some(bill => bill.status === "deferred"));
       const second = rivals.find(candidate => candidate.id !== suspect?.id);
       const tip = suspect && second ? [suspect.id, second.id].sort() : [];
-      const next = { ...state, mayor: { ...desk, tip } };
+      const next: GameState = { ...state, mayor: { ...desk, tip,
+        ...(desk.office ? { office: { ...desk.office, investigationUsed: true } } : {})
+      } };
       return tip.length ? civicEvent(next, "City Hall opened an investigation into unpaid levies.", "investigation") : next;
     }
     case "CITY_PROPOSE":
-      if (!office || !active || desk.proposalUsed || desk.proposal || !cityPolicyAvailable(state, action.policy, action.district)) {
+      if (!office || !active || (!desk.office && desk.proposalUsed) || desk.proposal || !cityPolicyAvailable(state, action.policy, action.district)) {
         return reject(state, "Choose an available city project during your term and turn.");
       }
       return civicEvent({ ...state, mayor: { ...desk, proposalUsed: true, proposal: { term: desk.term, kind: action.policy, sponsorId: id, votes: [], district: action.district } } },
@@ -1509,7 +1548,7 @@ const applyAction = (state: GameState, action: GameAction): GameState => {
       if (state.phase !== "lobby" || state.players[0]?.id !== action.playerId) return reject(state, "Only the room creator can choose a mode before starting.");
       if (action.mode !== "classic" && action.mode !== "expanding" && action.mode !== "mayor") return reject(state, "Choose Classic, Expanding or Mayor.");
       const initial = createInitialState(state.roomCode, action.mode === "classic" ? 40 : boardSizeForPlayers(state.players.length));
-      return addEvent({ ...state, mode: action.mode, rulesEdition: action.mode === 'classic' ? action.rulesEdition : undefined, boardSize: initial.boardSize, properties: initial.properties,
+      return addEvent({ ...state, mode: action.mode, mayorOffice: action.mode === "mayor" && action.mayorOffice === true ? true : undefined, rulesEdition: action.mode === 'classic' ? action.rulesEdition : undefined, boardSize: initial.boardSize, properties: initial.properties,
         bankHouses: initial.bankHouses, bankHotels: initial.bankHotels }, `The room selected ${action.mode === "classic" ? "Classic · 40 spaces" : action.mode === "mayor" ? "Mayor · City Hall Stories" : "Expanding Indian board"}.`);
     }
     case "CITY_PAY_TAX":
@@ -1521,6 +1560,9 @@ const applyAction = (state: GameState, action: GameAction): GameState => {
     case "CITY_LOAN":
     case "CITY_CONTRACT":
     case "CITY_EXPRESS":
+    case "CITY_LOCK_PERMITS":
+    case "CITY_GRANT_LOAN":
+    case "CITY_MOVE_RIVALS":
     case "CITY_SKIP_WHEEL":
     case "CITY_SPIN":
     case "CITY_SCRATCH":

@@ -179,6 +179,7 @@ export interface GameEvent {
 
 export interface GameState {
   mayor?: CityDesk;
+  mayorOffice?: true;
   world?: WorldId;
   city?: CityId;
   rulesEdition?: 'hasbro-2025';
@@ -226,7 +227,7 @@ export type GameAction =
   | {type:'SET_WORLD';playerId:string;world:WorldId}
   | { type:'SET_CITY'; playerId:string; city:CityId }
   | { type: "JOIN"; player: PlayerInput }
-  | { type: "SET_MODE"; playerId: string; mode: GameMode; rulesEdition?: 'hasbro-2025' }
+  | { type: "SET_MODE"; playerId: string; mode: GameMode; rulesEdition?: 'hasbro-2025'; mayorOffice?: true }
   | { type: "CLAIM_RENT"; playerId: string; claimId: number }
   | { type: "SET_APPEARANCE"; playerId: string; tokenId?: string; diceId?: string; color?: string }
   | { type: "START"; playerId: string; firstPlayerId: string; setupRolls?: SetupRoll[][]; deckOrder?: Record<CardDeck, number[]> }

@@ -474,3 +474,24 @@ Verification gate: add deterministic/immutable reducer regression tests first;
 then expose the lobby selector and phase-specific controls. Old-mode tests and
 recovery tests must remain green. This section is a design contract, not a claim
 that implementation or end-to-end verification has already finished.
+
+## Mayor office rules
+
+New clients select the office edition when they choose Mayor mode. Saved tables
+and rooms created through older clients keep their existing rules.
+
+- The Mayor selects exactly three distinct street deeds during a regular turn.
+  Nobody can add houses or hotels to those deeds until the office changes hands.
+  Buying, trading, mortgages and the sale of improvements keep their normal rules.
+- The Mayor can issue a ₹200 Emergency Loan to any solvent seat from City Funds.
+  The seat repays ₹225 at the end of its second turn with the loan. A seat may
+  receive another loan once its existing balance is repaid.
+- Transit Day and Express are unavailable. Connect the City completes when the
+  player holds two unmortgaged stations.
+- There is no audit quota. An audit with no deferred levy still costs the Mayor
+  ₹25. Repeatable council projects have no term or match quota. A council project
+  already awaiting a vote must finish before the next proposal can go on the ballot.
+- Once per term on the Mayor's own turn, the Mayor may move every other solvent
+  token exactly five spaces clockwise. Passing GO pays ₹200. A jailed rival
+  leaves Jail. This action changes positions and leaves the turn and dice intact.
+  The destination does not trigger a separate landing decision.

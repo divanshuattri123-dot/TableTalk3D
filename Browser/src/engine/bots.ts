@@ -1,7 +1,7 @@
 import {colorGroupTiles,getBoard,getPurchasableTile,isPurchasableTile} from './board';
 import {classicSpendableCash} from './classic';
 import {calculateRent,canTradeProperty,decisionPlayerId,reduceGame} from './reducer';
-import {auctionCredit,canChallengeCityProject,cityLoanAvailable,cityPolicyAvailable,cityStable,reserveLevy,trainOffer} from './mayor';
+import {auctionCredit,canChallengeCityProject,cityLoanAvailable,cityPolicyAvailable,cityStable,MAYOR_MOVE_SPACES,mayorCanGrantLoan,PERMIT_LOCK_COUNT,reserveLevy,trainOffer} from './mayor';
 import type {Dice,GameAction,GameState,Player,TradeOffer} from './types';
 
 const STYLES=[
@@ -50,19 +50,37 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
     }
     const mayor=bot(desk.mayorId),active=bot(s.activePlayerId),term=desk.term;
     if(mayor && s.players.filter(p=>!p.bankrupt).length>=3 && !desk.auditUsed){
-      if(!desk.tip && s.phase==='awaitingEndTurn')return {type:'CITY_TIP',playerId:mayor.id,term};
+      if(!desk.tip && !desk.office?.investigationUsed && s.phase==='awaitingEndTurn')return {type:'CITY_TIP',playerId:mayor.id,term};
       const rivals=desk.tip?.map(id=>s.players.find(p=>p.id===id && !p.bankrupt)).filter(p=>p!==undefined);
       if(rivals?.length){
         const target=[...rivals].sort((a,b)=>a.cash-b.cash)[0]!;
         return {type:'CITY_AUDIT',playerId:mayor.id,term,targetId:target.id};
       }
     }
-    if(mayor && active===mayor && !desk.proposalUsed && !desk.proposal && desk.round>=2){
+    if(mayor && active===mayor && desk.office){
+      const playerId=mayor.id;
+      if(mayor.cash<250 && mayorCanGrantLoan(s,playerId))return {type:'CITY_GRANT_LOAN',playerId,term,targetId:playerId};
+      if(!desk.office.permitPropertyIds){
+        const streets=getBoard(s.boardSize).filter(tile=>{
+          const owned=s.properties[tile.position];
+          if(tile.kind!=='property'||!owned?.ownerId||owned.ownerId===playerId||owned.houses>=5)return false;
+          return colorGroupTiles(tile.group,s.boardSize).every(deed=>s.properties[deed.position]?.ownerId===owned.ownerId);
+        }).sort((a,b)=>calculateRent(s,b.position,7)-calculateRent(s,a.position,7)).slice(0,PERMIT_LOCK_COUNT);
+        if(streets.length===PERMIT_LOCK_COUNT)return {type:'CITY_LOCK_PERMITS',playerId,term,propertyIds:streets.map(tile=>tile.position)};
+      }
+      if(desk.office.rivalMoveTerm!==term && s.players.some(rival=>{
+        if(rival.id===playerId||rival.bankrupt||rival.inJail||rival.position+MAYOR_MOVE_SPACES>=s.boardSize)return false;
+        const before=(rival.position+7)%s.boardSize, after=(before+MAYOR_MOVE_SPACES)%s.boardSize;
+        return s.properties[after]?.ownerId===playerId &&
+          calculateRent(s,after,7)>=150 && s.properties[before]?.ownerId!==playerId;
+      }))return {type:'CITY_MOVE_RIVALS',playerId,term};
+    }
+    if(mayor && active===mayor && (desk.office || !desk.proposalUsed) && !desk.proposal && desk.round>=2){
       const playerId=mayor.id;
       const cashLeader=reserveLevy(s);
       if(cashLeader && cashLeader.playerId!==playerId && cityPolicyAvailable(s,'wealth'))
         return {type:'CITY_PROPOSE',playerId,term,policy:'wealth'};
-      const lowCash=s.players.filter(p=>!p.bankrupt&&p.cash<=400&&!desk.seats[p.id]?.borrowed);
+      const lowCash=s.players.filter(p=>!p.bankrupt&&p.cash<=400&&(desk.office?desk.seats[p.id]?.loanDue===undefined:!desk.seats[p.id]?.borrowed));
       if(lowCash.some(p=>p.id===playerId) && cityPolicyAvailable(s,'credit'))
         return {type:'CITY_PROPOSE',playerId,term,policy:'credit'};
       if(desk.council && s.phase==='awaitingRoll'){
@@ -72,8 +90,10 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
         if(danger?.kind==='property' && cityPolicyAvailable(s,'rent-relief',danger.group))
           return {type:'CITY_PROPOSE',playerId,term,policy:'rent-relief',district:danger.group};
       }
-      const policy=lowCash.filter(p=>p.id!==playerId).length>=2?'loans':'transit';
-      return {type:'CITY_PROPOSE',playerId,term,policy};
+      if(!desk.office){
+        const policy=lowCash.filter(p=>p.id!==playerId).length>=2?'loans':'transit';
+        return {type:'CITY_PROPOSE',playerId,term,policy};
+      }
     }
     const proposal=desk.proposal;
     if(active && proposal && canChallengeCityProject(s,active.id)){
