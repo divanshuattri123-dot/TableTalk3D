@@ -254,8 +254,8 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
       : style.bid > 1.2 && limit - a.currentBid > 60 ? 20 : 10;
     const minBid=Math.max(usesClassicRules(s)?10:1,a.currentBid+1);
     const amount=p.botLevel==='pro'?Math.max(minBid,Math.min(limit,a.currentBid+increment)):Math.max(10,a.currentBid+increment);
-    const bid:GameAction={type:'AUCTION_BID',playerId:p.id,amount,propertyId:target};
-    return amount<=limit&&legal(bid)?bid:{type:'AUCTION_BID',playerId:p.id,pass:true};
+    const bid:GameAction={type:'AUCTION_BID',playerId:p.id,auctionId:a.id,amount,propertyId:target};
+    return amount<=limit&&legal(bid)?bid:{type:'AUCTION_BID',playerId:p.id,auctionId:a.id,pass:true};
   }
   const p=bot(decisionPlayerId(s));if(!p)return;
   const playerId=p.id,owned=deeds(s,p),cash=spendable(s,p),style=botStyle(p);

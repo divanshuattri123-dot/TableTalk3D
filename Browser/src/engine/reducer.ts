@@ -12,7 +12,7 @@ import {
   isPurchasableTile,
   isStreetTile
 } from "./board";
-import { formatRupees } from "./currency";
+import { formatRupees, roundRupees } from "./currency";
 import {
   AUDIT_FINE, DUEL_VETO_COST, MAYOR_STIPEND, MAX_AUDITS_PER_TERM, CITY_CONTRACTS, CITY_CONTRACT_REWARD, CITY_POLICIES, LOAN_AMOUNT, LOAN_REPAYMENT, TRAIN_FARE, WHEEL_SECTIONS,
   advanceCityRound, applyCityLoanPayment, auctionCredit, bookCityLoan, canChallengeCityProject, cityAuditBills, cityAuctionBacking, cityContractReady, cityLoanAvailable, cityLoanTotal,
@@ -110,7 +110,7 @@ const withProperty = (
 });
 
 const changeCash = (state: GameState, playerId: string, delta: number): GameState =>
-  withPlayer(state, playerId, (player) => ({ ...player, cash: player.cash + delta }));
+  withPlayer(state, playerId, (player) => ({ ...player, cash: roundRupees(player.cash + delta) }));
 
 const playerName = (state: GameState, playerId: string): string =>
   playerById(state, playerId)?.name ?? "Player";
@@ -871,6 +871,7 @@ const handleDeclineBuy = (
   }
   const tile = getPurchasableTile(pending.propertyId, state.boardSize) as PurchasableTile;
   const auction: AuctionState = {
+    id: state.nextEventId,
     propertyId: pending.propertyId,
     landingPlayerId: action.playerId,
     currentBid: 0,
@@ -1383,7 +1384,7 @@ function civicEvent(state: GameState, text: string, civic: NonNullable<GameEvent
 }
 
 const changeTreasury = (state: GameState, delta: number): GameState =>
-  state.mayor ? { ...state, mayor: { ...state.mayor, treasury: state.mayor.treasury + delta } } : state;
+  state.mayor ? { ...state, mayor: { ...state.mayor, treasury: roundRupees(state.mayor.treasury + delta) } } : state;
 
 function creditCityCash(state: GameState, id: string, amount: number) {
   return usesClassicRules(state) ? applyClassicCredit(state, id, amount) : changeCash(state, id, amount);
@@ -1563,11 +1564,12 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
   switch (action.type) {
     case "CITY_PAY_TAX":
     case "CITY_DEFER_TAX": {
+      const available = spendableCash(state, id);
       if (action.type === "CITY_PAY_TAX" && action.billId === -1) {
         const deferred = seat.bills.filter(entry => entry.status === "deferred");
         const total = deferred.reduce((sum, entry) => sum + entry.amount, 0);
         if (!deferred.length) return addEvent(state, "No deferred tax bills are open.", "error", { privateTo: id });
-        if (player.cash < total) return addEvent(state, "Raise more cash before paying all deferred bills.", "error", { privateTo: id });
+        if (available < total) return addEvent(state, "Raise more cash before paying all deferred bills.", "error", { privateTo: id });
         const cleared = updateCitySeat(changeTreasury(changeCash(state, id, -total), total), id, rec => ({
           ...rec, bills: rec.bills.filter(entry => entry.status !== "deferred")
         }));
@@ -1577,7 +1579,7 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
         (action.billId === undefined || action.billId === (entry.id ?? null)) &&
         (action.type === "CITY_DEFER_TAX" ? entry.status === "open" : entry.status !== "paid"));
       if (!bill) return addEvent(state, "That private bill is no longer open.", "error", { privateTo: id });
-      if (action.type === "CITY_PAY_TAX") return player.cash >= bill.amount
+      if (action.type === "CITY_PAY_TAX") return available >= bill.amount
         ? payTaxEarly(state, id, bill) : addEvent(state, "Raise more cash before paying this bill.", "error", { privateTo: id });
       return updateBill(state, id, bill, "deferred");
     }
@@ -1618,7 +1620,7 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
       const seizedFromId = citySeizedOwner(state, action.propertyId);
       if (!office || !desk.office || !tile || !seizedFromId) return reject(state, "Choose a deed with an outstanding seizure.");
       const auction: AuctionState = {
-        seizedFromId, propertyId: tile.position, landingPlayerId: id, currentBid: 0,
+        id: state.nextEventId, seizedFromId, propertyId: tile.position, landingPlayerId: id, currentBid: 0,
         eligiblePlayerIds: solvent.map(candidate => candidate.id), passedPlayerIds: []
       };
             const resume = state.phase as DebtResumePhase;
@@ -1705,7 +1707,7 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
       const isDuel = solvent.length === 2;
       let base = isDuel ? changeTreasury(changeCash(state, id, -DUEL_VETO_COST), DUEL_VETO_COST) : state;
       const curDesk = base.mayor!;
-      const nextVotes = [...proposal.votes, id];
+      const nextVotes = [...proposal.votes.filter(voter => solvent.some(seat => seat.id === voter)), id];
       const threshold = councilVoteThreshold(base);
       const speaker = councilSpeaker(base) === id && curDesk.speakerUsedTerm !== curDesk.term;
       const voice = speaker ? `Council Speaker ${player.name}` : player.name;
@@ -2068,7 +2070,7 @@ const reduceCore = (state: GameState, action: GameAction): GameState => {
     const [propertyId, ...bankAuctionQueue] = next.bankAuctionQueue;
     const opened = addEvent({ ...next, phase: "awaitingAuction", bankAuctionQueue: bankAuctionQueue.length ? bankAuctionQueue : undefined,
       bankAuctionResumePhase: next.phase as DebtResumePhase,
-      auction: { propertyId: propertyId!, landingPlayerId: next.activePlayerId!, currentBid: 0,
+      auction: { id: next.nextEventId, propertyId: propertyId!, landingPlayerId: next.activePlayerId!, currentBid: 0,
         eligiblePlayerIds: next.players.filter(p => !p.bankrupt).map(p => p.id), passedPlayerIds: [] }
     }, `${getTile(propertyId!, next.boardSize).name} is up for a bank repossession auction.`);
     return startBackedAuction(opened);
@@ -2077,6 +2079,8 @@ const reduceCore = (state: GameState, action: GameAction): GameState => {
 };
 
 export const reduceGame = (state:GameState,action:GameAction):GameState => {
+  // An action from a previous auction can arrive after a new auction opens.
+  if (action.type === "AUCTION_BID" && action.auctionId !== undefined && action.auctionId !== state.auction?.id) return state;
   if (action.type === "MOVE_RESULT") {
     // Reconnected tabs can finish the same dice animation separately.
     if (action.rollId !== undefined && action.rollId !== state.pendingRoll?.id) return state;

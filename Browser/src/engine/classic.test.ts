@@ -64,6 +64,18 @@ describe.each(["classic", "mayor"] as const)("%s base rules", (mode) => {
     s=apply(s,{type:"ROLL",playerId:"p1",dice:[5,5]});expect(p(s).position).toBe(12);expect(p(s).cash).toBe(1460);expect(s.lastRoll!.dice).toEqual([1,2]);
     s=apply(s,{type:"END_TURN",playerId:"p1"});expect(s.activePlayerId).toBe("p2");
   });
+  it("pays the player who owned the utility at landing when it is traded before the rent roll", () => {
+    let s = land(own(table(), "p2", [12]), 9, [1, 2]);
+    s = apply(s, { type: "TRADE_OFFER", playerId: "p2", toPlayerId: "p1", offerId: "utility",
+      offeredPropertyIds: [12], requestedPropertyIds: [], offeredCash: 0, requestedCash: 0 });
+    s = apply(s, { type: "TRADE_ACCEPT", playerId: "p1", offerId: "utility" });
+    expect(s.properties[12]?.ownerId).toBe("p1");
+    expect(s.phase).toBe("awaitingUtilityRoll");
+    s = apply(s, { type: "ROLL", playerId: "p1", dice: [3, 4] });
+    expect(p(s).cash).toBe(1472);
+    expect(p(s, "p2").cash).toBe(1528);
+  });
+
   it("preserves a movement double through the separate utility roll",()=>{
     let s=land(own(table(),"p2",[12]),10,[1,1]);s=apply(s,{type:"ROLL",playerId:"p1",dice:[1,2]});s=apply(s,{type:"END_TURN",playerId:"p1"});expect(s.activePlayerId).toBe("p1");expect(s.phase).toBe("awaitingRoll");
   });
@@ -111,6 +123,32 @@ describe.each(["classic", "mayor"] as const)("%s base rules", (mode) => {
     s=apply(s,{type:"AUCTION_BID",playerId:"p2",amount:30});for(const id of ["p1","p3"])s=apply(s,{type:"AUCTION_BID",playerId:id,pass:true});
     expect(s.properties[3]!.ownerId).toBe("p2");expect(p(s,"p2").cash).toBe(1470);
   });
+  it("does not apply a delayed auction pass to the next bank auction", () => {
+    let s = own(table(4), "p2", [1, 3], 0, true);
+    s.phase = "awaitingDebt";
+    s.debts = [{ playerId: "p2", creditorId: "bank", amount: 10, reason: "tax" }];
+    p(s, "p2").cash = -10;
+    s = apply(s, { type: "BANKRUPT", playerId: "p2" });
+    const auctionId = s.auction?.id;
+    expect(auctionId).toBeDefined();
+    const pass = { type: "AUCTION_BID", playerId: "p1", auctionId, pass: true } as const;
+    s = apply(s, pass);
+    for (const id of ["p3", "p4"]) s = apply(s, { ...pass, playerId: id });
+    expect(s.auction?.propertyId).toBe(3);
+    expect(s.auction?.id).not.toBe(auctionId);
+    expect(reduceGame(s, pass)).toBe(s);
+    expect(s.auction?.passedPlayerIds).toEqual([]);
+  });
+
+  it("sells the listed deed even if a bid carries an unrelated building target", () => {
+    let s = land(own(table(), "p3", [1]), 0, [1, 2]);
+    s = apply(s, { type: "DECLINE_BUY", playerId: "p1" });
+    s = apply(s, { type: "AUCTION_BID", playerId: "p2", amount: 10, propertyId: 1 });
+    for (const id of ["p1", "p3"]) s = apply(s, { type: "AUCTION_BID", playerId: id, pass: true });
+    expect(s.properties[1]?.ownerId).toBe("p3");
+    expect(s.properties[3]?.ownerId).toBe("p2");
+  });
+
   it("auctions the last house among eligible owners and builds at the winner's chosen target",()=>{
     let s=own(own(table(),"p1",[1,3]),"p2",[6,8,9]);s.bankHouses=1;
     s=apply(s,{type:"BUILD",playerId:"p1",propertyId:1,operation:"build"});expect(s.auction?.kind).toBe("house");

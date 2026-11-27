@@ -3,6 +3,7 @@ import type { CSSProperties, PointerEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { getBoard, getTile } from "../engine/board";
 import { formatRupees as money } from "../engine/currency";
+import { classicSpendableCash } from "../engine/classic";
 import {
   canChallengeCityProject, CITY_CONTRACTS, CITY_POLICIES, cityLoanAvailable, cityLoanReason, cityPolicyAvailable,
   cityStable, councilSpeaker, councilVoteThreshold, districtName, DUEL_VETO_COST, fortPosition, LOAN_REPAYMENT,
@@ -62,6 +63,7 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
   const stable = available && cityStable(game) && !!local && !local.bankrupt;
   const taxReady = available && !!local && !local.bankrupt && !game.debts?.length &&
     game.phase !== "lobby" && game.phase !== "gameOver" && game.phase !== "awaitingAuction";
+  const taxMoney = classicSpendableCash(game, localId);
   const office = localId === desk.mayorId;
   const rivals = game.players.filter(player => !player.bankrupt && player.id !== localId);
   const proposal = desk.proposal;
@@ -116,20 +118,20 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
               {openBills.map((bill, idx) => <div className="city-bill" key={`open-${bill.round}-${bill.id ?? idx}`}>
                 <div><b>{money(bill.amount)} levy (Round {bill.round})</b><small>Open · pay now or defer (never auto-pays unless caught by Mayor)</small></div>
                 <div className="city-actions">
-                  <button type="button" disabled={!taxReady || local!.cash < bill.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: bill.round, billId: bill.id ?? null })}>Pay {money(bill.amount)}</button>
+                  <button type="button" disabled={!taxReady || taxMoney < bill.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: bill.round, billId: bill.id ?? null })}>Pay {money(bill.amount)}</button>
                   <button type="button" disabled={!taxReady} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: bill.round, billId: bill.id ?? null })}>Defer</button>
                 </div>
               </div>)}
               {deferredBills.length === 1 && <div className="city-bill">
                 <div><b>{money(deferredBills[0]!.amount)} deferred levy (Round {deferredBills[0]!.round})</b><small>Deferred · never auto-pays! Pay yourself or risk {money(myNextFine)} fine if Mayor audits you</small></div>
                 <div className="city-actions">
-                  <button type="button" disabled={!taxReady || local!.cash < deferredBills[0]!.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: deferredBills[0]!.round, billId: deferredBills[0]!.id ?? null })}>Pay {money(deferredBills[0]!.amount)}</button>
+                  <button type="button" disabled={!taxReady || taxMoney < deferredBills[0]!.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: deferredBills[0]!.round, billId: deferredBills[0]!.id ?? null })}>Pay {money(deferredBills[0]!.amount)}</button>
                 </div>
               </div>}
               {deferredBills.length > 1 && <div className="city-bill">
                 <div><b>{money(deferredTotal)} total deferred tax ({deferredBills.length} bills)</b><small>Deferred · never auto-pays! Pay yourself or risk {money(myNextFine)} fine if Mayor audits you</small></div>
                 <div className="city-actions">
-                  <button type="button" disabled={!taxReady || local!.cash < deferredTotal} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: desk.round, billId: -1 })}>Pay all {money(deferredTotal)}</button>
+                  <button type="button" disabled={!taxReady || taxMoney < deferredTotal} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: desk.round, billId: -1 })}>Pay all {money(deferredTotal)}</button>
                 </div>
               </div>}
             </>;
@@ -258,7 +260,7 @@ export function CityTaxPrompt({ game, localId, available, hidden, openCityHall, 
       <span>Pay now, or defer (never auto-pays · {money(fine)} fine if Mayor audits you)</span>
     </div>
     <div className="city-actions">
-      <button type="button" disabled={!ready || local.cash < openBill.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: openBill.round, billId: openBill.id ?? null })}>Pay {money(openBill.amount)}</button>
+      <button type="button" disabled={!ready || classicSpendableCash(game, localId) < openBill.amount} onClick={() => sendAction({ type: "CITY_PAY_TAX", playerId: localId, round: openBill.round, billId: openBill.id ?? null })}>Pay {money(openBill.amount)}</button>
       <button type="button" className="city-secondary" disabled={!ready} onClick={() => sendAction({ type: "CITY_DEFER_TAX", playerId: localId, round: openBill.round, billId: openBill.id ?? null })}>Defer tax</button>
     </div>
   </aside>;

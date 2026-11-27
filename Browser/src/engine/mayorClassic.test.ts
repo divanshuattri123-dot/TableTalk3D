@@ -8,15 +8,16 @@ import { createInitialState, reduceGame } from "./reducer";
 import type { GameAction, GameState } from "./types";
 
 const order = Array.from({ length: 16 }, (_, index) => index);
-function table() {
+function table(fourth = false) {
   let state = createInitialState("CITY");
   for (const [id, color] of [["p1", "red"], ["p2", "blue"], ["p3", "green"]] as const) {
     state = reduceGame(state, { type: "JOIN", player: { id, name: id, color } });
   }
+  if (fourth) state = reduceGame(state, { type: "JOIN", player: { id: "p4", name: "p4", color: "orange" } });
   state = reduceGame(state, { type: "SET_MODE", playerId: "p1", mode: "mayor", mayorClassic: true });
   return apply(state, {
     type: "START", playerId: "p1", firstPlayerId: "p1",
-    setupRolls: [[{ playerId: "p1", dice: [6, 6] }, { playerId: "p2", dice: [1, 2] }, { playerId: "p3", dice: [3, 4] }]],
+    setupRolls: [[{ playerId: "p1", dice: [6, 6] }, { playerId: "p2", dice: [1, 2] }, { playerId: "p3", dice: [3, 4] }, ...(fourth ? [{ playerId: "p4", dice: [2, 3] as const }] : [])]],
     deckOrder: { chance: order, community: order }
   });
 }
@@ -35,6 +36,52 @@ function seeded(seed: number) {
 }
 
 describe("City Hall on the Classic table", () => {
+  it("counts only solvent council voters after a player goes bankrupt", () => {
+    let state = table(true);
+    state = apply(state, { type: "CITY_PROPOSE", playerId: "p1", term: 1, policy: "rent-relief", district: "brown" });
+    const proposalId = state.mayor!.proposal!.id;
+    state = apply(state, { type: "CITY_VOTE", playerId: "p2", term: 1, proposalId });
+    state.players[1]!.cash = -20;
+    state.phase = "awaitingDebt";
+    state.debtResumePhase = "awaitingRoll";
+    state.debts = [{ playerId: "p2", creditorId: "bank", reason: "tax", amount: 20 }];
+    state = apply(state, { type: "BANKRUPT", playerId: "p2" });
+    state = apply(state, { type: "CITY_VOTE", playerId: "p3", term: 1, proposalId });
+    expect(state.mayor?.proposal?.votes).toEqual(["p3"]);
+    expect(state.mayor?.policy?.kind).toBe("rent-relief");
+    state = apply(state, { type: "CITY_VOTE", playerId: "p4", term: 1, proposalId });
+    expect(state.mayor?.policy).toBeUndefined();
+  });
+
+  it("keeps auction funds reserved when the leading bidder pays taxes during a mortgage decision", () => {
+    const state = table();
+    state.phase = "awaitingMortgageDecision";
+    state.mortgageResumePhase = "awaitingAuction";
+    state.mortgageTransfers = [{ playerId: "p2", propertyIds: [6] }];
+    state.properties[6] = { ownerId: "p2", houses: 0, mortgaged: true };
+    state.players[1]!.cash = 110;
+    state.auction = { propertyId: 3, landingPlayerId: "p1", currentBid: 100, highestBidderId: "p2",
+      eligiblePlayerIds: ["p1", "p2", "p3"], passedPlayerIds: [] };
+    state.mayor!.seats.p2!.bills = [{ round: 1, amount: 20, dueTurn: 2, status: "open" }];
+    const next = reduceGame(state, { type: "CITY_PAY_TAX", playerId: "p2", round: 1 });
+    expect(next.players[1]!.cash).toBe(110);
+    expect(next.mayor!.treasury).toBe(400);
+    expect(next.mayor!.seats.p2!.bills).toEqual(state.mayor!.seats.p2!.bills);
+    expect(next.eventLog[0]).toMatchObject({ kind: "error", privateTo: "p2" });
+  });
+
+  it("can repay a city loan down to the last paise", () => {
+    let state = table();
+    state.players[1]!.cash = 0.30;
+    state.mayor!.seats.p2!.loanDue = 2;
+    state.mayor!.seats.p2!.loanAmountDue = 0.30;
+    state = apply(state, { type: "CITY_REPAY_LOAN", playerId: "p2", amount: 0.10 });
+    expect(state.players[1]!.cash).toBe(0.20);
+    state = apply(state, { type: "CITY_REPAY_LOAN", playerId: "p2", amount: 0.20 });
+    expect(state.players[1]!.cash).toBe(0);
+    expect(cityLoanBalance(state, "p2")).toBe(0);
+  });
+
   it("taxes rent at 50%, 60%, and 70% across the three bands without a ₹200 cap", () => {
     expect([0, 50, 100, 150, 200, 300, 500].map(rent => cityTax(rent, true))).toEqual([0, 25, 50, 80, 110, 180, 320]);
     let state = table();

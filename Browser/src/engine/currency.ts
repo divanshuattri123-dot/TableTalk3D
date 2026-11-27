@@ -1,3 +1,5 @@
+export const roundRupees = (value: number): number => Math.round(value * 100) / 100;
+
 export const formatRupees = (value: number): string => {
   const cents = Math.round(Math.abs(value) * 100);
   const whole = Math.floor(cents / 100).toString();

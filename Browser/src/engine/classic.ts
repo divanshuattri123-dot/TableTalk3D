@@ -1,6 +1,6 @@
 import { BOARD, colorGroupTiles, getBoard, getPurchasableTile, isPurchasableTile, railroadPositions, utilityPositions } from "./board";
 import { CLASSIC_CARDS, jailCardIndex } from "./classicCards";
-import { formatRupees as money } from "./currency";
+import { formatRupees as money, roundRupees as cents } from "./currency";
 import {
   applyCityLoanPayment, auctionCredit, bookCityLoan, cityAuctionBacking, cityHasSeizedDeeds, cityLoanBalance,
   cityLoanTotal, citySeizedOwner, permitPaused, propertyPermitLocked, recordRent, rentRelief, trainOffer, updateCitySeat
@@ -12,7 +12,6 @@ function requireRule(ok: unknown, text: string): asserts ok { if (!ok) throw new
 const whole = (n: number) => Number.isSafeInteger(n) && n >= 0;
 const validDice = (dice: Dice) => dice.length === 2 && dice.every(n => Number.isInteger(n) && n >= 1 && n <= 6);
 const cashAmount = (n: number) => Number.isFinite(n) && n >= 0 && Number.isSafeInteger(Math.round(n * 100)) && Math.abs(n * 100 - Math.round(n * 100)) < .00001;
-const cents = (n: number) => Math.round(n*100)/100;
 const owner = (s: GameState, id: string) => s.players.find(p => p.id === id)!;
 const group = (tile: StreetTile) => colorGroupTiles(tile.group, 40);
 const held = (p: Player) => p.jailCardDecks ?? [];
@@ -26,8 +25,8 @@ const live = (s: GameState) => s.players.filter(p => !p.bankrupt);
 const buildingValue = (s: GameState, tile: StreetTile) => (s.properties[tile.position]!.buildingCosts ?? Array(s.properties[tile.position]!.houses).fill(tile.houseCost)).reduce((n,cost)=>n+cost,0);
 const normalPhases = ["awaitingRoll", "awaitingEndTurn", "awaitingBuy", "awaitingJailPayment", "awaitingUtilityRoll", "awaitingAuction"];
 
-export const classicSpendableCash = (s: GameState, id: string) => (owner(s, id)?.cash ?? 0) -
-  [s.auction, s.suspendedAuction].reduce((n, a) => n + (a?.highestBidderId === id ? a.currentBid : 0), 0);
+export const classicSpendableCash = (s: GameState, id: string) => cents((owner(s, id)?.cash ?? 0) -
+  [s.auction, s.suspendedAuction].reduce((n, a) => n + (a?.highestBidderId === id ? a.currentBid : 0), 0));
 export const classicLiquidationValue = (s: GameState, id: string) => getBoard(s.boardSize).reduce((n, tile) => {
   const p = s.properties[tile.position];
   return !isPurchasableTile(tile) || p?.ownerId !== id || citySeizedOwner(s, tile.position) ? n : n + (p.mortgaged ? 0 : tile.mortgageValue) +
@@ -155,7 +154,7 @@ class Table {
       if (!deed.ownerId) { this.s.phase = "awaitingBuy"; this.s.pendingPurchase = { playerId: id, propertyId: p.position }; return; }
       if (deed.ownerId === id || deed.mortgaged) { this.endLanding(); return; }
       if (tile.kind === "utility") {
-        this.s.pendingUtility = { playerId: id, propertyId: p.position, multiplier: multiplier ?? (utilityPositions(40).every(i => this.s.properties[i]!.ownerId === deed.ownerId) ? 10 : 4) };
+        this.s.pendingUtility = { playerId: id, propertyId: p.position, ownerId: deed.ownerId, multiplier: multiplier ?? (utilityPositions(40).every(i => this.s.properties[i]!.ownerId === deed.ownerId) ? 10 : 4) };
         this.s.phase = "awaitingUtilityRoll"; return;
       }
       this.chargeRent(id, deed.ownerId, p.position, this.rent(p.position, this.s.lastRoll?.total ?? 0) * (multiplier ?? 1));
@@ -198,7 +197,11 @@ class Table {
       this.active(id,"awaitingUtilityRoll"); const rent = this.s.pendingUtility!;
       this.s.lastUtilityRoll = { playerId: id, dice: [...dice] as Dice, eventId: this.s.nextEventId };
       this.event(`${this.player(id).name} rolled ${dice.join(" + ")} for utility rent.`, "turn", { playerId: id });
-      this.chargeRent(id,this.s.properties[rent.propertyId]!.ownerId!,rent.propertyId,(dice[0]+dice[1])*rent.multiplier);
+      // Rent belongs to the owner at landing, even if they trade the deed during this roll.
+      const creditor = rent.ownerId ?? this.s.properties[rent.propertyId]?.ownerId;
+      if (creditor && creditor !== id && live(this.s).some(player => player.id === creditor)) {
+        this.chargeRent(id, creditor, rent.propertyId, (dice[0] + dice[1]) * rent.multiplier);
+      }
       this.s.pendingUtility = undefined; this.endLanding(); return;
     }
     const p = this.active(id,"awaitingRoll"), doubles = dice[0] === dice[1];
@@ -259,7 +262,7 @@ class Table {
     }
   }
   auction(propertyId: number, kind: AuctionState["kind"] = "property", targets?: Record<string,number[]>) {
-    this.s.auction={ propertyId, kind, currentBid:0, landingPlayerId:this.s.activePlayerId!, eligiblePlayerIds:targets?Object.keys(targets):live(this.s).map(p=>p.id), passedPlayerIds:[], buildTargets:targets };
+    this.s.auction={ id: this.s.nextEventId, propertyId, kind, currentBid:0, landingPlayerId:this.s.activePlayerId!, eligiblePlayerIds:targets?Object.keys(targets):live(this.s).map(p=>p.id), passedPlayerIds:[], buildTargets:targets };
     const backing = cityAuctionBacking(this.s);
     if (backing) {
       this.s.auction.cityBacking = backing;
@@ -276,7 +279,9 @@ class Table {
   finishAuction(stillAvailable = true) {
     const a=this.s.auction!, winner=a.highestBidderId;
     if (winner) {
-      const id=a.winningTarget ?? a.propertyId, tile=getPurchasableTile(id,40)!;
+      const building = a.kind === "house" || a.kind === "hotel";
+      const id = building ? a.winningTarget ?? a.propertyId : a.propertyId;
+      const tile = getPurchasableTile(id, 40)!;
       this.s.auction=undefined;
       const shortfall = cents(a.currentBid - classicSpendableCash(this.s, winner));
       if (shortfall > 0) {
@@ -285,7 +290,7 @@ class Table {
         this.credit(winner, shortfall);
       }
       this.spend(winner,a.currentBid);
-      if (a.kind==="house" || a.kind==="hotel") {
+      if (building) {
         requireRule(buildable(this.s,winner,id,a.kind==="hotel"),"The winning building target is no longer legal.");
         this.addBuilding(id,a.currentBid);
       } else if (a.seizedFromId) {
@@ -320,7 +325,7 @@ class Table {
     else {
       const amount=action.amount ?? -1, available=classicSpendableCash(this.s, p.id)+this.auctionCredit(a, p.id);
       requireRule(whole(amount) && amount>=Math.max(10,a.currentBid+1) && amount<=available,"Bids must open at ₹10, increase and be affordable.");
-      const target=action.propertyId ?? a.buildTargets?.[p.id]?.[0] ?? a.propertyId;
+      const target = a.buildTargets ? action.propertyId ?? a.buildTargets[p.id]?.[0] ?? a.propertyId : a.propertyId;
       if (a.buildTargets) requireRule(a.buildTargets[p.id]?.includes(target) && buildable(this.s,p.id,target,a.kind==="hotel"),"Choose a legal building target.");
       a.currentBid=amount; a.highestBidderId=p.id; a.winningTarget=target; a.passedPlayerIds=[];
       this.event(`${p.name} bid ${money(amount)}.`,"info",{playerId:p.id,position:target});

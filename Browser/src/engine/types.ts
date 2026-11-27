@@ -124,6 +124,7 @@ export interface PendingPurchase {
 }
 
 export interface AuctionState {
+  id?: number;
   cityBacking?: { limit: number; playerIds: string[] };
   seizedFromId?: string;
   kind?: "property" | "house" | "hotel";
@@ -191,7 +192,7 @@ export interface GameState {
   mode?: GameMode;
   decks?: Record<CardDeck, number[]>;
   setupRolls?: SetupRoll[][];
-  pendingUtility?: { playerId: string; propertyId: number; multiplier: number };
+  pendingUtility?: { playerId: string; propertyId: number; ownerId?: string; multiplier: number };
   lastUtilityRoll?: { playerId: string; dice: Dice; eventId: number };
   mortgageTransfers?: { playerId: string; propertyIds: number[] }[];
   mortgageResumePhase?: DebtResumePhase;
@@ -252,7 +253,7 @@ export type GameAction =
   | { type: "RESOLVE_MORTGAGES"; playerId: string; redeemPropertyIds: number[] }
   | { type: "END_TURN"; playerId: string }
   | { type: "BANKRUPT"; playerId: string }
-  | { type: "AUCTION_BID"; playerId: string; amount?: number; pass?: boolean; propertyId?: number }
+  | { type: "AUCTION_BID"; playerId: string; auctionId?: number; amount?: number; pass?: boolean; propertyId?: number }
   | {
       type: "TRADE_OFFER";
       playerId: string;
