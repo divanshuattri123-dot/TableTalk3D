@@ -1,5 +1,7 @@
 import type { ColorGroup } from "../engine/types";
 
+export const PERMIT_PAUSE_COLOR = "#a86ed6";
+
 export const GROUP_COLORS: Record<ColorGroup, string> = {
   brown: "#85513d", lightBlue: "#74cae7", pink: "#e36aa0", orange: "#ec8f35",
   red: "#da5348", yellow: "#e4c745", green: "#2c9170", darkBlue: "#36559f",

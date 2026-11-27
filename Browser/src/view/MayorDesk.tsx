@@ -6,7 +6,7 @@ import { formatRupees as money } from "../engine/currency";
 import {
   canChallengeCityProject, CITY_CONTRACTS, CITY_POLICIES, cityLoanAvailable, cityLoanReason, cityPolicyAvailable,
   cityStable, councilSpeaker, councilVoteThreshold, districtName, DUEL_VETO_COST, fortPosition, LOAN_REPAYMENT,
-  cityLoanBalance, MAX_AUDITS_PER_TERM, OFFICE_PROJECTS, mayorAuditsLeft, nextAuditFine, reserveLevy, WHEEL_SECTIONS
+  cityLoanBalance, MAX_AUDITS_PER_TERM, OFFICE_PROJECTS, mayorAuditsLeft, nextAuditFine, nextAuditMiss, reserveLevy, WHEEL_SECTIONS
 } from "../engine/mayor";
 import type { CityAction, CityPolicy, WheelDecision } from "../engine/mayor";
 import type { ColorGroup, GameState } from "../engine/types";
@@ -79,6 +79,7 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
   const loanNote = cityLoanReason(game, localId);
   const auditsLeft = desk.office ? Infinity : mayorAuditsLeft(desk);
   const myNextFine = nextAuditFine(seat);
+  const nextMissFine = desk.higherTax ? nextAuditMiss(seat).fine : 25;
   const threshold = councilVoteThreshold(game);
   const isDuel = seatCount === 2;
   const canVote = canChallengeCityProject(game, localId);
@@ -153,8 +154,9 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
         {office && local && !local.bankrupt && game.phase !== "gameOver" && <section aria-label="Mayor's decisions">
           <h3>Your decisions as Mayor</h3>
           {auditsLeft <= 0 ? <p>Both audit warrants have been used this term.</p> :
-            <><p><b>{desk.office ? "You can audit repeatedly." : auditsLeft + " of " + MAX_AUDITS_PER_TERM + " warrants left this term."}</b> Deferred tax is only paid if they pay voluntarily or you catch them! Fines double every catch (₹25 → ₹50 → ₹100…) across the whole match, plus you earn a ₹25 raid bonus. Clear records cost you ₹25.</p>
-              {desk.tip ? <p>{desk.tip.length ? `Intelligence tip: unpaid deferred tax spotted on ${desk.tip.map(localName).join(" or ")}.` : "No deferred levies are open right now — auditing clean records costs you ₹25."}</p> :
+            <><p><b>{desk.office ? "You can audit repeatedly." : auditsLeft + " of " + MAX_AUDITS_PER_TERM + " warrants left this term."}</b> Deferred tax is only paid if they pay voluntarily or you catch them! Fines double every catch (₹25 → ₹50 → ₹100…) across the whole match, plus you earn a ₹25 raid bonus. Clear records cost you {money(nextMissFine)} on your next missed audit.</p>
+              {desk.higherTax && <p>Two consecutive misses cost ₹25 each. The third costs ₹50, and later misses double your compensation. The penalty stays with you across terms. Open bills can also be caught once overdue.</p>}
+              {desk.tip ? <p>{desk.tip.length ? `Intelligence tip: unpaid deferred tax spotted on ${desk.tip.map(localName).join(" or ")}.` : "No audit-eligible levies were found."}</p> :
                 <div className="city-actions"><button type="button" disabled={!stable || !!desk.office?.investigationUsed} onClick={() => sendAction({ type: "CITY_TIP", playerId: localId, term: desk.term })}>Investigate for a tip</button></div>}
               <div className="city-actions" aria-label="Choose a rival for the warrant">{rivals.map(player => <button type="button" key={player.id} disabled={!stable} onClick={() => sendAction({ type: "CITY_AUDIT", playerId: localId, term: desk.term, targetId: player.id })}>Audit {player.name} ({money(nextAuditFine(desk.seats[player.id]))} fine)</button>)}</div>
             </>}
@@ -198,7 +200,7 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
         <section aria-label="City headlines"><h3>City headlines</h3>
           {journal.length ? <ol className="city-journal">{journal.map(event => <li key={event.id}>{event.text}</li>)}</ol> : <p>The city is watching the first deals.</p>}
         </section>
-        <details><summary>How Mayor Mode & Levies work</summary><p>Classic 40 with City Hall. Whenever a non-Mayor collects rent, a city levy is issued immediately (10% up to ₹200, 20% from ₹200–₹300, 40% above ₹300, max ₹200/round).</p><p>Deferred levies never pay automatically — you only pay if you choose to pay yourself or if the Mayor catches you with an Audit Warrant! Audit fines start at ₹25 and double every time you are caught (₹25 → ₹50 → ₹100 → ₹200…) across the entire match, even when the Mayor changes.</p></details>
+        <details><summary>How Mayor Mode & Levies work</summary><p>Classic 40 with City Hall. Whenever a non-Mayor collects rent, a city levy is issued immediately ({desk.higherTax ? "50% on the first ₹100, 60% on the next ₹100, and 70% above ₹200" : "10% up to ₹200, 20% from ₹200–₹300, 40% above ₹300, up to ₹200 per round"}).</p><p>Deferred levies never pay automatically — you only pay if you choose to pay yourself or if the Mayor catches you with an Audit Warrant! Audit fines start at ₹25 and double every time you are caught (₹25 → ₹50 → ₹100 → ₹200…) across the entire match, even when the Mayor changes.</p></details>
       </div>
     </CityModal>}
   </>;

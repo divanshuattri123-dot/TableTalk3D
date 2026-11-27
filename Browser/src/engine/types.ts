@@ -110,6 +110,7 @@ export interface PropertyState {
 }
 
 export interface PendingRoll {
+  id?: number;
   playerId: string;
   dice: Dice;
   total: number;
@@ -207,6 +208,7 @@ export interface GameState {
   bankHotels: number;
   consecutiveDoubles: number;
   pendingRoll?: PendingRoll;
+  rollSequence?: number;
   pendingPurchase?: PendingPurchase;
   auction?: AuctionState;
   bankAuctionQueue?: number[];
@@ -236,7 +238,7 @@ export type GameAction =
   | { type: "SET_APPEARANCE"; playerId: string; tokenId?: string; diceId?: string; color?: string }
   | { type: "START"; playerId: string; firstPlayerId: string; setupRolls?: SetupRoll[][]; deckOrder?: Record<CardDeck, number[]> }
   | { type: "ROLL"; playerId: string; dice: Dice }
-  | { type: "MOVE_RESULT"; playerId: string; cardDraws?: CardDraw[] }
+  | { type: "MOVE_RESULT"; playerId: string; rollId?: number; cardDraws?: CardDraw[] }
   | { type: "BUY"; playerId: string; propertyId: number }
   | { type: "DECLINE_BUY"; playerId: string }
   | {

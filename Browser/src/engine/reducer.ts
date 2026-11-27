@@ -15,8 +15,8 @@ import {
 import { formatRupees } from "./currency";
 import {
   AUDIT_FINE, DUEL_VETO_COST, MAYOR_STIPEND, MAX_AUDITS_PER_TERM, CITY_CONTRACTS, CITY_CONTRACT_REWARD, CITY_POLICIES, LOAN_AMOUNT, LOAN_REPAYMENT, TRAIN_FARE, WHEEL_SECTIONS,
-  advanceCityRound, applyCityLoanPayment, auctionCredit, bookCityLoan, canChallengeCityProject, cityAuctionBacking, cityContractReady, cityLoanAvailable, cityLoanTotal,
-  cityPolicyAvailable, cityStable, councilSpeaker, councilVoteThreshold, nextAuditFine, mayorAuditsLeft, districtName, fortPosition, newTerm, nextCityTurn,
+  advanceCityRound, applyCityLoanPayment, auctionCredit, bookCityLoan, canChallengeCityProject, cityAuditBills, cityAuctionBacking, cityContractReady, cityLoanAvailable, cityLoanTotal,
+  cityPolicyAvailable, cityStable, councilSpeaker, councilVoteThreshold, nextAuditFine, nextAuditMiss, mayorAuditsLeft, districtName, fortPosition, newTerm, nextCityTurn,
   MAYOR_MOVE_SPACES, PERMIT_LOCK_COUNT, cityHasSeizedDeeds, cityLoanBalance, citySeizedOwner,
   mayorCanGrantLoan, mayorCanReleaseJail, nextMayor, permitPaused, propertyPermitLocked,
   recordRent, rentRelief, reserveLevy, startCity, trainOffer, updateCitySeat
@@ -728,7 +728,7 @@ const handleStart = (state: GameState, action: Extract<GameAction, { type: "STAR
     }, action);
     if (next.notice) return reject(state, next.notice);
     if (state.mode !== "mayor") return next;
-    const city = { ...next, mayor: startCity(next.players, action.firstPlayerId, state.mayorOffice) };
+    const city = { ...next, mayor: startCity(next.players, action.firstPlayerId, state.mayorOffice, state.mayorClassic) };
     return city;
   }
   return addEvent(
@@ -749,7 +749,10 @@ const handleRoll = (state: GameState, action: Extract<GameAction, { type: "ROLL"
   }
   const total = action.dice[0] + action.dice[1];
   const doubles = action.dice[0] === action.dice[1];
+  const rollSequence = (state.rollSequence ?? 0) + 1;
+  state = { ...state, rollSequence };
   const roll = {
+    id: rollSequence,
     playerId: action.playerId,
     dice: action.dice,
     total,
@@ -1496,7 +1499,7 @@ function auditCity(state: GameState, targetId: string): GameState {
   const mayor = playerById(state, desk.mayorId)!;
   const target = playerById(state, targetId)!;
   const instant = usesCityDecrees(state);
-  const bills = desk.seats[targetId]?.bills.filter(entry => entry.status === "deferred") ?? [];
+  const bills = cityAuditBills(state, targetId);
   const deferred = instant ? bills : bills.slice(0, 1);
   const auditsUsed = (desk.auditsUsed ?? 0) + 1;
   let next: GameState = {
@@ -1505,10 +1508,16 @@ function auditCity(state: GameState, targetId: string): GameState {
     }
   };
   if (!deferred.length) {
-    next = civicEvent(next, `Clear records. ${mayor.name} owes ${target.name} ${formatRupees(AUDIT_FINE)} for the failed raid.`, "raid",
-      { playerId: mayor.id, recipientId: target.id, position: target.position, amount: AUDIT_FINE });
-    return makePayment(next, mayor.id, target.id, AUDIT_FINE, "as compensation for a failed raid");
+    const miss = nextAuditMiss(desk.seats[mayor.id]);
+    const fine = desk.higherTax ? miss.fine : AUDIT_FINE;
+    if (desk.higherTax) {
+      next = updateCitySeat(next, mayor.id, seat => ({ ...seat, auditMissStreak: miss.auditMissStreak, auditMissDoublings: miss.auditMissDoublings }));
+    }
+    next = civicEvent(next, "Clear records. " + mayor.name + " owes " + target.name + " " + formatRupees(fine) + " for the failed raid.", "raid",
+      { playerId: mayor.id, recipientId: target.id, position: target.position, amount: fine });
+    return makePayment(next, mayor.id, target.id, fine, "as compensation for a failed raid");
   }
+  if (desk.higherTax) next = updateCitySeat(next, mayor.id, seat => ({ ...seat, auditMissStreak: undefined }));
   const unpaid = deferred.reduce((total, entry) => total + entry.amount, 0);
   const fine = instant ? nextAuditFine(desk.seats[targetId]) : AUDIT_FINE;
   const caughtCount = (desk.seats[targetId]?.caughtCount ?? 0) + 1;
@@ -1652,7 +1661,7 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
     case "CITY_TIP": {
       if (!office || desk.auditUsed || desk.tip || desk.office?.investigationUsed || solvent.length < (instant ? 2 : 3)) return reject(state, "One investigation is available per term while your warrant is unused.");
       const rivals = solvent.filter(candidate => candidate.id !== id);
-      const suspect = rivals.find(candidate => desk.seats[candidate.id]?.bills.some(bill => bill.status === "deferred"));
+      const suspect = rivals.find(candidate => cityAuditBills(state, candidate.id).length > 0);
       const second = rivals.find(candidate => candidate.id !== suspect?.id);
       const tip = suspect ? second ? [suspect.id, second.id].sort() : instant ? [suspect.id] : [] : [];
       const next: GameState = { ...state, mayor: { ...desk, tip,
@@ -2069,6 +2078,11 @@ const reduceCore = (state: GameState, action: GameAction): GameState => {
 };
 
 export const reduceGame = (state:GameState,action:GameAction):GameState => {
+  if (action.type === "MOVE_RESULT") {
+    // Reconnected tabs can finish the same dice animation separately.
+    if (action.rollId !== undefined && action.rollId !== state.pendingRoll?.id) return state;
+    if (!state.pendingRoll && state.lastRoll?.playerId === action.playerId) return state;
+  }
   let next=reduceCore(state,action);
   if(!next.notice&&next.activePlayerId!==state.activePlayerId)
     next={...next,players:next.players.map(p=>p.bot&&p.id===next.activePlayerId?{...p,botTradeOffered:false}:p)};

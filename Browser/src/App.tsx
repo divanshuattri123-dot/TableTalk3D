@@ -30,7 +30,7 @@ import {rollDice} from './network/random';
 import { isPlayerColorTaken, playerColorKey } from "./engine/playerColors";
 import { usePresentation } from "./presentation/usePresentation";
 import { CityHall, CityHeadline, CityTaxPrompt, CityVotePrompt, FortWheel } from "./view/MayorDesk";
-import { cityLoanAvailable, citySeizedOwner, cityStable, councilSpeaker, fortPosition, permitPaused, propertyPermitLocked, rentReliefActive, trainOffer } from "./engine/mayor";
+import { cityLoanAvailable, citySeizedOwner, cityStable, councilSpeaker, fortPosition, permitPaused, permitPauseActive, propertyPermitLocked, rentReliefActive, trainOffer } from "./engine/mayor";
 import { presentationInteractionBusy } from "./presentation/timeline";
 import { shouldSendMove } from "./presentation/plan";
 import EventStage, { PlayerPortrait } from "./view/EventStage";
@@ -373,13 +373,13 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
 
   const me = game?.players.find((player) => player.id === session.player.id);
   const moveKey = game?.phase === "awaitingMove" && game.pendingRoll && me && game.pendingRoll.playerId === me.id
-    ? `${game.nextEventId}-${game.pendingRoll.dice.join("-")}` : "";
+    ? `${game.pendingRoll.id ?? game.nextEventId}-${game.pendingRoll.dice.join("-")}` : "";
 
   useEffect(() => {
     if (!game || !me || !sceneUsable || !moveKey || sentMove.current === moveKey || connection !== "connected" || !shouldSendMove(game, me.id, motion.busy, motion.visible)) return;
     const dispatchMove = () => {
       if (sentMove.current === moveKey) return true;
-      if (sendAction({ type: "MOVE_RESULT", playerId: me.id, cardDraws: makeCardDraws(game, me) })) {
+      if (sendAction({ type: "MOVE_RESULT", playerId: me.id, rollId: game.pendingRoll?.id, cardDraws: makeCardDraws(game, me) })) {
         sentMove.current = moveKey;
         return true;
       }
@@ -561,13 +561,14 @@ function Board({ game, current, onSelect }: { game: GameState; current?: Player;
           const side = tile.position < sideLength ? "bottom" : tile.position < sideLength * 2 ? "left" : tile.position < sideLength * 3 ? "top" : "right";
           const tileStyle = { ...tileGridPosition(tile.position, game.boardSize), "--tile-color": stripe, "--owner-color": owner?.color } as CSSProperties;
           const isRelief = rentReliefActive(game, tile);
+          const paused = permitPauseActive(game, tile);
           return (
             <article
-              className={`board-tile ${tile.kind} ${property?.ownerId ? "owned" : ""} ${property?.mortgaged ? "mortgaged" : ""} ${isRelief ? "rent-relief" : ""}`}
+              className={`board-tile ${tile.kind} ${property?.ownerId ? "owned" : ""} ${property?.mortgaged ? "mortgaged" : ""} ${paused ? "permit-pause" : isRelief ? "rent-relief" : ""}`}
               data-side={side}
               key={tile.position}
               style={tileStyle}
-              title={[tile.name, tile.region, tile.detail, isRelief ? "Rent Relief active · 50% off rent" : ""].filter(Boolean).join(" · ")}
+              title={[tile.name, tile.region, tile.detail, paused ? "Permit Pause active" : "", isRelief ? "Rent Relief active · 50% off rent" : ""].filter(Boolean).join(" · ")}
               role="button"
               tabIndex={0}
               aria-label={`Inspect ${tile.name}${tile.region ? `, ${tile.region}` : ""}${tile.detail ? `, ${tile.detail}` : ""}`}

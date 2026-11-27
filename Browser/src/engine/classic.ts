@@ -202,7 +202,8 @@ class Table {
       this.s.pendingUtility = undefined; this.endLanding(); return;
     }
     const p = this.active(id,"awaitingRoll"), doubles = dice[0] === dice[1];
-    const roll = { playerId: id, dice: [...dice] as Dice, total: dice[0]+dice[1], doubles, grantsExtraRoll: doubles && !p.inJail };
+    this.s.rollSequence = (this.s.rollSequence ?? 0) + 1;
+    const roll = { id: this.s.rollSequence, playerId: id, dice: [...dice] as Dice, total: dice[0]+dice[1], doubles, grantsExtraRoll: doubles && !p.inJail };
     this.s.card = undefined; this.s.lastRoll = roll;
     this.event(`${p.name} rolled ${dice.join(" + ")}.`, "turn", { playerId: id });
     if (p.inJail) {

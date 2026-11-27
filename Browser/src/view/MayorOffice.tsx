@@ -30,10 +30,10 @@ export default function MayorOffice({game, localId, available, jailAvailable, se
     {(inOffice || office.permitPropertyIds?.length) && <section aria-label="Permit Pause">
       <h3>Permit Pause</h3>
       {office.permitPropertyIds ? <>
-        <p>Building is paused on these streets until a different Mayor takes office.</p>
+        <p>The streets marked purple on the board are paused until a different Mayor takes office.</p>
         <ul className="city-journal">{office.permitPropertyIds.map(id => <li key={id}>{getTile(id, game.boardSize, game.city).name}</li>)}</ul>
       </> : <>
-        <p>Choose three streets. Nobody can add houses or hotels there while you hold office.</p>
+        <p>Choose three streets to mark purple. Nobody can add houses or hotels there while you hold office.</p>
         <div className="city-project-picker">{selections.map((value, index) =>
           <label key={index}>Street {index + 1}
             <select disabled={!available} value={value}

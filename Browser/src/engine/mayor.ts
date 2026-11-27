@@ -42,6 +42,8 @@ interface CitySeat {
   taxedRent?: number;
   bills: TaxBill[];
   caughtCount?: number;
+  auditMissStreak?: number;
+  auditMissDoublings?: number;
   borrowed?: true;
   loanDue?: number;
   loanAmountDue?: number;
@@ -73,6 +75,7 @@ export interface CityDesk {
   proposalUsed?: true;
   voteUsed?: true;
   council?: true;
+  higherTax?: true;
   speakerUsedTerm?: number;
   reserveLevyUsed?: true;
   proposal?: CityProject & { id?: number; term: number; votes: string[] };
@@ -107,10 +110,11 @@ export type CityAction =
   | { type: "CITY_SPIN"; playerId: string; wheelId: number; section?: number; prizeRoll?: number }
   | { type: "CITY_SCRATCH" | "CITY_SKIP_WHEEL"; playerId: string; wheelId: number };
 
-export function startCity(players: Player[], firstId: string, mayorOffice?: true): CityDesk {
+export function startCity(players: Player[], firstId: string, mayorOffice?: true, higherTax?: true): CityDesk {
   return {
     mayorId: firstId, firstId, term: 1, termStart: 1, round: 1, treasury: 400, council: true,
     ...(mayorOffice ? { office: {} } : {}),
+    ...(higherTax ? { higherTax: true } : {}),
     seats: Object.fromEntries(players.map(player => [player.id, { turns: 0, rent: 0, bills: [] }]))
   };
 }
@@ -122,10 +126,10 @@ export function updateCitySeat(state: GameState, id: string, update: (seat: City
   return { ...state, mayor: { ...desk, seats: { ...desk.seats, [id]: update(seat) } } };
 }
 
-function accrueRentTax(seat: CitySeat, round: number, addedRent: number): CitySeat {
-  const prevTax = cityTax(seat.taxedRent ?? 0);
+function accrueRentTax(seat: CitySeat, round: number, addedRent: number, higherTax?: true): CitySeat {
+  const prevTax = cityTax(seat.taxedRent ?? 0, higherTax);
   const rent = seat.rent + addedRent;
-  const delta = cityTax(rent) - prevTax;
+  const delta = cityTax(rent, higherTax) - prevTax;
   if (delta <= 0) return { ...seat, rent, taxedRent: rent };
   const index = seat.bills.findIndex(bill => bill.round === round && bill.status === "open");
   if (index >= 0) {
@@ -140,11 +144,25 @@ function accrueRentTax(seat: CitySeat, round: number, addedRent: number): CitySe
 
 export const recordRent = (state: GameState, id: string, amount: number) =>
   state.mayor && amount > 0 && (!usesCityDecrees(state) || id !== state.mayor.mayorId) && !state.players.find(p => p.id === id)?.bankrupt
-    ? updateCitySeat(state, id, seat => accrueRentTax(seat, state.mayor!.round, amount))
+    ? updateCitySeat(state, id, seat => accrueRentTax(seat, state.mayor!.round, amount, state.mayor!.higherTax))
     : state;
 
-export const nextAuditFine = (seat?: { caughtCount?: number }) =>
-  AUDIT_FINE * 2 ** Math.min(40, seat?.caughtCount ?? 0);
+// Keep fine arithmetic within exact paise even in a match with many repeated raids.
+const doubledAuditFine = (doublings: number) => AUDIT_FINE * 2 ** Math.min(40, doublings);
+export const nextAuditFine = (seat?: Pick<CitySeat, "caughtCount">) => doubledAuditFine(seat?.caughtCount ?? 0);
+
+export function nextAuditMiss(seat?: Pick<CitySeat, "auditMissStreak" | "auditMissDoublings">) {
+  const auditMissStreak = (seat?.auditMissStreak ?? 0) + 1;
+  const previousDoublings = seat?.auditMissDoublings ?? 0;
+  const auditMissDoublings = previousDoublings + (auditMissStreak >= 3 || previousDoublings > 0 ? 1 : 0);
+  return { auditMissStreak, auditMissDoublings, fine: doubledAuditFine(auditMissDoublings) };
+}
+
+export function cityAuditBills(state: GameState, playerId: string) {
+  const seat = state.mayor?.seats[playerId];
+  return seat?.bills.filter(bill => bill.status === "deferred" ||
+    state.mayor?.higherTax && bill.status === "open" && bill.dueTurn <= seat.turns) ?? [];
+}
 
 export const mayorAuditsLeft = (desk?: CityDesk) =>
   !desk || desk.auditUsed ? 0 : Math.max(0, MAX_AUDITS_PER_TERM - (desk.auditsUsed ?? 0));
@@ -209,12 +227,19 @@ export function newTerm(desk: CityDesk, mayorId: string): CityDesk {
   };
 }
 
-export const cityTax = (rent: number) =>
-  rent <= 0 ? 0 : Math.min(200, Math.max(1, Math.floor((
+export function cityTax(rent: number, higherTax?: true) {
+  if (rent <= 0) return 0;
+  if (higherTax) {
+    return Math.floor((Math.min(100, rent) * 50 +
+      Math.max(0, Math.min(200, rent) - 100) * 60 +
+      Math.max(0, rent - 200) * 70) / 100);
+  }
+  return Math.min(200, Math.max(1, Math.floor((
     Math.min(200, rent) +
     Math.max(0, Math.min(300, rent) - 200) * 2 +
     Math.max(0, rent - 300) * 4
   ) / 10)));
+}
 
 export function advanceCityRound(state: GameState): GameState {
   const desk = state.mayor;
@@ -223,7 +248,7 @@ export function advanceCityRound(state: GameState): GameState {
   const seats = { ...desk.seats };
   for (const player of state.players) {
     const seat = seats[player.id]!;
-    const bill = usesCityDecrees(state) && player.id === desk.mayorId ? 0 : Math.max(0, cityTax(seat.rent) - cityTax(seat.taxedRent ?? 0));
+    const bill = usesCityDecrees(state) && player.id === desk.mayorId ? 0 : Math.max(0, cityTax(seat.rent, desk.higherTax) - cityTax(seat.taxedRent ?? 0, desk.higherTax));
     seats[player.id] = {
       ...seat, rent: 0, taxedRent: undefined,
       bills: bill && !player.bankrupt ? [...seat.bills, { id: seat.rent, round: desk.round, amount: bill, dueTurn: seat.turns + 2, status: "open" }] : seat.bills
@@ -331,6 +356,10 @@ export function rentRelief(state: GameState, playerId: string, tile: Tile, rent:
 
 export const propertyPermitLocked = (state: GameState, propertyId: number) =>
   state.mayor?.office?.permitPropertyIds?.includes(propertyId) === true;
+
+export function permitPauseActive(state: GameState, tile: Tile) {
+  return tile.kind === "property" && (propertyPermitLocked(state, tile.position) || permitPaused(state, tile.group));
+}
 
 export function mayorCanGrantLoan(state: GameState, targetId: string, amount: number) {
   const desk = state.mayor;

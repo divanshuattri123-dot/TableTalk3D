@@ -2,7 +2,7 @@ import { usesClassicRules } from "./rules";
 import {colorGroupTiles,getBoard,getPurchasableTile,isPurchasableTile} from './board';
 import {classicSpendableCash} from './classic';
 import {calculateRent,canTradeProperty,decisionPlayerId,reduceGame} from './reducer';
-import {DUEL_VETO_COST,auctionCredit,canChallengeCityProject,cityLoanAvailable,cityLoanBalance,cityPolicyAvailable,citySeizedOwner,cityStable,propertyPermitLocked,LOAN_AMOUNT,MAYOR_MOVE_SPACES,mayorCanGrantLoan,mayorCanReleaseJail,PERMIT_LOCK_COUNT,reserveLevy,trainOffer} from './mayor';
+import {DUEL_VETO_COST,auctionCredit,canChallengeCityProject,cityLoanAvailable,cityLoanBalance,cityPolicyAvailable,citySeizedOwner,cityStable,propertyPermitLocked,LOAN_AMOUNT,MAYOR_MOVE_SPACES,mayorCanGrantLoan,mayorCanReleaseJail,PERMIT_LOCK_COUNT,nextAuditMiss,reserveLevy,trainOffer} from './mayor';
 import type {Dice,GameAction,GameState,Player,TradeOffer} from './types';
 
 const STYLES=[
@@ -127,7 +127,8 @@ export function nextBotAction(s:GameState,dice:Dice=[1,2]):GameAction|undefined 
     if(mayor && s.players.filter(p=>!p.bankrupt).length>=3 && !desk.auditUsed){
       if(!desk.tip && !desk.office?.investigationUsed && s.phase==='awaitingEndTurn')return {type:'CITY_TIP',playerId:mayor.id,term};
       const rivals=desk.tip?.map(id=>s.players.find(p=>p.id===id && !p.bankrupt)).filter(p=>p!==undefined);
-      if(rivals?.length && mayor.cash>=50){
+            const missFine = desk.higherTax ? nextAuditMiss(desk.seats[mayor.id]).fine : 25;
+      if(rivals?.length && mayor.cash>=Math.max(50, missFine * 2)){
         const target=[...rivals].sort((a,b)=>a.cash-b.cash)[0]!;
         return {type:'CITY_AUDIT',playerId:mayor.id,term,targetId:target.id};
       }

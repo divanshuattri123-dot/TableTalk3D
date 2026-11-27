@@ -36,7 +36,7 @@ function landAtWheel(state: GameState, id = state.activePlayerId!) {
 
 describe("Mayor rules (Classic 40-space + Overpowered Mayor)", () => {
   it("applies marginal tax slabs and caps the total", () => {
-    expect([0, 6, 50, 100, 200, 300, 400, 600, 700, 2000].map(cityTax)).toEqual([0, 1, 5, 10, 20, 40, 80, 160, 200, 200]);
+    expect([0, 6, 50, 100, 200, 300, 400, 600, 700, 2000].map(rent => cityTax(rent))).toEqual([0, 1, 5, 10, 20, 40, 80, 160, 200, 200]);
   });
 
   it("uses the Classic 40-space board, shuffled 16-card decks, and off-turn property management", () => {

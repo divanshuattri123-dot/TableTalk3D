@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { makeStartAction } from "../network/startAction";
 import { nextBotAction } from "./bots";
 import { jailCardIndex } from "./classicCards";
-import { cityLoanBalance } from "./mayor";
+import { getTile } from "./board";
+import { cityLoanBalance, cityTax, newTerm, nextAuditMiss, permitPauseActive, recordRent } from "./mayor";
 import { createInitialState, reduceGame } from "./reducer";
 import type { GameAction, GameState } from "./types";
 
@@ -34,6 +35,52 @@ function seeded(seed: number) {
 }
 
 describe("City Hall on the Classic table", () => {
+  it("taxes rent at 50%, 60%, and 70% across the three bands without a ₹200 cap", () => {
+    expect([0, 50, 100, 150, 200, 300, 500].map(rent => cityTax(rent, true))).toEqual([0, 25, 50, 80, 110, 180, 320]);
+    let state = table();
+    for (const rent of [100, 100, 300]) state = recordRent(state, "p2", rent);
+    expect(state.mayor!.seats.p2!.bills.map(bill => bill.amount)).toEqual([320]);
+    expect(recordRent(state, "p1", 500).mayor!.seats.p1!.bills).toEqual([]);
+  });
+
+  it("carries both audit fine ladders across terms and catches ignored overdue bills", () => {
+    let state = table();
+    const audit = (targetId: string) => {
+      state = apply(state, { type: "CITY_AUDIT", playerId: "p1", term: state.mayor!.term, targetId });
+    };
+    for (const fee of [25, 25, 50]) {
+      const before = state.players[0]!.cash;
+      audit("p2");
+      expect(state.players[0]!.cash).toBe(before - fee);
+    }
+    state = { ...state, mayor: newTerm(newTerm(state.mayor!, "p3"), "p1") };
+    expect(nextAuditMiss(state.mayor!.seats.p1).fine).toBe(100);
+    const feeStart = state.players[0]!.cash;
+    audit("p3");
+    expect(state.players[0]!.cash).toBe(feeStart - 100);
+    state.mayor!.seats.p2!.turns = 1;
+    for (const fine of [25, 50, 100]) {
+      state.mayor!.seats.p2!.bills = [{ round: 1, amount: 50, dueTurn: 1, status: "open" }];
+      const before = state.players[1]!.cash;
+      audit("p2");
+      expect(state.players[1]!.cash).toBe(before - 50 - fine);
+    }
+    expect(state.mayor!.seats.p2!.caughtCount).toBe(3);
+    expect(nextAuditMiss(state.mayor!.seats.p1).fine).toBe(200);
+  });
+
+  it("resets a short miss streak after a correct audit without forgiving earlier penalties", () => {
+    let state = table();
+    const audit = (targetId: string) => {
+      state = apply(state, { type: "CITY_AUDIT", playerId: "p1", term: 1, targetId });
+    };
+    audit("p2");
+    audit("p3");
+    state.mayor!.seats.p3!.bills = [{ round: 1, amount: 30, dueTurn: 2, status: "deferred" }];
+    audit("p3");
+    expect(state.mayor!.seats.p1!.auditMissStreak).toBeUndefined();
+    expect(nextAuditMiss(state.mayor!.seats.p1).fine).toBe(25);
+  });
   it("posts claimable utility rent to the city loan and resumes play after paying it down", () => {
     let state = table();
     state.players[0]!.position = 9;
@@ -82,6 +129,9 @@ describe("City Hall on the Classic table", () => {
     state = apply(state, { type: "BUILD", playerId: "p2", propertyId: 8, operation: "build" });
     expect(state.properties[8]!.houses).toBe(1);
     expect(state.bankHouses).toBe(31);
+    expect([1, 3, 6, 8].map(id => permitPauseActive(state, getTile(id)))).toEqual([true, true, true, false]);
+    const rotated = { ...state, mayor: newTerm(state.mayor!, "p2") };
+    expect(permitPauseActive(rotated, getTile(1))).toBe(false);
   });
 
   it("pays for an Express ride to the next station and gives the owner a normal rent claim", () => {

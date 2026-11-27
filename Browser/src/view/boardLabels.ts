@@ -4,7 +4,7 @@ import { assetUrl } from "../assets";
 import type { GameAsset } from "../assets";
 import { isPurchasableTile, isStreetTile } from "../engine/board";
 import type { Tile } from "../engine/types";
-import { GROUP_COLORS } from "./palette";
+import { GROUP_COLORS, PERMIT_PAUSE_COLOR } from "./palette";
 import { tileLayout } from "./layout";
 import { formatRupees } from "../engine/currency";
 
@@ -16,6 +16,8 @@ export function createBoardLabels(board: readonly Tile[], assets: GameAsset[]) {
   const map = new THREE.CanvasTexture(canvas); map.colorSpace = THREE.SRGBColorSpace;
   map.anisotropy = 4;
   let alive = true;
+  let permitIds = new Set<number>();
+  const paintStreet = new Map<number, () => void>();
   const images = new Map<string, Promise<HTMLImageElement>>();
   const icon = (name: string) => {
     if (!images.has(name)) images.set(name, new Promise((resolve, reject) => {
@@ -33,11 +35,11 @@ export function createBoardLabels(board: readonly Tile[], assets: GameAsset[]) {
       if (!alive) return;
       ctx.save(); ctx.translate(col * cell, row * cell); ctx.scale(cell / logicalWidth, cell / logicalHeight);
       const w = logicalWidth, h = logicalHeight, cx = w / 2;
-      ctx.fillStyle = "#f8f1df"; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = permitIds.has(tile.position) ? "#e4cdf7" : "#f8f1df"; ctx.fillRect(0, 0, w, h);
       ctx.strokeStyle = "#1d3941"; ctx.lineWidth = 3; ctx.strokeRect(1.5, 1.5, w - 3, h - 3);
       ctx.strokeStyle = "rgba(114,83,44,.23)"; ctx.lineWidth = 1; ctx.strokeRect(7, 7, w - 14, h - 14);
       if (isStreetTile(tile)) {
-        ctx.fillStyle = GROUP_COLORS[tile.group];
+        ctx.fillStyle = permitIds.has(tile.position) ? PERMIT_PAUSE_COLOR : GROUP_COLORS[tile.group];
         const strip = 42;
         if (layout.quarter === 0) ctx.fillRect(2, 2, w - 4, strip);
         else if (layout.quarter === 1) ctx.fillRect(w - strip - 2, 2, strip, h - 4);
@@ -72,6 +74,7 @@ export function createBoardLabels(board: readonly Tile[], assets: GameAsset[]) {
       }
       ctx.restore(); map.needsUpdate = true;
     };
+    if (isStreetTile(tile)) paintStreet.set(tile.position, paint);
     paint();
     const imageName = icons[tile.kind] ?? (tile.kind === "tax" ? tile.amount === 200 ? "IncomeTax" : "SuperTax" : tile.kind === "utility" ? /Power|Electric/.test(tile.name) ? "ElectricCompany" : "WaterWorks" : undefined);
     if (imageName) void icon(imageName).then(paint).catch(() => {});
@@ -82,5 +85,13 @@ export function createBoardLabels(board: readonly Tile[], assets: GameAsset[]) {
   }
   const geometry = mergeGeometries(geometries)!; geometries.forEach((entry) => entry.dispose());
   const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map, toneMapped: false }));
-  return { mesh, stop: () => { alive = false; } };
+  return {
+    mesh,
+    setPermitPause(ids: Set<number>) {
+      const changed = [...permitIds].filter(id => !ids.has(id)).concat([...ids].filter(id => !permitIds.has(id)));
+      permitIds = ids;
+      for (const id of changed) paintStreet.get(id)?.();
+    },
+    stop: () => { alive = false; }
+  };
 }

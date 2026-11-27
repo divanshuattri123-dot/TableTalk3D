@@ -3,6 +3,8 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { permitPauseActive } from "../engine/mayor";
+import { PERMIT_PAUSE_COLOR } from "./palette";
 import { getBoard } from "../engine/board";
 import type { GameState } from "../engine/types";
 import { useAssets } from "../assets";
@@ -117,13 +119,17 @@ export default function ThreeBoard({ game, settings, onSelect, onFallback, onCam
     }
     function refreshBuildings(state: GameState) {
       const reliefGroup = state.mayor?.policy?.kind === "rent-relief" ? state.mayor.policy.district : "";
-      const key = JSON.stringify([state.properties, reliefGroup]);
+      const permitIds = board.filter(tile => permitPauseActive(state, tile)).map(tile => tile.position);
+      const paused = new Set(permitIds);
+      const key = JSON.stringify([state.properties, reliefGroup, permitIds]);
       if (key === propertyKey) return;
-      propertyKey = key; clearDecorations();
+      propertyKey = key;
+      labels.setPermitPause(paused);
+      clearDecorations();
       board.forEach((tile) => {
         const prop = state.properties[tile.position];
         const isRelief = tile.kind === "property" && tile.group === reliefGroup;
-        tiles.setColorAt(tile.position, new THREE.Color(isRelief ? "#3b8ef3" : prop?.mortgaged ? "#d75b62" : "#b2d0ac"));
+        tiles.setColorAt(tile.position, new THREE.Color(paused.has(tile.position) ? PERMIT_PAUSE_COLOR : isRelief ? "#3b8ef3" : prop?.mortgaged ? "#d75b62" : "#b2d0ac"));
       });
       if (tiles.instanceColor) tiles.instanceColor.needsUpdate = true;
       const houses: THREE.Matrix4[] = [], hotels: THREE.Matrix4[] = [];
@@ -133,7 +139,7 @@ export default function ThreeBoard({ game, settings, onSelect, onFallback, onCam
         const owner = state.players.find((player) => player.id === property.ownerId);
         const tileEntry = board[position];
         const isRelief = tileEntry?.kind === "property" && tileEntry.group === reliefGroup;
-        const marker = new THREE.Mesh(new THREE.BoxGeometry(.86, .025, .09), new THREE.MeshBasicMaterial({ color: isRelief ? "#1d6fe0" : property.mortgaged ? "#c92d3e" : owner?.color ?? "#999999" }));
+        const marker = new THREE.Mesh(new THREE.BoxGeometry(.86, .025, .09), new THREE.MeshBasicMaterial({ color: paused.has(position) ? "#7936af" : isRelief ? "#1d6fe0" : property.mortgaged ? "#c92d3e" : owner?.color ?? "#999999" }));
         marker.position.set(point.x, .13, point.z); marker.rotation.y = Math.floor(position / side) * Math.PI / 2; decorations.add(marker);
         for (let index = 0; index < property.houses; index += 1) {
           const hotel = property.houses === 5;
