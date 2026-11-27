@@ -42,6 +42,7 @@ interface CitySeat {
   taxedRent?: number;
   bills: TaxBill[];
   caughtCount?: number;
+  missedAudits?: number;
   auditMissStreak?: number;
   auditMissDoublings?: number;
   borrowed?: true;
@@ -151,11 +152,10 @@ export const recordRent = (state: GameState, id: string, amount: number) =>
 const doubledAuditFine = (doublings: number) => AUDIT_FINE * 2 ** Math.min(40, doublings);
 export const nextAuditFine = (seat?: Pick<CitySeat, "caughtCount">) => doubledAuditFine(seat?.caughtCount ?? 0);
 
-export function nextAuditMiss(seat?: Pick<CitySeat, "auditMissStreak" | "auditMissDoublings">) {
-  const auditMissStreak = (seat?.auditMissStreak ?? 0) + 1;
-  const previousDoublings = seat?.auditMissDoublings ?? 0;
-  const auditMissDoublings = previousDoublings + (auditMissStreak >= 3 || previousDoublings > 0 ? 1 : 0);
-  return { auditMissStreak, auditMissDoublings, fine: doubledAuditFine(auditMissDoublings) };
+export function nextAuditMiss(seat?: Pick<CitySeat, "missedAudits" | "auditMissStreak" | "auditMissDoublings">) {
+  // Preserve misses already recorded by the first version of the updated audit rules.
+  const prior = seat?.missedAudits ?? Math.max(seat?.auditMissStreak ?? 0, seat?.auditMissDoublings ? seat.auditMissDoublings + 2 : 0);
+  return { missedAudits: prior + 1, fine: doubledAuditFine(prior) };
 }
 
 export function cityAuditBills(state: GameState, playerId: string) {

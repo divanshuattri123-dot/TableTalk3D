@@ -1511,13 +1511,12 @@ function auditCity(state: GameState, targetId: string): GameState {
     const miss = nextAuditMiss(desk.seats[mayor.id]);
     const fine = desk.higherTax ? miss.fine : AUDIT_FINE;
     if (desk.higherTax) {
-      next = updateCitySeat(next, mayor.id, seat => ({ ...seat, auditMissStreak: miss.auditMissStreak, auditMissDoublings: miss.auditMissDoublings }));
+      next = updateCitySeat(next, mayor.id, seat => ({ ...seat, missedAudits: miss.missedAudits, auditMissStreak: undefined, auditMissDoublings: undefined }));
     }
     next = civicEvent(next, "Clear records. " + mayor.name + " owes " + target.name + " " + formatRupees(fine) + " for the failed raid.", "raid",
       { playerId: mayor.id, recipientId: target.id, position: target.position, amount: fine });
     return makePayment(next, mayor.id, target.id, fine, "as compensation for a failed raid");
   }
-  if (desk.higherTax) next = updateCitySeat(next, mayor.id, seat => ({ ...seat, auditMissStreak: undefined }));
   const unpaid = deferred.reduce((total, entry) => total + entry.amount, 0);
   const fine = instant ? nextAuditFine(desk.seats[targetId]) : AUDIT_FINE;
   const caughtCount = (desk.seats[targetId]?.caughtCount ?? 0) + 1;

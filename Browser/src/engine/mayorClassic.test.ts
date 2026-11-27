@@ -48,16 +48,16 @@ describe("City Hall on the Classic table", () => {
     const audit = (targetId: string) => {
       state = apply(state, { type: "CITY_AUDIT", playerId: "p1", term: state.mayor!.term, targetId });
     };
-    for (const fee of [25, 25, 50]) {
+    for (const fee of [25, 50, 100]) {
       const before = state.players[0]!.cash;
       audit("p2");
       expect(state.players[0]!.cash).toBe(before - fee);
     }
     state = { ...state, mayor: newTerm(newTerm(state.mayor!, "p3"), "p1") };
-    expect(nextAuditMiss(state.mayor!.seats.p1).fine).toBe(100);
+    expect(nextAuditMiss(state.mayor!.seats.p1).fine).toBe(200);
     const feeStart = state.players[0]!.cash;
     audit("p3");
-    expect(state.players[0]!.cash).toBe(feeStart - 100);
+    expect(state.players[0]!.cash).toBe(feeStart - 200);
     state.mayor!.seats.p2!.turns = 1;
     for (const fine of [25, 50, 100]) {
       state.mayor!.seats.p2!.bills = [{ round: 1, amount: 50, dueTurn: 1, status: "open" }];
@@ -66,10 +66,10 @@ describe("City Hall on the Classic table", () => {
       expect(state.players[1]!.cash).toBe(before - 50 - fine);
     }
     expect(state.mayor!.seats.p2!.caughtCount).toBe(3);
-    expect(nextAuditMiss(state.mayor!.seats.p1).fine).toBe(200);
+    expect(nextAuditMiss(state.mayor!.seats.p1).fine).toBe(400);
   });
 
-  it("resets a short miss streak after a correct audit without forgiving earlier penalties", () => {
+  it("keeps the personal miss count after a successful audit", () => {
     let state = table();
     const audit = (targetId: string) => {
       state = apply(state, { type: "CITY_AUDIT", playerId: "p1", term: 1, targetId });
@@ -78,8 +78,8 @@ describe("City Hall on the Classic table", () => {
     audit("p3");
     state.mayor!.seats.p3!.bills = [{ round: 1, amount: 30, dueTurn: 2, status: "deferred" }];
     audit("p3");
-    expect(state.mayor!.seats.p1!.auditMissStreak).toBeUndefined();
-    expect(nextAuditMiss(state.mayor!.seats.p1).fine).toBe(25);
+    expect(state.mayor!.seats.p1!.missedAudits).toBe(2);
+    expect(nextAuditMiss(state.mayor!.seats.p1).fine).toBe(100);
   });
   it("posts claimable utility rent to the city loan and resumes play after paying it down", () => {
     let state = table();
