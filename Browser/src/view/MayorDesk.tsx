@@ -7,7 +7,7 @@ import { classicSpendableCash } from "../engine/classic";
 import {
   canChallengeCityProject, CITY_CONTRACTS, CITY_POLICIES, cityLoanAvailable, cityLoanReason, cityPolicyAvailable,
   cityStable, councilSpeaker, councilVoteThreshold, districtName, DUEL_VETO_COST, fortPosition, LOAN_REPAYMENT,
-  cityLoanBalance, MAX_AUDITS_PER_TERM, OFFICE_PROJECTS, mayorAuditsLeft, nextAuditFine, nextAuditMiss, reserveLevy, WHEEL_SECTIONS
+  cityLoanBalance, MAX_AUDITS_PER_TERM, OFFICE_PROJECTS, mayorAuditsLeft, nextAuditFine, nextAuditMiss, RENT_RELIEF_PERCENT, reserveLevy, WHEEL_SECTIONS
 } from "../engine/mayor";
 import type { CityAction, CityPolicy, WheelDecision } from "../engine/mayor";
 import type { ColorGroup, GameState } from "../engine/types";
@@ -26,7 +26,7 @@ const projectDetails: Record<CityPolicy, string> = {
   transit: "Instant: One free Express ride per player while City Funds has ₹75 (Mayors always ride Express free).",
   wealth: "Collects 20% above ₹1,500 (capped at ₹300) right now from a player holding ≥ ₹2,000 and over half the table’s cash.",
   credit: "Instant: The next eligible deed auction backs cash-light bidders (≤ ₹400) with up to ₹200 at 12.5% interest.",
-  "rent-relief": "Instant: Turns one district BLUE right now and cuts all rent there by 50% (up to ₹250 off per landing).",
+  "rent-relief": `Turns one district blue immediately. Every rent payment there is ${RENT_RELIEF_PERCENT}% lower, with no discount cap.`,
   permits: "Instant: Freezes rival construction in one district while the Mayor remains free to build."
 };
 const wheelIcons = ["₹100", "₹150", "−₹50", "KEY", "GO", "✦"];
@@ -48,8 +48,8 @@ function CityModal({ title, kind = "ledger", onClose, children }: { title: strin
   </dialog>, document.body);
 }
 
-export function CityHall({ game, localId, available, open, onOpen, onClose, sendAction }: {
-  game: GameState; localId: string; available: boolean; open: boolean; onOpen: () => void; onClose: () => void; sendAction: SendCity;
+export function CityHall({ game, localId, available, loansOnly, officeLoanAvailable, open, onOpen, onClose, sendAction }: {
+  game: GameState; localId: string; available: boolean; loansOnly?: boolean; officeLoanAvailable: boolean; open: boolean; onOpen: () => void; onClose: () => void; sendAction: SendCity;
 }) {
   const [selected, setSelected] = useState<CityPolicy>(() => game.mayor?.office ? "wealth" : "loans");
   const [selectedDistrict, setSelectedDistrict] = useState<ColorGroup>();
@@ -94,8 +94,9 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
     <button type="button" className="city-hall-trigger" onClick={onOpen} aria-haspopup="dialog" aria-expanded={open}>
       <span aria-hidden="true">♜</span> City Hall {hasActionDot && <i aria-label="City Hall choice available" />}
     </button>
-    {open && <CityModal title={game.phase === "gameOver" ? "The city’s story" : "City Hall"} onClose={onClose}>
+    {open && <CityModal title={loansOnly ? "City Hall · Emergency loans" : game.phase === "gameOver" ? "The city’s story" : "City Hall"} onClose={onClose}>
       <div className="city-modal-body">
+        {loansOnly && desk.office ? <MayorOffice key={desk.term} game={game} localId={localId} loansOnly available={false} loanAvailable={officeLoanAvailable} jailAvailable={false} sendAction={sendAction} /> : <>
         <div className="city-summary">
           <div><span>IN OFFICE · TERM {desk.term}</span><b>{mayor?.name ?? "Mayor"}{office ? " (you)" : ""}</b></div>
           <div><span>ROUND {desk.round} · CITY FUNDS</span><b>{money(desk.treasury)}</b></div>
@@ -106,7 +107,7 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
         {desk.policy && <p className={`city-status${desk.policy.kind === "rent-relief" ? " city-status-blue" : ""}`}><b>{CITY_POLICIES[desk.policy.kind]}{desk.policy.district ? ` · ${districtName(game, desk.policy.district)}` : ""}</b>
           {desk.policy.kind === "credit" && desk.policy.used ? " · Auction backing spent" :
             desk.policy.kind === "wealth" ? " · Collected instantly" :
-            desk.policy.kind === "rent-relief" ? " · Active NOW (district tiles turned blue · 50% off rent)" : " · Active NOW"}</p>}
+            desk.policy.kind === "rent-relief" ? ` · Active · ${RENT_RELIEF_PERCENT}% off rent` : " · Active NOW"}</p>}
         {seat && <section aria-label="Your private bills">
           <h3>Your private bills</h3>
           {bills.length === 0 && seat.loanDue === undefined && !loanAvailable && !loanNote && <p>Nothing due.{seat.caughtCount ? ` Past audit catches: ${seat.caughtCount} (next fine if caught: ${money(myNextFine)}).` : ""}</p>}
@@ -152,7 +153,7 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
             </div>
             <p><small>Develop a clear colour set or connect two stations with an Express ride.</small></p></>}
         </section>}
-        {desk.office && <MayorOffice key={desk.term} game={game} localId={localId} available={stable} jailAvailable={available} sendAction={sendAction} />}
+        {desk.office && <MayorOffice key={desk.term} game={game} localId={localId} available={stable} loanAvailable={officeLoanAvailable} jailAvailable={available} sendAction={sendAction} />}
         {office && local && !local.bankrupt && game.phase !== "gameOver" && <section aria-label="Mayor's decisions">
           <h3>Your decisions as Mayor</h3>
           {auditsLeft <= 0 ? <p>Both audit warrants have been used this term.</p> :
@@ -202,7 +203,8 @@ export function CityHall({ game, localId, available, open, onOpen, onClose, send
         <section aria-label="City headlines"><h3>City headlines</h3>
           {journal.length ? <ol className="city-journal">{journal.map(event => <li key={event.id}>{event.text}</li>)}</ol> : <p>The city is watching the first deals.</p>}
         </section>
-        <details><summary>How Mayor Mode & Levies work</summary><p>Classic 40 with City Hall. Whenever a non-Mayor collects rent, a city levy is issued immediately ({desk.higherTax ? "50% on the first ₹100, 60% on the next ₹100, and 70% above ₹200" : "10% up to ₹200, 20% from ₹200–₹300, 40% above ₹300, up to ₹200 per round"}).</p><p>Deferred levies never pay automatically — you only pay if you choose to pay yourself or if the Mayor catches you with an Audit Warrant! Audit fines start at ₹25 and double every time you are caught (₹25 → ₹50 → ₹100 → ₹200…) across the entire match, even when the Mayor changes.</p></details>
+        <details><summary>How Mayor Mode & Levies work</summary><p>Classic 40 with City Hall. Whenever a non-Mayor collects rent, a city levy is issued immediately ({desk.higherTax ? "50% on the first ₹100, 60% on the next ₹100, and 70% above ₹200" : "10% up to ₹200, 20% from ₹200–₹300, 40% above ₹300, up to ₹200 per round"}).</p><p>Voluntary tax payments are private and held outside spendable City Funds during the match. Deferred levies stay open until you pay or the Mayor catches them with an audit. Audit fines start at ₹25 and double every time you are caught (₹25 → ₹50 → ₹100 → ₹200…) across the entire match, even when the Mayor changes.</p></details>
+        </>}
       </div>
     </CityModal>}
   </>;

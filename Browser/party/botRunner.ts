@@ -15,5 +15,8 @@ export function botThinkDelay(previous:GameState|undefined,state:GameState,varia
     state.players.some(player => player.id === state.activePlayerId && player.bot && !player.bankrupt) &&
     state.players.some(player => player.id === state.rentClaim!.ownerId && !player.bot && !player.bankrupt);
   // An automatic roll can expire a human's claim before they can act on their phone.
-  return Math.min(14000,Math.max(humanRentClaim ? 6000 : 900,animation+450))+variation;
+  const consideringTrade = state.phase === "awaitingTradeResponse" && state.players.some(player =>
+    player.id === state.pendingTrade?.toPlayerId && player.botLevel === "pro");
+  const minimum = humanRentClaim ? 6000 : consideringTrade ? 1650 : 900;
+  return Math.min(14000,Math.max(minimum,animation+450))+variation;
 }

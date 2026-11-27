@@ -5,12 +5,13 @@ import {LOAN_AMOUNT, MAYOR_MOVE_SPACES, PERMIT_LOCK_COUNT, cityLoanTotal, citySe
 import type {CityAction} from "../engine/mayor";
 import type {GameState} from "../engine/types";
 
-export default function MayorOffice({game, localId, available, jailAvailable, sendAction}: {
-  game: GameState; localId: string; available: boolean; jailAvailable: boolean; sendAction: (action: CityAction) => void;
+export default function MayorOffice({game, localId, available, loansOnly, loanAvailable, jailAvailable, sendAction}: {
+  game: GameState; localId: string; available: boolean; loansOnly?: boolean; loanAvailable: boolean; jailAvailable: boolean;
+  sendAction: (action: CityAction) => void;
 }) {
   const [selections, setSelections] = useState<string[]>(() => Array<string>(PERMIT_LOCK_COUNT).fill(""));
   const [borrower, setBorrower] = useState("");
-  const [amount, setAmount] = useState(String(LOAN_AMOUNT));
+  const [amount, setAmount] = useState<string>();
   const [auctionDeed, setAuctionDeed] = useState("");
   const [confirmMove, setConfirmMove] = useState(false);
   const desk = game.mayor!;
@@ -20,14 +21,18 @@ export default function MayorOffice({game, localId, available, jailAvailable, se
   const streets = board.filter(tile => tile.kind === "property");
   const seized = board.filter(tile => citySeizedOwner(game, tile.position));
   const jailed = game.players.filter(player => !player.bankrupt && player.inJail);
-  const principal = Number(amount);
   const eligible = game.players.filter(player => mayorCanGrantLoan(game, player.id, 1));
+  const debtor = game.debts?.[0];
+  const recipient = borrower || (eligible.some(player => player.id === debtor?.playerId) ? debtor!.playerId : "");
+  const defaultAmount = recipient === debtor?.playerId && debtor.amount
+    ? Math.min(Math.floor(desk.treasury), Math.ceil(debtor.amount)) : Math.min(Math.floor(desk.treasury), LOAN_AMOUNT);
+  const principal = Number(amount ?? defaultAmount);
   const moveUsed = office.rivalMoveTerm === desk.term;
   const canMove = available && game.activePlayerId === localId && !moveUsed;
   const terms = {playerId: localId, term: desk.term};
 
   return <>
-    {(inOffice || office.permitPropertyIds?.length) && <section aria-label="Permit Pause">
+    {!loansOnly && (inOffice || office.permitPropertyIds?.length) && <section aria-label="Permit Pause">
       <h3>Permit Pause</h3>
       {office.permitPropertyIds ? <>
         <p>The streets marked purple on the board are paused until a different Mayor takes office.</p>
@@ -48,7 +53,7 @@ export default function MayorOffice({game, localId, available, jailAvailable, se
           onClick={() => sendAction({type:"CITY_LOCK_PERMITS",...terms,propertyIds:selections.map(Number)})}>Pause permits on three streets</button></div>
       </>}
     </section>}
-    {seized.length > 0 && <section aria-label="Seized deeds">
+    {!loansOnly && seized.length > 0 && <section aria-label="Seized deeds">
       <h3>Seized deeds</h3>
       <p>Rent pays down each owner’s city loan. Unsold deeds are released when the balance reaches zero.</p>
       {inOffice ? <>
@@ -65,23 +70,23 @@ export default function MayorOffice({game, localId, available, jailAvailable, se
     {inOffice && <>
       <section aria-label="Emergency Loans">
         <h3>Emergency Loans</h3>
-        <p>Choose any whole-rupee amount from City Funds. Repayment is due after two turns at 12.5% interest, rounded up.</p>
+        <p>Issue any whole-rupee amount City Funds can cover, even while a player is settling debt. New loans are due after two of the borrower’s turns at 12.5% interest, rounded up. A top-up keeps the existing due date.</p>
         <div className="city-project-picker">
-          <label>Loan recipient<select value={borrower} disabled={!available || !eligible.length}
-            onChange={event => setBorrower(event.target.value)}>
+          <label>Loan recipient<select value={recipient} disabled={!loanAvailable || !eligible.length}
+            onChange={event => { setBorrower(event.target.value); setAmount(undefined); }}>
             <option value="">Choose a player</option>
             {game.players.filter(player => !player.bankrupt).map(player => <option key={player.id} value={player.id}
               disabled={!eligible.some(candidate => candidate.id === player.id)}>{player.name}{player.id === localId ? " (you)" : ""}</option>)}
           </select></label>
-          <label>Loan amount<input type="number" inputMode="numeric" min="1" max={desk.treasury} step="1" value={amount}
+          <label>Loan amount<input type="number" inputMode="numeric" min="1" max={Math.floor(desk.treasury)} step="1" value={amount ?? String(defaultAmount)}
             onChange={event => setAmount(event.target.value)} /></label>
         </div>
         <p><small>{Number.isSafeInteger(principal) && principal > 0 && principal <= desk.treasury
           ? `Repayment ${formatRupees(cityLoanTotal(principal))}` : `Available in City Funds ${formatRupees(desk.treasury)}`}</small></p>
-        <div className="city-actions"><button type="button" disabled={!available || !mayorCanGrantLoan(game, borrower, principal)}
-          onClick={() => sendAction({type:"CITY_GRANT_LOAN",...terms,targetId:borrower,amount:principal})}>Issue city loan</button></div>
+        <div className="city-actions"><button type="button" disabled={!loanAvailable || !mayorCanGrantLoan(game, recipient, principal)}
+          onClick={() => sendAction({type:"CITY_GRANT_LOAN",...terms,targetId:recipient,amount:principal})}>Issue city loan</button></div>
       </section>
-      <section aria-label="Jail release">
+      {!loansOnly && <><section aria-label="Jail release">
         <h3>Jail release</h3>
         <p>Release a jailed player without the ₹50 fine.</p>
         {jailed.length ? <div className="city-actions">{jailed.map(player =>
@@ -98,7 +103,7 @@ export default function MayorOffice({game, localId, available, jailAvailable, se
         </div> : <div className="city-actions"><button type="button" disabled={!canMove} onClick={() => setConfirmMove(true)}>
           Move every rival five spaces
         </button></div>}
-      </section>
+      </section></>}
     </>}
   </>;
 }

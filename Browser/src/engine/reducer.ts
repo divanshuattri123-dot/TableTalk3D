@@ -651,7 +651,7 @@ const resolveLanding = (
         "policy", { playerId, position: tile.position, amount: discount });
     }
     return finishLanding(
-      makePayment(state, playerId, property.ownerId, baseRent - discount, `rent for ${tile.name}`, "rent")
+      makePayment(state, playerId, property.ownerId, roundRupees(baseRent - discount), `rent for ${tile.name}`, "rent")
     );
   }
 
@@ -1460,11 +1460,12 @@ const updateBill = (state: GameState, id: string, bill: TaxBill, status: TaxBill
     ...seat, bills: seat.bills.map(entry => entry === bill ? { ...entry, status } : entry)
   }));
 
-function payTaxEarly(state: GameState, id: string, bill: TaxBill) {
-  const next = updateCitySeat(changeTreasury(changeCash(state, id, -bill.amount), bill.amount), id, seat => ({
-    ...seat, bills: seat.bills.filter(entry => entry !== bill)
+function payPrivateTax(state: GameState, id: string, bills: TaxBill[], total: number) {
+  // Spendable City Funds are public. A private receipt must not increase them mid-match.
+  return updateCitySeat(changeCash(state, id, -total), id, seat => ({
+    ...seat, privateTaxPaid: roundRupees((seat.privateTaxPaid ?? 0) + total),
+    bills: seat.bills.filter(entry => !bills.includes(entry))
   }));
-  return addEvent(next, `${playerName(next, id)} paid ${formatRupees(bill.amount)} rent tax to City Funds.`, "money", { privateTo: id, playerId: id, amount: bill.amount });
 }
 
 function settleCityEnd(state: GameState, id: string): GameState {
@@ -1479,8 +1480,9 @@ function settleCityEnd(state: GameState, id: string): GameState {
   const loanDue = !officeLoans && seat.loanDue !== undefined && seat.loanDue <= cutoff;
   const posted = due.reduce((sum, bill) => sum + (bill.status === "paid" ? bill.amount : 0), 0);
   const owed = due.reduce((sum, bill) => sum + (bill.status === "paid" ? 0 : bill.amount), 0) + (loanDue ? seat.loanAmountDue ?? LOAN_REPAYMENT : 0);
-  let next = updateCitySeat(changeTreasury(state, posted), id, record => ({
+  let next = updateCitySeat(state, id, record => ({
     ...record, bills: pending, loanDue: loanDue ? undefined : record.loanDue,
+    ...(posted ? { privateTaxPaid: roundRupees((record.privateTaxPaid ?? 0) + posted) } : {}),
     loanAmountDue: loanDue ? undefined : record.loanAmountDue
   }));
   next = makePayment(next, id, "bank", owed, "to settle City Hall dues", "city");
@@ -1489,7 +1491,7 @@ function settleCityEnd(state: GameState, id: string): GameState {
   for (const bill of pending) {
     if (bill.status !== "open" || bill.dueTurn !== cutoff + 1 || playerById(next, id)!.bankrupt) continue;
     next = playerById(next, id)!.cash >= bill.amount
-      ? payTaxEarly(next, id, bill)
+      ? payPrivateTax(next, id, [bill], bill.amount)
       : updateBill(next, id, bill, "deferred");
   }
   return next;
@@ -1550,7 +1552,8 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
   const desk = original.mayor;
   const player = playerById(original, action.playerId);
   const taxDecision = action.type === "CITY_PAY_TAX" || action.type === "CITY_DEFER_TAX";
-  const allowedPhase = action.type === "CITY_RELEASE_JAIL" ? mayorCanReleaseJail(original, action.targetId) : taxDecision
+  const allowedPhase = action.type === "CITY_GRANT_LOAN" ? original.phase !== "lobby" && original.phase !== "gameOver"
+    : action.type === "CITY_RELEASE_JAIL" ? mayorCanReleaseJail(original, action.targetId) : taxDecision
     ? original.phase !== "lobby" && original.phase !== "gameOver" && original.phase !== "awaitingAuction"
     : cityStable(original);
   if (original.mode !== "mayor" || !desk || !player || player.bankrupt || !allowedPhase) {
@@ -1570,17 +1573,14 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
         const total = deferred.reduce((sum, entry) => sum + entry.amount, 0);
         if (!deferred.length) return addEvent(state, "No deferred tax bills are open.", "error", { privateTo: id });
         if (available < total) return addEvent(state, "Raise more cash before paying all deferred bills.", "error", { privateTo: id });
-        const cleared = updateCitySeat(changeTreasury(changeCash(state, id, -total), total), id, rec => ({
-          ...rec, bills: rec.bills.filter(entry => entry.status !== "deferred")
-        }));
-        return addEvent(cleared, `${playerName(cleared, id)} paid ${formatRupees(total)} deferred tax to City Funds.`, "money", { privateTo: id, playerId: id, amount: total });
+        return payPrivateTax(state, id, deferred, total);
       }
       const bill = seat.bills.find(entry => entry.round === action.round &&
         (action.billId === undefined || action.billId === (entry.id ?? null)) &&
         (action.type === "CITY_DEFER_TAX" ? entry.status === "open" : entry.status !== "paid"));
       if (!bill) return addEvent(state, "That private bill is no longer open.", "error", { privateTo: id });
       if (action.type === "CITY_PAY_TAX") return available >= bill.amount
-        ? payTaxEarly(state, id, bill) : addEvent(state, "Raise more cash before paying this bill.", "error", { privateTo: id });
+        ? payPrivateTax(state, id, [bill], bill.amount) : addEvent(state, "Raise more cash before paying this bill.", "error", { privateTo: id });
       return updateBill(state, id, bill, "deferred");
     }
     case "CITY_LOCK_PERMITS": {
@@ -1680,10 +1680,12 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
         return civicEvent({ ...state, mayor: { ...desk, proposalUsed: true, proposal } },
           player.name + " proposed " + CITY_POLICIES[action.policy] + " for next round.", "policy", { playerId: id });
       }
+      const officeState = desk.office && player.botLevel === "pro"
+        ? { ...desk.office, lastBotProjectTurn: seat.turns } : desk.office;
       if (action.policy === "wealth") {
         const levy = reserveLevy(state);
         if (!levy) return reject(state, "Nobody currently qualifies for the Cash Reserve Levy.");
-        const updated: GameState = { ...state, mayor: { ...desk, proposalUsed: true, reserveLevyUsed: true, proposal: undefined, policy: { kind: "wealth", sponsorId: id, expiresRound: desk.round } } };
+        const updated: GameState = { ...state, mayor: { ...desk, office: officeState, proposalUsed: true, reserveLevyUsed: true, proposal: undefined, policy: { kind: "wealth", sponsorId: id, expiresRound: desk.round } } };
         return civicEvent(makePayment(updated, levy.playerId, "bank", levy.amount, "for the Mayor's instant Cash Reserve Levy", "city"),
           `Mayor ${player.name} enacted Cash Reserve Levy immediately — ${formatRupees(levy.amount)} collected from ${playerName(state, levy.playerId)}!`,
           "policy", { playerId: levy.playerId, amount: levy.amount });
@@ -1691,7 +1693,7 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
       const enacted = { kind: action.policy, sponsorId: id, district: action.district, expiresRound: desk.round + 1 } as const;
       const openVote = { ...enacted, id: state.nextEventId, term: desk.term, votes: [] as string[] };
       return civicEvent(
-        { ...state, mayor: { ...desk, proposalUsed: true, policy: enacted, proposal: openVote } },
+        { ...state, mayor: { ...desk, office: officeState, proposalUsed: true, policy: enacted, proposal: openVote } },
         `Mayor ${player.name} enacted ${CITY_POLICIES[action.policy]}${action.district ? ` in ${districtName(state, action.district)}` : ""} — active immediately!`,
         "policy", { playerId: id }
       );
@@ -1803,7 +1805,8 @@ function afterCityAction(before: GameState, state: GameState): GameState {
     const seat = desk.seats[player.id];
     if (!seat || (!seat.bills.length && seat.loanDue === undefined)) continue;
     const posted = seat.bills.reduce((sum, bill) => sum + (bill.status === "paid" ? bill.amount : 0), 0);
-    next = updateCitySeat(changeTreasury(next, posted), player.id, record => ({ ...record, bills: [], loanDue: undefined, loanAmountDue: undefined, loanStatus: undefined }));
+    next = updateCitySeat(next, player.id, record => ({ ...record, bills: [], loanDue: undefined, loanAmountDue: undefined, loanStatus: undefined,
+      ...(posted ? { privateTaxPaid: roundRupees((record.privateTaxPaid ?? 0) + posted) } : {}) }));
   }
   desk = next.mayor!;
   if (playerById(next, desk.mayorId)?.bankrupt) {
@@ -1984,7 +1987,9 @@ const synchronizeDebt = (state: GameState): GameState => {
   const outstanding = debts.filter(debt => { const player = playerById(next, debt.playerId); return player && !player.bankrupt && player.cash < 0 && (debt.amount === undefined || debt.amount > 0); });
   if (!outstanding.length) {
     if (!next.debts && !next.debtResumePhase && next.phase !== "awaitingDebt") return next;
-    return { ...next, phase: next.phase === "awaitingDebt" ? next.debtResumePhase ?? "awaitingEndTurn" : next.phase, debts: undefined, debtResumePhase: undefined };
+    const resume = next.debtResumePhase ?? "awaitingEndTurn";
+    const pendingTrade = next.pendingTrade?.resumePhase === "awaitingDebt" ? { ...next.pendingTrade, resumePhase: resume } : next.pendingTrade;
+    return { ...next, phase: next.phase === "awaitingDebt" ? resume : next.phase, pendingTrade, debts: undefined, debtResumePhase: undefined };
   }
   const tradeResume = next.pendingTrade?.resumePhase;
   const resume = next.phase === "awaitingDebt" || next.phase === "awaitingTradeResponse"
@@ -2029,7 +2034,7 @@ const reduceCore = (state: GameState, action: GameAction): GameState => {
     );
     const managing = before.phase === "awaitingDebt" && "playerId" in action && action.playerId === debt.playerId &&
       (action.type === "BANKRUPT" || action.type === "TRADE_OFFER" || action.type === "BUILD" && action.operation !== "build" || action.type === "MORTGAGE" && action.mortgage);
-    if (!reply && !managing && action.type !== "JOIN" && action.type !== "SET_APPEARANCE") return reject(before, "Settle the outstanding debt before normal play can continue.");
+    if (!reply && !managing && action.type !== "CITY_GRANT_LOAN" && action.type !== "JOIN" && action.type !== "SET_APPEARANCE") return reject(before, "Settle the outstanding debt before normal play can continue.");
   }
   let next = applyAction(before, action);
   // Raised cash repays creditors in order without duplicating funds across multiple debts.
@@ -2089,8 +2094,24 @@ export const reduceGame = (state:GameState,action:GameAction):GameState => {
   let next=reduceCore(state,action);
   if(!next.notice&&next.activePlayerId!==state.activePlayerId)
     next={...next,players:next.players.map(p=>p.bot&&p.id===next.activePlayerId?{...p,botTradeOffered:false}:p)};
-  if(action.type==='TRADE_OFFER'&&next.pendingTrade?.id===action.offerId)
-    next={...next,players:next.players.map(p=>p.bot&&p.id===action.playerId?{...p,botTradeOffered:true}:p)};
+  if (!next.notice && (action.type === "TRADE_OFFER" || action.type === "TRADE_COUNTER") && next.pendingTrade?.id === action.offerId) {
+    const actor = playerById(next, action.playerId);
+    next = { ...next, pendingTrade: {
+      ...next.pendingTrade,
+      ...(action.type === "TRADE_COUNTER" ? { counterRound: (state.pendingTrade?.counterRound ?? (state.pendingTrade?.counterOfId ? 1 : 0)) + 1 } : {}),
+      ...(actor?.bot && action.botNote ? { botNote: action.botNote } : {})
+    } };
+    if (actor?.bot && action.type === "TRADE_OFFER") {
+      next = withPlayer(next, actor.id, player => ({ ...player, botTradeOffered: true }));
+    }
+  }
+  if (action.type === "TRADE_DECLINE" && !next.notice && state.pendingTrade?.toPlayerId === action.playerId && !next.pendingTrade) {
+    const sender = playerById(next, state.pendingTrade.fromPlayerId);
+    if (sender?.botLevel === "pro" && sender.bot) {
+      next = withPlayer(next, sender.id, player => ({ ...player,
+        botTradeRebuff: { partnerId: action.playerId, eventId: next.nextEventId } }));
+    }
+  }
   if(!next.city || next.city==='india')return next;
   const translate=(text:string)=>cityText(text,next.city,next.boardSize);
   return {...next,eventLog:next.eventLog.map(event=>{

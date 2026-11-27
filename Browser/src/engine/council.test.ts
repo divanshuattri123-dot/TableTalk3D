@@ -111,7 +111,7 @@ describe("Council rules (Instant Mayor Decrees & Live Council Voting)", () => {
     expect(cash(due, "b")).toBe(-169);
   });
 
-  it("applies Rent Relief instantly, keeps the district blue, and halves rent up to ₹250", () => {
+  it("applies Rent Relief instantly, keeps the district blue, and discounts 90 percent without a cap", () => {
     const setup = own(table(), "b", 23, 3);
     const relief = propose(setup, "rent-relief", "red");
     expect(rentReliefActive(relief, getTile(23, 40))).toBe(true);
@@ -121,8 +121,8 @@ describe("Council rules (Instant Mayor Decrees & Live Council Voting)", () => {
       return step(next, { type: "MOVE_RESULT", playerId: "a" });
     };
     const discounted = land(relief);
-    expect(cash(discounted, "a")).toBe(1600 - 450); // 700 rent - 250 relief = 450
-    expect(discounted.mayor!.seats.b!.rent).toBe(450);
+    expect(cash(discounted, "a")).toBe(1600 - 70); // ₹700 rent less ₹630 relief.
+    expect(discounted.mayor!.seats.b!.rent).toBe(70);
   });
 
   it("pauses rival construction instantly under Permit Pause while letting the overpowered Mayor build", () => {

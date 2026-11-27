@@ -93,6 +93,7 @@ export interface Player extends PlayerInput {
   bot?: true;
   botLevel?: "pro";
   botTradeOffered?: boolean;
+  botTradeRebuff?: { partnerId: string; eventId: number };
   cash: number;
   position: number;
   inJail: boolean;
@@ -138,8 +139,12 @@ export interface AuctionState {
   passedPlayerIds: string[];
 }
 
+export type BotTradeNote = "set-premium" | "swap" | "cash-reserve" | "concession" | "purchase";
+
 export interface TradeOffer {
   counterOfId?: string;
+  counterRound?: number;
+  botNote?: BotTradeNote;
   id: string;
   fromPlayerId: string;
   toPlayerId: string;
@@ -265,7 +270,8 @@ export type GameAction =
       requestedPropertyIds: number[];
       offeredJailCards?: CardDeck[];
       requestedJailCards?: CardDeck[];
+      botNote?: BotTradeNote;
     }
   | { type: "TRADE_ACCEPT"; playerId: string; offerId: string }
-  | { type: "TRADE_COUNTER"; playerId: string; previousOfferId: string; offerId: string; offeredCash: number; requestedCash: number; offeredPropertyIds: number[]; requestedPropertyIds: number[]; offeredJailCards?: CardDeck[]; requestedJailCards?: CardDeck[] }
+  | { type: "TRADE_COUNTER"; playerId: string; previousOfferId: string; offerId: string; offeredCash: number; requestedCash: number; offeredPropertyIds: number[]; requestedPropertyIds: number[]; offeredJailCards?: CardDeck[]; requestedJailCards?: CardDeck[]; botNote?: BotTradeNote }
   | { type: "TRADE_DECLINE"; playerId: string; offerId: string };

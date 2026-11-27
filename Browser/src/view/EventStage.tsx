@@ -6,7 +6,7 @@ import { getPurchasableTile, getTile, isStreetTile } from "../engine/board";
 import { calculateRent } from "../engine/reducer";
 import { formatRupees } from "../engine/currency";
 import { classicSpendableCash } from "../engine/classic";
-import { auctionCredit, cityLoanTotal, citySeizedOwner, permitPaused, propertyPermitLocked } from "../engine/mayor";
+import { auctionCredit, cityLoanTotal, citySeizedOwner, permitPaused, propertyPermitLocked, RENT_RELIEF_PERCENT } from "../engine/mayor";
 import type { GameAction, GameState, Player } from "../engine/types";
 import type { PresentationFrame } from "../presentation/plan";
 import { GROUP_COLORS } from "./palette";
@@ -15,6 +15,13 @@ import {rollDice} from '../network/random';
 import TapDice from './TapDice';
 
 const money = formatRupees;
+const tradeNotes = {
+  "set-premium": "That deed completes your set. I’d need a little more to let it go.",
+  swap: "What if we swap deeds? There’s room for both of us to improve our position.",
+  "cash-reserve": "I’d rather keep some cash for the next round. Can we make it work with these terms?",
+  concession: "I can move a little on my price. How about this?",
+  purchase: "I’m interested in this deed. Would you sell at this price?"
+};
 const ART = { presenting: "dba32b5b1a084458", hammer: "bf380b9028ee80ae", waiting: "7e5612f738223164", sold: "3d92b4733d425fa8", jail: "d73b9e891369cc5b", bankrupt: "ff6eb34a6f9e58ff", winner: "5be924bf8411012c", chest: "76a2561bbb2b243c" };
 function Character({ pose, className = "" }: { pose: keyof typeof ART; className?: string }) {
   return <img className={`event-character ${className}`} alt="" src={assetUrl(`assets/images/${ART[pose]}.webp`)} />;
@@ -47,14 +54,14 @@ export function TitleDeed({ game, position, rent }: { game: GameState; position:
     {propertyPermitLocked(game, position) && <p className="title-deed-detail">Building permits paused until the Mayor changes</p>}
     {tile.kind === "property" && permitPaused(game, tile.group) && <p className="title-deed-detail">Building permits paused this round</p>}
     {tile.kind === "property" && game.mayor?.policy?.kind === "rent-relief" && game.mayor.policy.district === tile.group &&
-      <p className="title-deed-detail">{usesCityDecrees(game) ? "District relief halves rent here, up to ₹250 off per landing" : "First rent payment here qualifies for district relief this round"}</p>}
+      <p className="title-deed-detail">{usesCityDecrees(game) ? `District relief cuts rent here by ${RENT_RELIEF_PERCENT}%` : `${RENT_RELIEF_PERCENT}% off your first qualifying rent payment this round`}</p>}
     <div className="deed-symbol">{tile.kind === "railroad" ? "🚂" : tile.kind === "utility" ? "⚡" : "⌂"}</div>
     <dl>{rows.map(([label, value]) => <div key={label} className={value === rent ? "applicable-rent" : ""}><dt>{label}</dt><dd>{typeof value === "number" ? money(value) : value}</dd></div>)}</dl>
     <footer><p>Mortgage value <b>{money(tile.mortgageValue)}</b></p>{isStreetTile(tile) && <><p>Houses cost <b>{money(tile.houseCost)} each</b></p><p>Hotel costs <b>{money(tile.houseCost)} + 4 houses</b></p></>}<small>{isStreetTile(tile) ? "Own the complete colour set. Build evenly." : tile.kind === "utility" ? usesClassicRules(game) ? "Roll again to determine utility rent. No token movement." : "Multiply by the total of the landing dice." : "More railroads mean higher rent."}</small></footer>
   </article>;
 }
 
-function ReadableCard({ frame, player, onContinue }: { frame: PresentationFrame; player?: Player; onContinue: (id: string) => void }) {
+function ReadableCard({ frame, player, onContinue, loanTools }: { frame: PresentationFrame; player?: Player; onContinue: (id: string) => void; loanTools?: ReactNode }) {
   const [opened, setOpened] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   useEffect(() => { if (opened) return; const timer = window.setTimeout(() => setOpened(true), 650); return () => window.clearTimeout(timer); }, [opened]);
   return <div className="event-backdrop card-event-backdrop"><section className={`readable-card ${frame.deck}`} role="dialog" aria-modal="true" aria-labelledby="card-heading" aria-describedby="card-effect">
@@ -63,10 +70,11 @@ function ReadableCard({ frame, player, onContinue }: { frame: PresentationFrame;
     <p className="card-effect" id="card-effect">{frame.text}</p>
     <small>Card effects apply automatically. Continue when you have read the card.</small>
     <button className="event-primary" type="button" disabled={!opened} onClick={() => onContinue(frame.id)}>{opened ? "Continue" : "Opening card…"}</button>
+    {loanTools}
   </section></div>;
 }
 
-function MortgageDecision({game,localId,sendAction}:{game:GameState;localId:string;sendAction:(action:GameAction)=>void}) {
+function MortgageDecision({game,localId,sendAction,loanTools}:{game:GameState;localId:string;sendAction:(action:GameAction)=>void;loanTools?:ReactNode}) {
   const [redeem,setRedeem]=useState<number[]>([]), transfer=game.mortgageTransfers![0]!, recipient=game.players.find(p=>p.id===transfer.playerId)!;
   const modern=game.rulesEdition === "hasbro-2025";
   const interest=(modern ? redeem : transfer.propertyIds).reduce((n,id)=>n+Math.ceil(getPurchasableTile(id,game.boardSize,game.city)!.mortgageValue/10),0);
@@ -78,13 +86,15 @@ function MortgageDecision({game,localId,sendAction}:{game:GameState;localId:stri
     <p className="mortgage-total">Due now <strong>{money(cost)}</strong> · Available {money(classicSpendableCash(game,recipient.id))}</p>
     {localId===recipient.id?<><button className="event-primary" type="button" disabled={redeem.length>0&&!canPay} onClick={()=>sendAction({type:"RESOLVE_MORTGAGES",playerId:localId,redeemPropertyIds:redeem})}>Confirm mortgage choices</button>{!canPay && <p className="waiting-note">Untick redemption if you cannot afford it.{!modern && " Unpaid retention interest pauses the table for debt settlement."}</p>}</>:<p>Waiting for {recipient.name}’s mortgage choices.</p>}
     <small>Redeeming later still costs principal plus 10%.</small>
+    {loanTools}
   </section></div>;
 }
 
-export default function EventStage({ game, frame, busy, localId, sendAction, onCardRead, financeTools, counterTools }: {
+export default function EventStage({ game, frame, busy, localId, sendAction, onCardRead, financeTools, counterTools, loanTools }: {
   game: GameState; frame?: PresentationFrame; busy: boolean; localId: string; sendAction: (action: GameAction) => boolean | void;
   onCardRead: (id: string) => void;
   financeTools?: ReactNode;
+  loanTools?: ReactNode;
   counterTools?: () => ReactNode;
 }) {
   const [bid, setBid] = useState("");
@@ -102,12 +112,12 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
   const acting = current?.id === localId && !busy && !me?.bankrupt;
   const auction = frame?.kind === "sold" ? frame.auction ?? previousAuction.current : game.auction;
   const eventColor = actor?.color ?? current?.color ?? "#e93244";
-  if (frame?.kind === "card") return <ReadableCard key={frame.id} frame={frame} player={actor} onContinue={onCardRead} />;
+  if (frame?.kind === "card") return <ReadableCard key={frame.id} frame={frame} player={actor} onContinue={onCardRead} loanTools={loanTools} />;
   if(frame?.kind==='dice')return <RollReadout frame={frame} name={actor?.name} color={eventColor}/>;
-  if(game.phase === "awaitingMortgageDecision" && !busy)return <MortgageDecision key={game.mortgageTransfers![0]!.playerId+":"+game.mortgageTransfers![0]!.propertyIds.join(",")} game={game} localId={localId} sendAction={sendAction}/>;
+  if(game.phase === "awaitingMortgageDecision" && !busy)return <MortgageDecision key={game.mortgageTransfers![0]!.playerId+":"+game.mortgageTransfers![0]!.propertyIds.join(",")} game={game} localId={localId} sendAction={sendAction} loanTools={loanTools}/>;
   if(game.phase === "awaitingUtilityRoll" && !busy) {
     const rent=game.pendingUtility!, tile=getPurchasableTile(rent.propertyId, game.boardSize, game.city)!;
-    return <div className="event-backdrop"><section className="utility-stage" role="dialog" aria-modal="true" aria-label="Utility rent roll"><p className="eyebrow">Classic · utility rent</p><h1>{tile.name}</h1><p>{current?.name} must roll two fresh dice. Rent is <b>{rent.multiplier} × the total</b>. This roll never moves the token or earns an extra turn.</p>{acting?<TapDice utility onThrow={()=>sendAction({type:"ROLL",playerId:localId,dice:rollDice()})}/>:<p>Waiting for {current?.name} to roll for rent.</p>}{financeTools}</section></div>;
+    return <div className="event-backdrop"><section className="utility-stage" role="dialog" aria-modal="true" aria-label="Utility rent roll"><p className="eyebrow">Classic · utility rent</p><h1>{tile.name}</h1><p>{current?.name} must roll two fresh dice. Rent is <b>{rent.multiplier} × the total</b>. This roll never moves the token or earns an extra turn.</p>{acting?<TapDice utility onThrow={()=>sendAction({type:"ROLL",playerId:localId,dice:rollDice()})}/>:<p>Waiting for {current?.name} to roll for rent.</p>}{financeTools}{loanTools}</section></div>;
   }
   if (auction && !game.pendingTrade && (!busy||frame?.kind==='bid'||frame?.kind==='sold') && (game.phase === "awaitingAuction" || frame?.kind === "sold")) {
     const sold = frame?.kind === "sold", winner = game.players.find(p => p.id === (sold ? frame.playerId : auction.highestBidderId));
@@ -136,6 +146,7 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
               ? `If you win this bid, repay ${money(cityLoanTotal(borrowing))} on ${money(borrowing)} borrowed.` : "Borrow only what your winning bid needs."}</p>}{building && <label>Build on<select aria-label="Auction building target" value={chosenTarget} onChange={e=>setBuildTarget(e.target.value)}>{targets.map(id=><option key={id} value={id}>{getTile(id, game.boardSize, game.city).name}</option>)}</select></label>}<div>{[10, 50, 100].map(step => <button type="button" key={step} disabled={busy || available < auction.currentBid + step} onClick={() => doBid(auction.currentBid + step)}>+{money(step)}</button>)}</div><label>Choose your bid<input aria-label="Auction bid amount" type="number" min={minimum} max={available} step="1" value={bid} placeholder={String(minimum)} onChange={e => setBid(e.target.value)} /></label><div><button className="event-primary" type="button" disabled={busy || !bid || !Number.isSafeInteger(Number(bid)) || Number(bid) < minimum || Number(bid) > available} onClick={() => doBid(Number(bid))}>Place bid</button><button className="event-secondary" type="button" disabled={busy || auction.passedPlayerIds.includes(localId)} onClick={() => sendAction({ type: "AUCTION_BID", playerId: localId, auctionId: auction.id, pass: true })}>Pass</button></div></div>}
           {!eligible && !sold && <p className="auction-waiting">{winner?.id === localId ? "You have the highest bid. Waiting for the others." : auction.passedPlayerIds.includes(localId) ? "You passed. Watch the bidding." : "Watching the auction."}</p>}
           {!sold && financeTools}
+          {!sold && loanTools}
         </div>
       </section>
     </div>;
@@ -144,13 +155,13 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
     const position = game.pendingPurchase.propertyId, tile = getPurchasableTile(position, game.boardSize, game.city)!;
     return <div className="event-backdrop purchase-backdrop"><section className="purchase-stage" role="dialog" aria-modal="true" aria-label={`Purchase ${tile.name}`}>
       <div className="sale-intro"><p className="event-ribbon" style={{ background: current?.color }}>FOR SALE</p><h1>{tile.name}</h1><p>{current?.name} landed here.</p><Character pose="presenting" /></div><TitleDeed game={game} position={position} />
-      <div className="sale-actions"><p>Bank price<strong>{money(tile.price)}</strong></p>{acting ? <><button className="event-primary" type="button" disabled={(me?.cash ?? 0) < tile.price} onClick={() => sendAction({ type: "BUY", playerId: localId, propertyId: position })}>Buy property</button><button className="event-secondary" type="button" onClick={() => sendAction({ type: "DECLINE_BUY", playerId: localId })}>Start auction</button><small>Your cash: {money(me?.cash ?? 0)}<br />Declining opens bidding to everybody.</small></> : <p className="auction-waiting">Waiting for {current?.name} to buy or auction.</p>}{financeTools}</div>
+      <div className="sale-actions"><p>Bank price<strong>{money(tile.price)}</strong></p>{acting ? <><button className="event-primary" type="button" disabled={(me?.cash ?? 0) < tile.price} onClick={() => sendAction({ type: "BUY", playerId: localId, propertyId: position })}>Buy property</button><button className="event-secondary" type="button" onClick={() => sendAction({ type: "DECLINE_BUY", playerId: localId })}>Start auction</button><small>Your cash: {money(me?.cash ?? 0)}<br />Declining opens bidding to everybody.</small></> : <p className="auction-waiting">Waiting for {current?.name} to buy or auction.</p>}{financeTools}{loanTools}</div>
     </section></div>;
   }
   if (game.pendingTrade && !busy) {
     const trade = game.pendingTrade, from = game.players.find(p => p.id === trade.fromPlayerId)!, to = game.players.find(p => p.id === trade.toPlayerId)!;
-    if (counterOpen && localId === to.id && counterTools) return <div className="finance-backdrop"><section className="finance-sheet counter-offer-sheet" role="dialog" aria-modal="true" aria-label="Write a counter-offer"><header><h2>Your counter-offer</h2><button type="button" aria-label="Cancel counter-offer" onClick={()=>setCounterOpen(false)}>×</button></header><p>Edit what you give and receive. Nothing changes hands until the other player accepts.</p>{counterTools()}</section></div>;
-return <div className="event-backdrop trade-backdrop"><section className="trade-stage" role="dialog" aria-modal="true" aria-label="Trade offer"><h1>{trade.counterOfId ? "A counter-offer." : "Let’s make a deal."}</h1><p>{from.name} made an offer to {to.name}.</p><div className="trade-comparison">{[{ player: from, cash: trade.offeredCash, deeds: trade.offeredPropertyIds, cards:trade.offeredJailCards }, { player: to, cash: trade.requestedCash, deeds: trade.requestedPropertyIds, cards:trade.requestedJailCards }].map(side => <article key={side.player.id} style={{ "--player-color": side.player.color } as CSSProperties}><PlayerPortrait player={side.player} /><h2>{side.player.name} gives</h2><strong>{money(side.cash)}</strong><ul>{side.deeds.length ? side.deeds.map(id => <li key={id}>{getTile(id, game.boardSize, game.city).name}{game.properties[id]!.mortgaged?" · mortgaged":""}</li>) : <li>No properties</li>}{side.cards?.map(deck=><li key={deck}>{deck==="chance"?"Chance":"Community Chest"} release card</li>)}</ul></article>)}</div>{usesClassicRules(game) && <p>{game.rulesEdition === "hasbro-2025" ? "Received mortgages may be kept at no immediate cost, or redeemed for principal + 10%." : "Received mortgages require an immediate 10% interest or principal + 10% redemption decision after acceptance."}</p>}{localId === to.id ? <div className="trade-decision"><button className="event-primary" type="button" onClick={() => sendAction({ type: "TRADE_ACCEPT", playerId: localId, offerId: trade.id })}>Accept deal</button><button className="event-secondary" type="button" onClick={() => sendAction({ type: "TRADE_DECLINE", playerId: localId, offerId: trade.id })}>Decline</button>{counterTools && <button className="event-secondary" type="button" onClick={()=>setCounterOpen(true)}>Counter offer</button>}</div> : localId === from.id ? <div className="trade-decision"><p>Waiting for {to.name}’s decision.</p><button className="event-secondary" type="button" onClick={() => sendAction({ type: "TRADE_DECLINE", playerId: localId, offerId: trade.id })}>Withdraw offer</button></div> : <p>Waiting for {to.name}’s decision.</p>}</section></div>;
+    if (counterOpen && localId === to.id && counterTools) return <div className="finance-backdrop"><section className="finance-sheet counter-offer-sheet" role="dialog" aria-modal="true" aria-label="Write a counter-offer"><header><h2>Your counter-offer</h2><button type="button" aria-label="Cancel counter-offer" onClick={()=>setCounterOpen(false)}>×</button></header><p>Edit what you give and receive. Nothing changes hands until the other player accepts.</p>{counterTools()}{loanTools}</section></div>;
+return <div className="event-backdrop trade-backdrop"><section className="trade-stage" role="dialog" aria-modal="true" aria-label="Trade offer"><h1>{trade.counterOfId ? "A counter-offer." : "Let’s make a deal."}</h1><p>{from.name} made an offer to {to.name}.</p>{from.bot && trade.botNote && tradeNotes[trade.botNote] && <p>“{tradeNotes[trade.botNote]}”</p>}<div className="trade-comparison">{[{ player: from, cash: trade.offeredCash, deeds: trade.offeredPropertyIds, cards:trade.offeredJailCards }, { player: to, cash: trade.requestedCash, deeds: trade.requestedPropertyIds, cards:trade.requestedJailCards }].map(side => <article key={side.player.id} style={{ "--player-color": side.player.color } as CSSProperties}><PlayerPortrait player={side.player} /><h2>{side.player.name} gives</h2><strong>{money(side.cash)}</strong><ul>{side.deeds.length ? side.deeds.map(id => <li key={id}>{getTile(id, game.boardSize, game.city).name}{game.properties[id]!.mortgaged?" · mortgaged":""}</li>) : <li>No properties</li>}{side.cards?.map(deck=><li key={deck}>{deck==="chance"?"Chance":"Community Chest"} release card</li>)}</ul></article>)}</div>{usesClassicRules(game) && <p>{game.rulesEdition === "hasbro-2025" ? "Received mortgages may be kept at no immediate cost, or redeemed for principal + 10%." : "Received mortgages require an immediate 10% interest or principal + 10% redemption decision after acceptance."}</p>}{localId === to.id ? <div className="trade-decision"><button className="event-primary" type="button" onClick={() => sendAction({ type: "TRADE_ACCEPT", playerId: localId, offerId: trade.id })}>Accept deal</button><button className="event-secondary" type="button" onClick={() => sendAction({ type: "TRADE_DECLINE", playerId: localId, offerId: trade.id })}>Decline</button>{counterTools && <button className="event-secondary" type="button" onClick={()=>setCounterOpen(true)}>Counter offer</button>}</div> : localId === from.id ? <div className="trade-decision"><p>Waiting for {to.name}’s decision.</p><button className="event-secondary" type="button" onClick={() => sendAction({ type: "TRADE_DECLINE", playerId: localId, offerId: trade.id })}>Withdraw offer</button></div> : <p>Waiting for {to.name}’s decision.</p>}{loanTools}</section></div>;
   }
   if (!frame) return null;
   if (frame.kind === "set") return <div className="motion-event colour-set-event" key={frame.id} style={{ "--event-color": eventColor } as CSSProperties} aria-live="polite">

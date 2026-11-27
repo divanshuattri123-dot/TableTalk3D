@@ -119,7 +119,7 @@ class Table {
     const relief = rentRelief(this.s, payerId, tile, amount);
     if (relief) {
       Object.assign(this.s, updateCitySeat(this.s, payerId, seat => ({ ...seat, rentReliefRound: this.s.mayor!.round })));
-      amount -= relief;
+      amount = cents(amount - relief);
       this.event(this.player(payerId).name + " saved " + money(relief) + " with Rent Relief.", "civic", { civic: "policy", playerId: payerId, amount: relief });
     }
     if (this.s.rulesEdition !== "hasbro-2025") {
@@ -472,7 +472,13 @@ class Table {
   settle() {
     this.reconcileAuctions();
     this.s.debts=this.s.debts?.filter(d=>(d.amount??0)>0 && !owner(this.s,d.playerId)?.bankrupt);
-    if (!this.s.debts?.length) { this.s.debts=undefined; if (this.s.phase==="awaitingDebt") this.s.phase=this.s.debtResumePhase??"awaitingEndTurn"; this.s.debtResumePhase=undefined; }
+    if (!this.s.debts?.length) {
+      const resume = this.s.debtResumePhase ?? "awaitingEndTurn";
+      this.s.debts = undefined;
+      if (this.s.phase === "awaitingDebt") this.s.phase = resume;
+      if (this.s.pendingTrade?.resumePhase === "awaitingDebt") this.s.pendingTrade.resumePhase = resume;
+      this.s.debtResumePhase = undefined;
+    }
     else if (this.s.phase!=="awaitingDebt" && this.s.phase!=="awaitingTradeResponse") { this.s.debtResumePhase=this.s.phase as DebtResumePhase; this.s.phase="awaitingDebt"; }
     if (live(this.s).length===1) {
       this.s.phase="gameOver"; this.s.winnerId=live(this.s)[0]!.id; this.s.activePlayerId=this.s.winnerId;

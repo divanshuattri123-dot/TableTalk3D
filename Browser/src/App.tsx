@@ -30,7 +30,7 @@ import {rollDice} from './network/random';
 import { isPlayerColorTaken, playerColorKey } from "./engine/playerColors";
 import { usePresentation } from "./presentation/usePresentation";
 import { CityHall, CityHeadline, CityTaxPrompt, CityVotePrompt, FortWheel } from "./view/MayorDesk";
-import { cityLoanAvailable, citySeizedOwner, cityStable, councilSpeaker, fortPosition, permitPaused, permitPauseActive, propertyPermitLocked, rentReliefActive, trainOffer } from "./engine/mayor";
+import { cityLoanAvailable, citySeizedOwner, cityStable, councilSpeaker, fortPosition, permitPaused, permitPauseActive, propertyPermitLocked, rentReliefActive, RENT_RELIEF_PERCENT, trainOffer } from "./engine/mayor";
 import { presentationInteractionBusy } from "./presentation/timeline";
 import { shouldSendMove } from "./presentation/plan";
 import EventStage, { PlayerPortrait } from "./view/EventStage";
@@ -324,6 +324,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
   const [diceToolsOpen,setDiceToolsOpen]=useState(false);
   const [drawer, setDrawer] = useState<"menu" | "players" | "log">();
   const [cityOpen, setCityOpen] = useState(false);
+  const [cityLoanView, setCityLoanView] = useState(false);
   const seizedAuction = game?.auction?.seizedFromId;
   useEffect(() => { if (seizedAuction) setCityOpen(false); }, [seizedAuction]);
   const [openWheelId, setOpenWheelId] = useState<number>();
@@ -428,6 +429,11 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
   const mobileLobby = mobile && game.phase === 'lobby';
   const shareText = copied ? "Link copied" : "Copy room link";
   const cityAvailable = connection === "connected" && !motion.busy && sceneUsable && !diceToolsOpen;
+  const loanAvailable = connection === "connected" && !diceToolsOpen;
+  const mayorLoanButton = game.mayor?.office && game.mayor.mayorId === me?.id && !me?.bankrupt && game.phase !== "gameOver"
+    ? <button type="button" className="event-secondary" disabled={!loanAvailable} onClick={() => {
+      setOpenWheelId(undefined); setCityLoanView(true); setCityOpen(true);
+    }}>City Hall loans</button> : undefined;
   const speakerId = councilSpeaker(game);
   const wheel = game.mayor?.wheel;
   const wheelAvailable = cityAvailable && isCurrent && game.phase === "awaitingEndTurn" && wheel?.playerId === me?.id && !!wheel;
@@ -447,8 +453,9 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
           <button type="button" onClick={copyRoomLink}>{shareText}</button>
         </div>
         <div className={`connection-pill ${connection}`}><span />{connection}</div>
-        {game.mayor && <CityHall game={game} localId={session.player.id} available={cityAvailable}
-          open={cityOpen} onOpen={() => { setOpenWheelId(undefined); setCityOpen(true); }} onClose={() => setCityOpen(false)} sendAction={sendAction} />}
+        {game.mayor && <CityHall game={game} localId={session.player.id} available={cityAvailable} officeLoanAvailable={loanAvailable}
+          loansOnly={cityLoanView} open={cityOpen} onOpen={() => { setOpenWheelId(undefined); setCityLoanView(false); setCityOpen(true); }}
+          onClose={() => { setCityLoanView(false); setCityOpen(false); }} sendAction={sendAction} />}
         <nav className="hud-navigation desktop-hud-navigation" aria-label="Game menu">
           <button type="button" onClick={() => setDrawer("players")} aria-label="Players and deeds" aria-haspopup="dialog">♙ <span>Players</span></button>
           <button type="button" onClick={() => setDrawer("log")} aria-label="Event log" aria-haspopup="dialog">≡ <span>Log</span></button>
@@ -460,6 +467,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
       {error && <p className="global-error">{error}</p>}
       {connection !== "connected" && <div className="connection-recovery" role="status"><strong>{connection === "offline" ? "You’re offline" : "Reconnecting to your table…"}</strong><span>Confirmed moves are saved. Keep this room open.</span><button type="button" onClick={reconnect}>Retry now</button></div>}
       {game.notice && <p className="global-error" role="status">{game.notice}</p>}
+      {game.phase === "awaitingDebt" && mayorLoanButton && <div className="city-rescue-shortcut">{mayorLoanButton}</div>}
       {screenNotice && <p className="fullscreen-notice" role="status">{screenNotice}</p>}
       {game.rentClaim && game.rentClaim.ownerId === me?.id && !me?.bankrupt && <div className="rent-claim" role="status"><span><b>{getTile(game.rentClaim.propertyId, game.boardSize, game.city).name}</b><small>Claim before the next movement roll</small></span><button type="button" disabled={connection !== "connected" || motion.busy || !sceneUsable || ["awaitingTradeResponse", "awaitingDebt", "awaitingMortgageDecision"].includes(game.phase)} onClick={() => sendAction({ type: "CLAIM_RENT", playerId: me!.id, claimId: game.rentClaim!.id })}>Claim {formatMoney(game.rentClaim.amount)}</button></div>}
       {game.mayor && me && !me.bankrupt && <CityTaxPrompt game={game} localId={me.id} openCityHall={() => setCityOpen(true)} available={connection === "connected" && !motion.busy && sceneUsable} hidden={cityOpen || !!wheelDialog || !!drawer || !!tablePanel || ["awaitingAuction", "awaitingBuy", "awaitingTradeResponse", "awaitingDebt", "awaitingMove"].includes(game.phase)} sendAction={sendAction} />}
@@ -485,7 +493,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
 
 {drawer && !(mobileLobby && drawer === "menu") && <div className="hud-drawer-backdrop" onClick={() => setDrawer(undefined)}><section className={`hud-drawer${drawer === "menu" ? " game-menu-drawer" : ""}`} role="dialog" aria-modal="true" aria-labelledby="hud-drawer-title" onClick={event => event.stopPropagation()}><header><h2 id="hud-drawer-title">{drawer === "menu" ? "Game menu" : drawer === "players" ? "At the table" : "Table chatter"}</h2><button type="button" autoFocus onClick={() => setDrawer(undefined)} aria-label="Close panel">×</button></header>{drawer === "menu" ? <GameMenu roomCode={session.roomCode} copied={copied} fullscreen={fullscreen} showFullscreen={!nativeMobileShell()} onPanel={panel => { setDrawer(undefined); setTablePanel(panel); }} onPlayers={() => setDrawer("players")} onHistory={() => setDrawer("log")} onCopy={copyRoomLink} onFullscreen={toggleFullscreen} onLeave={onLeave} onPrivacy={publisher.openPrivacy} /> : drawer === "players" ? <PlayerRoster game={game} localId={session.player.id} /> : <EventLog game={game} />}</section></div>}
 
-      <EventStage game={game} frame={motion.frame} busy={connection !== "connected" || presentationInteractionBusy(game, motion) || !sceneUsable} localId={session.player.id} sendAction={sendAction} onCardRead={motion.acknowledgeCard} counterTools={me && game.pendingTrade ? () => <TradeComposer key={game.pendingTrade!.id} game={game} local={me} sendAction={sendAction} counterTrade={game.pendingTrade!} /> : undefined} financeTools={me && <ClassicFinanceMenu game={game} local={me} available={connection === "connected" && !motion.busy && sceneUsable} sendAction={sendAction} />} />
+      <EventStage game={game} frame={motion.frame} busy={connection !== "connected" || presentationInteractionBusy(game, motion) || !sceneUsable} localId={session.player.id} sendAction={sendAction} onCardRead={motion.acknowledgeCard} loanTools={mayorLoanButton} counterTools={me && game.pendingTrade ? () => <TradeComposer key={game.pendingTrade!.id} game={game} local={me} sendAction={sendAction} counterTrade={game.pendingTrade!} /> : undefined} financeTools={me && <ClassicFinanceMenu game={game} local={me} available={connection === "connected" && !motion.busy && sceneUsable} sendAction={sendAction} />} />
       {game.mode === "mayor" && <CityHeadline game={game} paused={cityOpen || !!wheelDialog || !!drawer} />}
       {wheelDialog && <FortWheel key={wheelDialog.id} game={game} decision={wheelDialog} localId={session.player.id}
         available={cityAvailable} onClose={() => setOpenWheelId(undefined)} sendAction={sendAction} />}
@@ -568,7 +576,7 @@ function Board({ game, current, onSelect }: { game: GameState; current?: Player;
               data-side={side}
               key={tile.position}
               style={tileStyle}
-              title={[tile.name, tile.region, tile.detail, paused ? "Permit Pause active" : "", isRelief ? "Rent Relief active · 50% off rent" : ""].filter(Boolean).join(" · ")}
+              title={[tile.name, tile.region, tile.detail, paused ? "Permit Pause active" : "", isRelief ? `Rent Relief active · ${RENT_RELIEF_PERCENT}% off rent` : ""].filter(Boolean).join(" · ")}
               role="button"
               tabIndex={0}
               aria-label={`Inspect ${tile.name}${tile.region ? `, ${tile.region}` : ""}${tile.detail ? `, ${tile.detail}` : ""}`}

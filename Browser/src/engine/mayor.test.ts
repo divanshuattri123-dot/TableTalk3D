@@ -101,7 +101,9 @@ describe("Mayor rules (Classic 40-space + Overpowered Mayor)", () => {
     // Player p2 can still choose to pay by themselves at any time without fine
     const selfPaid = send(state, { type: "CITY_PAY_TAX", playerId: "p2", round: 1 });
     expect(cash(selfPaid, "p2")).toBe(1440);
-    expect(selfPaid.mayor!.treasury).toBe(560);
+    expect(selfPaid.mayor!.treasury).toBe(400);
+    expect(selfPaid.mayor!.seats.p2!.privateTaxPaid).toBe(160);
+    expect(projectCityState(selfPaid, "p1")).toEqual(projectCityState(state, "p1"));
     expect(selfPaid.mayor!.seats.p2!.bills).toEqual([]);
   });
 

@@ -9,6 +9,7 @@ import type {GameAction, GameState} from '../src/engine/types';
 import {projectCityState, WHEEL_SECTIONS} from '../src/engine/mayor';
 
 interface SeatConnection { seat?: string }
+const isPrivateTax = (action?: GameAction) => action?.type === "CITY_PAY_TAX" || action?.type === "CITY_DEFER_TAX";
 function withWheelDraw(action: GameAction | undefined): GameAction | undefined {
   return action?.type === "CITY_SPIN"
     ? { ...action, section: randomIndex(WHEEL_SECTIONS.length), prizeRoll: randomIndex(100) }
@@ -63,8 +64,12 @@ export class GameRoom extends Server<Env> {
   async onAlarm(){
     if(![...this.getConnections()].some(connection=>connection.readyState===1))return;
     const previous=this.room.state;
-    const state=await this.room.apply(current => withWheelDraw(chooseBotAction(current)));
-    if(state!==previous)this.publishState(state);
+    let action: GameAction | undefined;
+    const state=await this.room.apply(current => {
+      action = withWheelDraw(chooseBotAction(current));
+      return action;
+    });
+    if(state!==previous)this.publishState(state, undefined, undefined, isPrivateTax(action) ? previous : undefined);
     if(state.notice){console.error('AI decision rejected',state.notice);return;}
     await this.scheduleBot(previous);
   }
@@ -87,7 +92,7 @@ export class GameRoom extends Server<Env> {
       const action = incoming.action;
       const state = await this.room.apply(() => withWheelDraw(action), incoming.id);
       if (action.type === "JOIN" && state.players.some(player => player.id === action.player.id)) sender.setState({ seat: action.player.id });
-      this.publishState(state, sender.id, incoming.id);
+      this.publishState(state, sender.id, incoming.id, isPrivateTax(action) ? previous : undefined);
       await this.scheduleBot(previous);
     } catch (error) {
       console.error("Room checkpoint failed", error);
@@ -95,13 +100,18 @@ export class GameRoom extends Server<Env> {
     }
   }
 
-  private publishState(state: GameState, senderId?: string, ackId?: string) {
+  private publishState(state: GameState, senderId?: string, ackId?: string, privatePrevious?: GameState) {
     if (!state.mayor) {
       this.broadcast(JSON.stringify({ type: "state", state, ackId } satisfies ServerMessage));
       return;
     }
     for (const link of this.getConnections<SeatConnection>()) {
-      if (link.readyState === 1) this.sendState(link, state, link.id === senderId ? ackId : undefined);
+      if (link.readyState !== 1) continue;
+      const seat = link.state?.seat;
+      const view = projectCityState(state, seat);
+      if (link.id !== senderId && privatePrevious &&
+          JSON.stringify(view) === JSON.stringify(projectCityState(privatePrevious, seat))) continue;
+      this.send(link, { type: "state", state: view, ackId: link.id === senderId ? ackId : undefined });
     }
   }
 

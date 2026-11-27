@@ -4,6 +4,7 @@
   background: linear-gradient(145deg, #225052, #123437); color: #fff0bd; font-weight: 800;
   white-space: nowrap; box-shadow: 0 3px 10px #17292354;
 }
+.city-rescue-shortcut { position: fixed; z-index: 52; top: max(60px, env(safe-area-inset-top)); right: 12px; }
 .city-hall-trigger span { color: #ffd882; font-size: 1.2rem; }
 .city-hall-trigger i { width: 7px; height: 7px; border-radius: 50%; background: #ffc85d; box-shadow: 0 0 7px #ffc85dab; }
 .city-modal {

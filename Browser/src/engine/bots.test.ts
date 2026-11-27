@@ -60,7 +60,22 @@ describe('AI decisions obey ordinary rules',()=>{
       offeredCash:100,requestedCash:0,offeredPropertyIds:[],requestedPropertyIds:[3]});
     expect(decision(state).type).toBe('TRADE_ACCEPT');
     const pro={...state,players:state.players.map(p=>p.bot?{...p,botLevel:'pro' as const}:p)};
-    expect(decision(pro)).toMatchObject({type:'TRADE_COUNTER',requestedCash:230});
+    const first = decision(pro);
+    expect(first).toMatchObject({type:'TRADE_COUNTER',botNote:'set-premium'});
+    if (first.type !== 'TRADE_COUNTER') throw new Error('Expected the Pro counter');
+    expect(first.requestedCash).toBeGreaterThan(150);
+    let next = apply(pro, first);
+    next = apply(next, {type:'TRADE_COUNTER',playerId:'p0',previousOfferId:first.offerId,offerId:'second-price',
+      offeredCash:first.requestedCash-35,requestedCash:0,offeredPropertyIds:[],requestedPropertyIds:[3]});
+    const second = decision(next);
+    expect(second).toMatchObject({type:'TRADE_COUNTER',botNote:'concession'});
+    if (second.type !== 'TRADE_COUNTER') throw new Error('Expected a second Pro counter');
+    expect(second.requestedCash).toBeLessThan(first.requestedCash);
+    expect(second.requestedCash).toBeGreaterThan(first.requestedCash-35);
+    next = apply(next, second);
+    const agreed = apply(next, {type:'TRADE_ACCEPT',playerId:'p0',offerId:second.offerId});
+    expect(agreed.properties[3]?.ownerId).toBe('p0');
+    expect(bot(agreed).cash).toBe(bot(pro).cash+second.requestedCash);
   });
 
   it('bids or passes but waits when a human is the only remaining responder',()=>{
@@ -100,6 +115,32 @@ describe('AI decisions obey ordinary rules',()=>{
     s=apply(s,{type:'TRADE_OFFER',playerId:'p0',offerId:'bad',toPlayerId:'ai-1',offeredCash:1,requestedCash:0,offeredPropertyIds:[],requestedPropertyIds:[3]});expect(decision(s).type).toBe('TRADE_COUNTER');s=apply(s,decision(s));expect(nextBotAction(s)).toBeUndefined();
     s=apply(s,{type:'TRADE_COUNTER',playerId:'p0',previousOfferId:s.pendingTrade!.id,offerId:'still-bad',offeredCash:1,requestedCash:0,offeredPropertyIds:[],requestedPropertyIds:[3]});expect(decision(s).type).toBe('TRADE_DECLINE');apply(s,decision(s));
   });
+  it('offers a deed swap when cash alone cannot buy the missing property, then gives the recipient space', () => {
+    let s = started('classic');
+    s.phase = 'awaitingEndTurn';
+    bot(s).botLevel = 'pro';
+    bot(s).cash = 250;
+    for (const id of [6, 16, 18]) s.properties[id]!.ownerId = 'ai-1';
+    s.properties[19]!.ownerId = 'p0';
+    const trade = decision(s);
+    expect(trade).toMatchObject({type:'TRADE_OFFER',offeredPropertyIds:[6],requestedPropertyIds:[19],botNote:'swap'});
+    s = apply(s, trade);
+    s = apply(s, {type:'TRADE_DECLINE',playerId:'p0',offerId:s.pendingTrade!.id});
+    bot(s).botTradeOffered = false;
+    expect(decision(s)).toMatchObject({type:'END_TURN'});
+  });
+
+  it('stops countering a human negotiation once the offer chain reaches four rounds', () => {
+    let s = started('classic');
+    s.activePlayerId = 'p0';
+    s.properties[3]!.ownerId = 'ai-1';
+    bot(s).botLevel = 'pro';
+    s = apply(s, {type:'TRADE_OFFER',playerId:'p0',toPlayerId:'ai-1',offerId:'impasse',
+      offeredCash:1,requestedCash:0,offeredPropertyIds:[],requestedPropertyIds:[3]});
+    s.pendingTrade!.counterRound = 4;
+    expect(decision(s)).toMatchObject({type:'TRADE_DECLINE',offerId:'impasse'});
+  });
+
   it('offers a set-completing deal at most once during the same turn',()=>{
     let s=started();s.phase='awaitingEndTurn';s.properties[1]!.ownerId='ai-1';s.properties[3]!.ownerId='p0';expect(decision(s).type).toBe('TRADE_OFFER');s=apply(s,decision(s));
     s=apply(s,{type:'TRADE_DECLINE',playerId:'p0',offerId:s.pendingTrade!.id});expect(decision(s).type).toBe('END_TURN');

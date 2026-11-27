@@ -3,7 +3,7 @@ import { makeStartAction } from "../network/startAction";
 import { nextBotAction } from "./bots";
 import { jailCardIndex } from "./classicCards";
 import { getTile } from "./board";
-import { cityLoanBalance, cityTax, newTerm, nextAuditMiss, permitPauseActive, recordRent } from "./mayor";
+import { cityLoanBalance, cityTax, newTerm, nextAuditMiss, permitPauseActive, projectCityState, recordRent } from "./mayor";
 import { createInitialState, reduceGame } from "./reducer";
 import type { GameAction, GameState } from "./types";
 
@@ -70,6 +70,65 @@ describe("City Hall on the Classic table", () => {
     expect(next.eventLog[0]).toMatchObject({ kind: "error", privateTo: "p2" });
   });
 
+  it("keeps payment, deferral and paying all deferred bills private from every other seat", () => {
+    let s = recordRent(table(), "p2", 500);
+    s.players[1]!.cash = 1500.37;
+    const bill = s.mayor!.seats.p2!.bills[0]!;
+    const originalViews = [undefined, "p1", "p3"].map(viewer => JSON.stringify(projectCityState(s, viewer)));
+    const deferred = apply(s, { type: "CITY_DEFER_TAX", playerId: "p2", round: bill.round, billId: bill.id });
+    expect([undefined, "p1", "p3"].map(viewer => JSON.stringify(projectCityState(deferred, viewer)))).toEqual(originalViews);
+    s = apply(deferred, { type: "CITY_PAY_TAX", playerId: "p2", round: bill.round, billId: -1 });
+    expect([undefined, "p1", "p3"].map(viewer => JSON.stringify(projectCityState(s, viewer)))).toEqual(originalViews);
+    const own = projectCityState(s, "p2");
+    expect(own.mayor!.seats.p2).toMatchObject({ bills: [], privateTaxPaid: 320 });
+    expect(own.players[1]!.cash).toBe(1180.37);
+    expect(own.mayor!.treasury).toBe(400);
+    const settledAudit = apply(s, { type: "CITY_AUDIT", playerId: "p1", term: 1, targetId: "p2" });
+    expect(settledAudit.mayor!.seats.p2!.caughtCount).toBeUndefined();
+  });
+
+  it("pays creditors in order when the Mayor grants a partial rescue loan and a top-up", () => {
+    let s = table();
+    s.phase = "awaitingDebt";
+    s.debtResumePhase = "awaitingRoll";
+    s.players[1]!.cash = -120;
+    s.debts = [
+      { playerId: "p2", creditorId: "p3", amount: 75, reason: "rent", rent: true },
+      { playerId: "p2", creditorId: "bank", amount: 45, reason: "tax" }
+    ];
+    const grant = { type: "CITY_GRANT_LOAN", playerId: "p1", term: 1, targetId: "p2", amount: 50 } as const;
+    expect(reduceGame(s, { ...grant, playerId: "p3" }).notice).toBeTruthy();
+    s = apply(s, grant);
+    expect(s.phase).toBe("awaitingDebt");
+    expect(s.players[1]!.cash).toBe(-70);
+    expect(s.players[2]!.cash).toBe(1550);
+    expect(s.debts?.map(debt => debt.amount)).toEqual([25, 45]);
+    expect(s.mayor!.seats.p2!.loanDue).toBe(2);
+    const between = s.mayor!.seats.p2!.turns;
+    s = apply(s, { ...grant, amount: 80 });
+    expect(s.phase).toBe("awaitingRoll");
+    expect(s.players[1]!.cash).toBe(10);
+    expect(s.players[2]!.cash).toBe(1575);
+    expect(s.mayor!.seats.p2).toMatchObject({ loanAmountDue: 147, loanDue: between + 2 });
+    expect(s.mayor!.treasury).toBe(270);
+  });
+
+  it("allows a loan while a trade is pending, then resumes the original decision if the trade closes", () => {
+    let s = table();
+    s.phase = "awaitingDebt";
+    s.debtResumePhase = "awaitingRoll";
+    s.players[1]!.cash = -40;
+    s.debts = [{ playerId: "p2", creditorId: "bank", amount: 40, reason: "tax" }];
+    s.properties[3]!.ownerId = "p2";
+    s = apply(s, { type: "TRADE_OFFER", playerId: "p2", toPlayerId: "p3", offerId: "need-cash",
+      offeredCash: 0, requestedCash: 50, offeredPropertyIds: [3], requestedPropertyIds: [] });
+    s = apply(s, { type: "CITY_GRANT_LOAN", playerId: "p1", term: 1, targetId: "p2", amount: 40 });
+    expect(s.phase).toBe("awaitingTradeResponse");
+    expect(s.pendingTrade).toMatchObject({ id: "need-cash", resumePhase: "awaitingRoll" });
+    s = apply(s, { type: "TRADE_DECLINE", playerId: "p3", offerId: "need-cash" });
+    expect(s.phase).toBe("awaitingRoll");
+  });
+
   it("can repay a city loan down to the last paise", () => {
     let state = table();
     state.players[1]!.cash = 0.30;
@@ -80,6 +139,46 @@ describe("City Hall on the Classic table", () => {
     state = apply(state, { type: "CITY_REPAY_LOAN", playerId: "p2", amount: 0.20 });
     expect(state.players[1]!.cash).toBe(0);
     expect(cityLoanBalance(state, "p2")).toBe(0);
+  });
+
+  it("chooses the district with the biggest rent exposure and accepts a council veto", () => {
+    let s = table();
+    s.players[0] = { ...s.players[0]!, bot: true, botLevel: "pro", position: 14, cash: 650 };
+    s.properties[16] = { ownerId: "p2", houses: 2, mortgaged: false };
+    for (const id of [21, 23, 24]) s.properties[id] = { ownerId: "p2", houses: 5, mortgaged: false };
+    const decree = nextBotAction(s, [1, 1]);
+    expect(decree).toMatchObject({ type: "CITY_PROPOSE", policy: "rent-relief", district: "red" });
+    expect(nextBotAction(s, [6, 6])).toEqual(decree);
+    s = apply(s, decree!);
+    for (const voter of ["p2", "p3"]) s = apply(s, {
+      type: "CITY_VOTE", playerId: voter, term: 1, proposalId: s.mayor!.proposal!.id
+    });
+    expect(s.mayor?.policy).toBeUndefined();
+    expect(nextBotAction(s)?.type).not.toBe("CITY_PROPOSE");
+  });
+
+  it("uses the five-space order when it improves expected rent over the full dice range", () => {
+    const s = table();
+    s.players[0] = { ...s.players[0]!, bot: true, botLevel: "pro" };
+    s.players[1]!.position = 12;
+    s.properties[24] = { ownerId: "p1", houses: 3, mortgaged: false };
+    expect(nextBotAction(s)).toMatchObject({ type: "CITY_MOVE_RIVALS", playerId: "p1" });
+    s.players[2]!.position = 37;
+    expect(nextBotAction(s)?.type).not.toBe("CITY_MOVE_RIVALS");
+  });
+
+  it("carries uncapped Rent Relief into the manual rent claim and credits the reduced amount", () => {
+    let s = table();
+    s.rulesEdition = "hasbro-2025";
+    s.players[0]!.position = 17;
+    s.properties[24] = { ownerId: "p2", houses: 5, mortgaged: false };
+    s = apply(s, { type: "CITY_PROPOSE", playerId: "p1", term: 1, policy: "rent-relief", district: "red" });
+    s = apply(s, { type: "ROLL", playerId: "p1", dice: [3, 4] });
+    s = apply(s, { type: "MOVE_RESULT", playerId: "p1" });
+    expect(s.rentClaim).toMatchObject({ amount: 110, payerId: "p1", ownerId: "p2" });
+    s = apply(s, { type: "CLAIM_RENT", playerId: "p2", claimId: s.rentClaim!.id });
+    expect(s.players[1]!.cash).toBe(1610);
+    expect(s.mayor!.seats.p2!.rent).toBe(110);
   });
 
   it("taxes rent at 50%, 60%, and 70% across the three bands without a ₹200 cap", () => {

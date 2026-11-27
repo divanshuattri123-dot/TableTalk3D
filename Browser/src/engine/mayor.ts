@@ -1,5 +1,6 @@
 import { classicPosition, colorGroupTiles, getBoard, railroadPositions } from "./board";
 import { usesCityDecrees } from "./rules";
+import { roundRupees } from "./currency";
 import type { AuctionState, ColorGroup, GameState, Player, Tile } from "./types";
 
 export const TRAIN_FARE = 75;
@@ -9,6 +10,7 @@ export const LOAN_CASH_LIMIT = 1000;
 export const AUCTION_CREDIT_CASH_LIMIT = 400;
 export const AUDIT_FINE = 25;
 export const MAYOR_STIPEND = 100;
+export const RENT_RELIEF_PERCENT = 90;
 export const MAX_AUDITS_PER_TERM = 2;
 export const DUEL_VETO_COST = 150;
 export const WHEEL_SECTIONS = ["Bank dividend", "Building loan matures", "Doctor’s fee", "Jail release", "Advance to GO", "Lucky Scratch"] as const;
@@ -40,6 +42,7 @@ interface CitySeat {
   turns: number;
   rent: number;
   taxedRent?: number;
+  privateTaxPaid?: number;
   bills: TaxBill[];
   caughtCount?: number;
   missedAudits?: number;
@@ -91,6 +94,7 @@ export interface CityDesk {
     rivalMoveTerm?: number;
     investigationUsed?: true;
     lastBotSeizureTurn?: number;
+    lastBotProjectTurn?: number;
   };
 }
 export type CityAction =
@@ -187,15 +191,15 @@ export function trainOffer(state: GameState, playerId: string) {
   return { to: stations.find(position => position > player.position) ?? stations[0]!, fare: free || mayorFree ? 0 : TRAIN_FARE, ...(mayorFree ? { mayorFree: true as const } : {}) };
 }
 
-const unpostedTax = (seat?: CitySeat) =>
-  seat?.bills.reduce((sum, bill) => sum + (bill.status === "paid" ? bill.amount : 0), 0) ?? 0;
+const maskedTaxPaid = (seat?: CitySeat) =>
+  (seat?.privateTaxPaid ?? 0) + (seat?.bills.reduce((sum, bill) => sum + (bill.status === "paid" ? bill.amount : 0), 0) ?? 0);
 
 export function cityLoanAvailable(state: GameState, playerId: string) {
   const desk = state.mayor;
   const player = state.players.find(candidate => candidate.id === playerId);
   const isMayor = desk?.mayorId === playerId;
   return cityStable(state) && state.activePlayerId === playerId && !!player && !player.bankrupt &&
-    !!desk && !desk.office && (usesCityDecrees(state) && isMayor || player.cash + unpostedTax(desk.seats[playerId]) <= LOAN_CASH_LIMIT) && desk.policy?.kind === "loans" &&
+    !!desk && !desk.office && (usesCityDecrees(state) && isMayor || player.cash + maskedTaxPaid(desk.seats[playerId]) <= LOAN_CASH_LIMIT) && desk.policy?.kind === "loans" &&
     desk.treasury >= LOAN_AMOUNT && !desk.seats[playerId]?.borrowed;
 }
 
@@ -205,7 +209,7 @@ export function cityLoanReason(state: GameState, playerId: string): string | und
   if (!desk || desk.office || desk.policy?.kind !== "loans" || !player || player.bankrupt || cityLoanAvailable(state, playerId)) return;
   if (desk.seats[playerId]?.borrowed) return "You already used your 1 city loan this match.";
   if (desk.treasury < LOAN_AMOUNT) return "City Funds needs at least ₹200 to issue an emergency loan.";
-  if ((!usesCityDecrees(state) || desk.mayorId !== playerId) && player.cash + unpostedTax(desk.seats[playerId]) > LOAN_CASH_LIMIT) return "Emergency loans are for players with ₹1,000 or less (Mayors have no cash cap).";
+  if ((!usesCityDecrees(state) || desk.mayorId !== playerId) && player.cash + maskedTaxPaid(desk.seats[playerId]) > LOAN_CASH_LIMIT) return "Emergency loans are for players with ₹1,000 or less (Mayors have no cash cap).";
   if (state.activePlayerId !== playerId) return "Borrowing opens on your turn (₹200 loan · repay ₹225).";
   return "Finish the current board decision to borrow ₹200.";
 }
@@ -318,7 +322,7 @@ export function canChallengeCityProject(state: GameState, playerId: string) {
 
 export function reserveLevy(state: GameState) {
   const solvent = state.players.filter(player => !player.bankrupt).map(player => ({
-    id: player.id, cash: Math.max(0, player.cash + unpostedTax(state.mayor?.seats[player.id]))
+    id: player.id, cash: Math.max(0, player.cash + maskedTaxPaid(state.mayor?.seats[player.id]))
   }));
   const totalCash = solvent.reduce((sum, player) => sum + player.cash, 0);
   const assessed = solvent.find(player => player.cash >= 2000 && player.cash * 2 > totalCash);
@@ -351,7 +355,7 @@ export const rentReliefActive = (state: GameState, tile: Tile) =>
 export function rentRelief(state: GameState, playerId: string, tile: Tile, rent: number) {
   if (!usesCityDecrees(state) && state.mayor?.seats[playerId]?.rentReliefRound === state.mayor?.round) return 0;
   if (!rentReliefActive(state, tile)) return 0;
-  return Math.min(250, Math.floor(rent / 2));
+  return Math.round(rent * RENT_RELIEF_PERCENT) / 100;
 }
 
 export const propertyPermitLocked = (state: GameState, propertyId: number) =>
@@ -363,10 +367,12 @@ export function permitPauseActive(state: GameState, tile: Tile) {
 
 export function mayorCanGrantLoan(state: GameState, targetId: string, amount: number) {
   const desk = state.mayor;
-  return !!desk?.office && cityStable(state) && Number.isSafeInteger(amount) && amount > 0 &&
-    amount <= desk.treasury && Number.isSafeInteger(cityLoanTotal(amount)) &&
-    state.players.some(player => player.id === targetId && !player.bankrupt && player.cash >= 0) &&
-    !!desk.seats[targetId] && desk.seats[targetId].loanDue === undefined;
+  const player = state.players.find(candidate => candidate.id === targetId && !candidate.bankrupt);
+  const account = desk?.seats[targetId];
+  if (!desk?.office || !player || !account || state.phase === "lobby" || state.phase === "gameOver") return false;
+  return Number.isSafeInteger(amount) && amount > 0 && amount <= desk.treasury &&
+    Number.isSafeInteger(cityLoanBalance(state, targetId) + cityLoanTotal(amount)) &&
+    (account.loanDue === undefined || player.cash < 0 || state.debts?.some(debt => debt.playerId === targetId) === true);
 }
 
 export function cityLoanBalance(state: GameState, playerId: string) {
@@ -388,7 +394,8 @@ export function applyCityLoanPayment(state: GameState, id: string, amount: numbe
 export function bookCityLoan(state: GameState, id: string, principal: number, amountDue: number) {
   if (!state.mayor) return state;
   return updateCitySeat({ ...state, mayor: { ...state.mayor, treasury: state.mayor.treasury - principal } }, id,
-    seat => ({ ...seat, borrowed: true, loanDue: seat.turns + 2, loanAmountDue: amountDue, loanStatus: undefined }));
+    seat => ({ ...seat, borrowed: true, loanDue: seat.loanDue ?? seat.turns + 2,
+      loanAmountDue: cityLoanBalance(state, id) + amountDue }));
 }
 
 export function cityHasSeizedDeeds(state: GameState, playerId: string) {
@@ -416,7 +423,7 @@ export function cityAuctionBacking(state: GameState) {
       desk.policy?.kind !== "credit" || desk.policy.used || desk.treasury <= 0) return;
   const limit = Math.min(desk.treasury, LOAN_AMOUNT);
   const playerIds = state.players.filter(player => auction.eligiblePlayerIds.includes(player.id) &&
-    !player.bankrupt && player.cash >= 0 && player.cash + unpostedTax(desk.seats[player.id]) <= AUCTION_CREDIT_CASH_LIMIT &&
+    !player.bankrupt && player.cash >= 0 && player.cash + maskedTaxPaid(desk.seats[player.id]) <= AUCTION_CREDIT_CASH_LIMIT &&
     (desk.office ? desk.seats[player.id]?.loanDue === undefined : !desk.seats[player.id]?.borrowed)).map(p => p.id);
   if (playerIds.length) return { limit, playerIds };
 }
@@ -451,12 +458,13 @@ export function projectCityState(state: GameState, seatId?: string): GameState {
   if (!desk) return state;
   const seats: CityDesk["seats"] = {};
   for (const [id, seat] of Object.entries(desk.seats)) {
-    seats[id] = id === seatId ? seat : { ...seat, rent: 0, taxedRent: undefined, bills: [], contract: seat.contractPaid ? seat.contract : undefined };
+    seats[id] = id === seatId ? seat : { ...seat, privateTaxPaid: undefined, rent: 0, taxedRent: undefined,
+      bills: [], contract: seat.contractPaid ? seat.contract : undefined };
   }
   const players = state.players.map(player => {
     if (player.id === seatId) return player;
-    const unposted = unpostedTax(desk.seats[player.id]);
-    return unposted ? { ...player, cash: player.cash + unposted } : player;
+    const unposted = maskedTaxPaid(desk.seats[player.id]);
+    return unposted ? { ...player, cash: roundRupees(player.cash + unposted) } : player;
   });
   return {
     ...state, players,
