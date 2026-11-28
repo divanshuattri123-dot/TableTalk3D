@@ -48,7 +48,6 @@
 /* The phone HUD is for decisions. Secondary tools belong behind its one menu. */
 .immersive-game.touch-table .desktop-hud-navigation, .immersive-game.touch-table .game-header .wordmark,
 .immersive-game.touch-table .connection-pill, .immersive-game.touch-table .table-toolbar,
-.immersive-game.touch-table .unity-camera-tools, .immersive-game.touch-table .scene-tools, .immersive-game.touch-table .flat-camera-tools,
 .immersive-game.touch-table .touch-guide, .immersive-game.touch-table .landing-ribbon, .immersive-game.touch-table .table-caption,
 .immersive-game.touch-table .my-piece-strip, .immersive-game.touch-table .desktop-play-help { display: none; }
 .immersive-game.touch-table:not([data-phase="lobby"]) .room-ticket { display: none; }

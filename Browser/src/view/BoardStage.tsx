@@ -63,7 +63,6 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
       <button type="button" className="collection-button" onClick={() => setStudio("token")} aria-label="Open token collection">◇ <span>Pieces</span></button>
       <button type="button" aria-expanded={preferences} onClick={() => setPreferences(!preferences)} aria-label="Game settings">⚙ <span>Settings</span></button>
       <button type="button" className="help-button" onClick={() => setHelp(true)} aria-label="How to play">?</button>
-      {settings.view === "2d" && <button type="button" onClick={() => setPrices(true)} aria-label="Read property names and prices">₹</button>}
     </div>
     {preferences && <div className="preferences-surface" onClick={() => setPreferences(false)}><section className="table-preferences" role="dialog" aria-label="Game settings" onClick={event => event.stopPropagation()}>
       <div className="preferences-title"><b>Your table</b><button type="button" autoFocus onClick={() => setPreferences(false)} aria-label="Close settings">×</button></div>
@@ -79,11 +78,19 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
       <button className="mobile-preference-option" type="button" onClick={() => { setPreferences(false); setStudio("dice"); }}>Change dice</button>
       {settings.musicId && <button type="button" onClick={() => update({ musicId: undefined })}>Stop music</button>}
       <button type="button" onClick={() => { update({ cityId: undefined, tableArtId: undefined, renderer: "unity", camera: "top" }); }}>Restore city scenery</button>
+      <button type="button" onClick={() => setPrices(true)}>Property guide</button>
+      <details className="settings-log">
+        <summary>Event log</summary>
+        <div className="event-log">
+          {game.eventLog.length === 0 ? <p>No moves yet.</p> :
+            <ol>{game.eventLog.slice(0, 10).map(event => <li className={event.kind} key={event.id}>{event.text}</li>)}</ol>}
+        </div>
+      </details>
       <p>View, scenery and audio are personal. Your token and dice are shared with the whole room.</p>
     </section></div>}
     {error && <p className="asset-notice">{error} <button type="button" onClick={reload}>Retry collection</button></p>}
     {settings.view === "3d" ? <Suspense fallback={<div className="scene-loading"><span className="pulse-token" /><b>Building your 3D table…</b><small>The rules and room are ready.</small></div>}>
-      {settings.renderer === "unity" ? <UnityBoard mode={game.mode} onWheel={onWheel} diceEnabled={diceEnabled&&tile===undefined&&!panel&&!studio} diceId={local?.diceId} onThrow={onThrow} key={rendererAttempt} game={shown} target={target} settings={settings} frame={frame} syncVersion={syncVersion} onSelect={setTile} onComplete={onComplete} onReady={unityReady} onLite3D={() => update({ renderer: "collection" })} onFallback={() => update({ view: "2d" })} onRetry={()=>setRendererAttempt(n=>n+1)} onReadPrices={() => setPrices(true)} /> : <ThreeBoard mayorWheel={game.mode === "mayor"} onWheel={onWheel} game={shown} settings={settings} onSelect={setTile} onFallback={() => update({ view: "2d" })} onCamera={() => update({ camera: settings.camera === "top" ? "perspective" : "top" })} />}
+      {settings.renderer === "unity" ? <UnityBoard mode={game.mode} onWheel={onWheel} diceEnabled={diceEnabled&&tile===undefined&&!panel&&!studio} diceId={local?.diceId} onThrow={onThrow} key={rendererAttempt} game={shown} target={target} settings={settings} frame={frame} syncVersion={syncVersion} onSelect={setTile} onComplete={onComplete} onReady={unityReady} onLite3D={() => update({ renderer: "collection" })} onFallback={() => update({ view: "2d" })} onRetry={()=>setRendererAttempt(n=>n+1)} /> : <ThreeBoard mayorWheel={game.mode === "mayor"} onWheel={onWheel} game={shown} settings={settings} onSelect={setTile} onFallback={() => update({ view: "2d" })} />}
     </Suspense> : render2D(setTile)}
     <div className="landing-ribbon"><div><small>{game.phase === "lobby" ? "Tap any space to inspect it" : `${current?.name ?? "Player"} is at`}</small><b>{location.name}</b><span>{location.region && `${location.region} · `}{isPurchasableTile(location) ? `${money(location.price)} · ${locationOwner ? `Owned by ${locationOwner.name}` : "Unowned deed"}` : location.kind === "tax" ? `Pay ${money(location.amount)}` : location.kind === "go" ? "Collect ₹200 when passing GO" : instruction}</span></div><button type="button" onClick={() => setTile(location.position)}>Full details ↗</button></div>
     <div className="table-caption"><label className="tile-jump"><span className="sr-only">Inspect any board tile</span><select aria-label="Inspect any board tile" value="" onChange={(event) => { if (event.target.value) setTile(Number(event.target.value)); }}><option value="">Explore every property ↗</option>{getBoard(game.boardSize, game.city).map((entry) => <option value={entry.position} key={entry.position}>{entry.position + 1}. {entry.name}{entry.region ? ` — ${entry.region}` : ""}</option>)}</select></label></div>
@@ -100,7 +107,7 @@ export default function BoardStage({ game, shown, target, frame, syncVersion, on
         <button className="icon-button" type="button" onClick={() => setHelp(false)} aria-label="Close rules">×</button>
         <p className="eyebrow">A quick guide</p><h2 id="rules-title">Own the neighbourhood.</h2>
         <ol>
-          <li><span className="desktop-play-help">Drag the view or use the camera buttons. </span>Tap a place for its deed. <span className="mobile-play-help">Open Menu → Property guide for a readable list. Settings and history are in Menu.</span><span className="desktop-play-help">Use ₹ for a readable property list. The home button fits the whole board.</span></li>
+          <li>Tap or click a space to inspect its deed. Open Settings for the property guide and event log.</li>
           <li>Everyone starts with ₹1,500. Roll two dice, move and collect ₹200 each time you pass GO.</li>
           <li>Buy an unowned deed, or send it to an auction. Everyone can bid or pass — the last bidder wins.</li>
           <li>Own a full colour set to double its base rent. Build evenly across the set: four houses, then a hotel.</li>

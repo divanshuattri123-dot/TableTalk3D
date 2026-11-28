@@ -18,13 +18,12 @@ interface Release { loaderUrl: string; dataUrl: string; frameworkUrl: string; co
 declare global { interface Window { createUnityInstance?: (canvas: HTMLCanvasElement, options: object, progress: (value: number) => void) => Promise<UnityInstance> } }
 let loader: Promise<void> | undefined;
 
-export default function UnityBoard({ game, target, settings, frame, syncVersion, onSelect, onComplete, onReady, onFallback, onLite3D, onReadPrices, onRetry, diceEnabled, diceId, onThrow, mode, onWheel }: {
+export default function UnityBoard({ game, target, settings, frame, syncVersion, onSelect, onComplete, onReady, onFallback, onLite3D, onRetry, diceEnabled, diceId, onThrow, mode, onWheel }: {
   game: GameState; target: GameState; frame?: PresentationFrame;
   syncVersion: number;
   settings: ViewSettings;
   onSelect: (position: number) => void; onComplete: (id: string) => void;
   onReady: (ready: boolean) => void; onFallback: () => void; onLite3D: () => void;
-  onReadPrices: () => void;
   onRetry: () => void;
   diceEnabled: boolean; diceId?: string; onThrow: () => void; mode?: GameState["mode"]; onWheel?: () => void;
 }) {
@@ -150,7 +149,7 @@ export default function UnityBoard({ game, target, settings, frame, syncVersion,
   }, [ready, game.players, byId]);
   const failureMessage=unityFailureMessage(failure);
   return <div className="unity-board-shell" data-renderer={ready ? "unity-ready" : "unity-loading"}>
-    <canvas id="unity-canvas" ref={canvas} className="unity-canvas" draggable={false} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()} tabIndex={0} aria-label="Interactive 3D city board. Drag to pan, pinch or use buttons to zoom." />
+    <canvas id="unity-canvas" ref={canvas} className="unity-canvas" draggable={false} onDragStart={event => event.preventDefault()} onContextMenu={event => event.preventDefault()} tabIndex={0} aria-label="Interactive 3D city board. Drag to pan, pinch or scroll to zoom." />
     {ready && <ScreenBoardLabels size={game.boardSize} city={game.city} reliefDistrict={game.mayor?.policy?.kind === "rent-relief" ? game.mayor.policy.district : undefined}
       permitDistrict={game.mayor?.policy?.kind === "permits" ? game.mayor.policy.district : undefined}
       pausedDeeds={game.mayor?.office?.permitPropertyIds}
@@ -159,6 +158,6 @@ export default function UnityBoard({ game, target, settings, frame, syncVersion,
     {!ready && !failure && <div className="unity-loading"><span className="pulse-token" /><h2>Opening your city</h2><p>Loading the Unity 3D player · {Math.round(progress * 100)}%</p><progress max="1" value={progress} /><div className="unity-loading-options"><button type="button" onClick={onLite3D}>Play in lighter 3D</button><button type="button" onClick={onFallback}>Continue in 2D</button></div></div>}
     {failure && <div className="unity-loading" role="alert"><h2>{failureMessage.title}</h2><p>{failureMessage.message}</p><details><summary>Technical details</summary><p>{failure}</p></details>{failureMessage.retry&&<button type="button" onClick={async()=>{const player=instance.current;instance.current=undefined;latest.current.onReady(false);if(player)try{await Promise.race([player.Quit(),new Promise(resolve=>window.setTimeout(resolve,2000))]);}catch{}onRetry();}}>Restore 3D</button>}<button type="button" onClick={onLite3D}>Play in lighter 3D</button><button type="button" onClick={onFallback}>Continue in 2D</button></div>}
     {assetError && <p className="asset-notice">{assetError}</p>}
-    {ready && <><div className="unity-camera-tools"><button type="button" onClick={() => instance.current?.SendMessage("GamePresentation", "WholeBoard")} aria-label="Show whole board">⌂</button><button type="button" onClick={() => instance.current?.SendMessage("GamePresentation", "FocusActive")} aria-label="Follow current player">◎</button><button type="button" onClick={onReadPrices} aria-label="Read property prices" title="Property prices">₹</button><button type="button" aria-label="Zoom in" onClick={() => instance.current?.SendMessage("GamePresentation", "ZoomIn")}>＋</button><button type="button" aria-label="Zoom out" onClick={() => instance.current?.SendMessage("GamePresentation", "ZoomOut")}>−</button></div><p className="touch-guide"><span className="touch-copy">Prices in ₹ · pinch to zoom · tap a property</span><span className="mouse-copy">Drag to pan · scroll to zoom · click a property</span></p></>}
+    {ready && <p className="touch-guide"><span className="touch-copy">Pinch to zoom · tap a property</span><span className="mouse-copy">Drag to pan · scroll to zoom · click a property</span></p>}
   </div>;
 }

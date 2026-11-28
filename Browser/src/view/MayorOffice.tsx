@@ -1,7 +1,7 @@
 import {useState} from "react";
 import {getBoard, getTile} from "../engine/board";
 import {formatRupees} from "../engine/currency";
-import {LOAN_AMOUNT, MAYOR_MOVE_SPACES, PERMIT_LOCK_COUNT, cityLoanTotal, citySeizedOwner, mayorCanGrantLoan, mayorCanReleaseJail} from "../engine/mayor";
+import {LOAN_AMOUNT, LOAN_REPAYMENT_TURNS, MAYOR_MOVE_SPACES, PERMIT_LOCK_COUNT, cityLoanTotal, citySeizedOwner, mayorCanGrantLoan, mayorCanReleaseJail} from "../engine/mayor";
 import type {CityAction} from "../engine/mayor";
 import type {GameState} from "../engine/types";
 
@@ -35,10 +35,10 @@ export default function MayorOffice({game, localId, available, loansOnly, loanAv
     {!loansOnly && (inOffice || office.permitPropertyIds?.length) && <section aria-label="Permit Pause">
       <h3>Permit Pause</h3>
       {office.permitPropertyIds ? <>
-        <p>The streets marked purple on the board are paused until a different Mayor takes office.</p>
+        <p>Building permits on these streets are paused until a different Mayor takes office. The tiles are purple, or black if Rent Relief also applies.</p>
         <ul className="city-journal">{office.permitPropertyIds.map(id => <li key={id}>{getTile(id, game.boardSize, game.city).name}</li>)}</ul>
       </> : <>
-        <p>Choose three streets to mark purple. Nobody can add houses or hotels there while you hold office.</p>
+        <p>Choose three streets to pause construction. Their tiles turn purple, or black if Rent Relief also applies.</p>
         <div className="city-project-picker">{selections.map((value, index) =>
           <label key={index}>Street {index + 1}
             <select disabled={!available} value={value}
@@ -70,7 +70,7 @@ export default function MayorOffice({game, localId, available, loansOnly, loanAv
     {inOffice && <>
       <section aria-label="Emergency Loans">
         <h3>Emergency Loans</h3>
-        <p>Issue any whole-rupee amount City Funds can cover, even while a player is settling debt. New loans are due after two of the borrower’s turns at 12.5% interest, rounded up. A top-up keeps the existing due date.</p>
+        <p>Issue any whole-rupee amount City Funds can cover, even while a player is settling debt. New loans are due after {LOAN_REPAYMENT_TURNS} of the borrower’s turns at 12.5% interest, rounded up. A top-up keeps the existing due date.</p>
         <div className="city-project-picker">
           <label>Loan recipient<select value={recipient} disabled={!loanAvailable || !eligible.length}
             onChange={event => { setBorrower(event.target.value); setAmount(undefined); }}>

@@ -103,13 +103,13 @@ describe("City Hall on the Classic table", () => {
     expect(s.players[1]!.cash).toBe(-70);
     expect(s.players[2]!.cash).toBe(1550);
     expect(s.debts?.map(debt => debt.amount)).toEqual([25, 45]);
-    expect(s.mayor!.seats.p2!.loanDue).toBe(2);
+    expect(s.mayor!.seats.p2!.loanDue).toBe(3);
     const between = s.mayor!.seats.p2!.turns;
     s = apply(s, { ...grant, amount: 80 });
     expect(s.phase).toBe("awaitingRoll");
     expect(s.players[1]!.cash).toBe(10);
     expect(s.players[2]!.cash).toBe(1575);
-    expect(s.mayor!.seats.p2).toMatchObject({ loanAmountDue: 147, loanDue: between + 2 });
+    expect(s.mayor!.seats.p2).toMatchObject({ loanAmountDue: 147, loanDue: between + 3 });
     expect(s.mayor!.treasury).toBe(270);
   });
 

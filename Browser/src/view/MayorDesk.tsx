@@ -16,7 +16,7 @@ import { createScratchBurst, eraseScratchFoil, paintScratchFlakes, paintScratchF
 import type { ScratchBurst } from "./scratchFoil";
 import { FORT_SPIN_MS } from "./wheelTiming";
 import MayorOffice from "./MayorOffice";
-import { CityLoanAccount } from "./CityLoans";
+import { CityLoanAccount, cityLoanDeadline } from "./CityLoans";
 import "./mayor.css";
 
 const FortWheelCloseup = lazy(() => import("./FortWheelCloseup"));
@@ -26,7 +26,7 @@ const projectDetails: Record<CityPolicy, string> = {
   transit: "Instant: One free Express ride per player while City Funds has ₹75 (Mayors always ride Express free).",
   wealth: "Collects 20% above ₹1,500 (capped at ₹300) right now from a player holding ≥ ₹2,000 and over half the table’s cash.",
   credit: "Instant: The next eligible deed auction backs cash-light bidders (≤ ₹400) with up to ₹200 at 12.5% interest.",
-  "rent-relief": `Turns one district blue immediately. Every rent payment there is ${RENT_RELIEF_PERCENT}% lower, with no discount cap.`,
+  "rent-relief": `Cuts rent in one district by ${RENT_RELIEF_PERCENT}% with no cap. Its tiles turn blue, or black where Permit Pause also applies.`,
   permits: "Instant: Freezes rival construction in one district while the Mayor remains free to build."
 };
 const wheelIcons = ["₹100", "₹150", "−₹50", "KEY", "GO", "✦"];
@@ -138,7 +138,7 @@ export function CityHall({ game, localId, available, loansOnly, officeLoanAvaila
             </>;
           })()}
           {desk.office && <CityLoanAccount game={game} localId={localId} available={stable} sendAction={sendAction} />}
-          {!desk.office && seat.loanDue !== undefined && <p>City loan due <b>{money(seat.loanAmountDue ?? LOAN_REPAYMENT)}</b>{seat.loanDue <= seat.turns + 1 ? " at the end of your upcoming turn." : " within two of your turns."}</p>}
+          {!desk.office && seat.loanDue !== undefined && <p>City loan <b>{money(seat.loanAmountDue ?? LOAN_REPAYMENT)}</b>. {cityLoanDeadline(seat.loanDue - seat.turns)}</p>}
           {loanAvailable && <div className="city-actions"><button type="button" disabled={!stable} onClick={() => sendAction({ type: "CITY_LOAN", playerId: localId, round: desk.round })}>Borrow ₹200 · repay ₹225</button></div>}
           {loanNote && <p><small>{loanNote}</small></p>}
         </section>}

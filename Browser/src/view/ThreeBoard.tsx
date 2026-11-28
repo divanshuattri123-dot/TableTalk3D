@@ -4,7 +4,8 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { permitPauseActive } from "../engine/mayor";
-import { PERMIT_PAUSE_COLOR } from "./palette";
+import { CITY_POLICY_OVERLAP_COLOR, cityTileEffect, PERMIT_PAUSE_COLOR } from "./palette";
+import type { CityTileEffect } from "./palette";
 import { getBoard } from "../engine/board";
 import type { GameState } from "../engine/types";
 import { useAssets } from "../assets";
@@ -15,7 +16,7 @@ import { boardFrustum, boardSpan, tileLayout } from "./layout";
 import { createBoardLabels } from "./boardLabels";
 import { createCity } from "./city";
 
-interface BoardHandle { focus: () => void; reset: () => void; zoom: (factor: number) => void; sync: (game: GameState) => void; top: (top: boolean) => void }
+interface BoardHandle { sync: (game: GameState) => void; top: (top: boolean) => void }
 interface TokenView { root: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; route: THREE.Vector3[]; position: number; duration: number; start: number; modelId?: string; model?: THREE.Group; version: number }
 
 function geometryFromModel(object: THREE.Group): THREE.BufferGeometry {
@@ -41,8 +42,8 @@ function geometryFromModel(object: THREE.Group): THREE.BufferGeometry {
   return result;
 }
 
-export default function ThreeBoard({ game, settings, onSelect, onFallback, onCamera, mayorWheel, onWheel }: {
-  game: GameState; mayorWheel?: boolean; onWheel?: () => void; settings: ViewSettings; onSelect: (position: number) => void; onFallback: () => void; onCamera: () => void;
+export default function ThreeBoard({ game, settings, onSelect, onFallback, mayorWheel, onWheel }: {
+  game: GameState; mayorWheel?: boolean; onWheel?: () => void; settings: ViewSettings; onSelect: (position: number) => void; onFallback: () => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const handle = useRef<BoardHandle | null>(null);
@@ -124,22 +125,29 @@ export default function ThreeBoard({ game, settings, onSelect, onFallback, onCam
       const key = JSON.stringify([state.properties, reliefGroup, permitIds]);
       if (key === propertyKey) return;
       propertyKey = key;
-      labels.setPermitPause(paused);
+      const effects = new Map<number, CityTileEffect>();
       clearDecorations();
       board.forEach((tile) => {
         const prop = state.properties[tile.position];
-        const isRelief = tile.kind === "property" && tile.group === reliefGroup;
-        tiles.setColorAt(tile.position, new THREE.Color(paused.has(tile.position) ? PERMIT_PAUSE_COLOR : isRelief ? "#3b8ef3" : prop?.mortgaged ? "#d75b62" : "#b2d0ac"));
+        const effect = cityTileEffect(paused.has(tile.position), tile.kind === "property" && tile.group === reliefGroup);
+        if (effect) effects.set(tile.position, effect);
+        const color = effect === "city-policy-overlap" ? CITY_POLICY_OVERLAP_COLOR
+          : effect === "permit-pause" ? PERMIT_PAUSE_COLOR
+          : effect === "rent-relief" ? "#3b8ef3" : prop?.mortgaged ? "#d75b62" : "#b2d0ac";
+        tiles.setColorAt(tile.position, new THREE.Color(color));
       });
+      labels.setCityEffects(effects);
       if (tiles.instanceColor) tiles.instanceColor.needsUpdate = true;
       const houses: THREE.Matrix4[] = [], hotels: THREE.Matrix4[] = [];
       for (const [positionString, property] of Object.entries(state.properties)) {
         if (!property.ownerId) continue;
         const position = Number(positionString), point = tilePoint(position, state.boardSize);
         const owner = state.players.find((player) => player.id === property.ownerId);
-        const tileEntry = board[position];
-        const isRelief = tileEntry?.kind === "property" && tileEntry.group === reliefGroup;
-        const marker = new THREE.Mesh(new THREE.BoxGeometry(.86, .025, .09), new THREE.MeshBasicMaterial({ color: paused.has(position) ? "#7936af" : isRelief ? "#1d6fe0" : property.mortgaged ? "#c92d3e" : owner?.color ?? "#999999" }));
+        const effect = effects.get(position);
+        const markerColor = effect === "city-policy-overlap" ? "#777"
+          : effect === "permit-pause" ? "#7936af"
+          : effect === "rent-relief" ? "#1d6fe0" : property.mortgaged ? "#c92d3e" : owner?.color ?? "#999999";
+        const marker = new THREE.Mesh(new THREE.BoxGeometry(.86, .025, .09), new THREE.MeshBasicMaterial({ color: markerColor }));
         marker.position.set(point.x, .13, point.z); marker.rotation.y = Math.floor(position / side) * Math.PI / 2; decorations.add(marker);
         for (let index = 0; index < property.houses; index += 1) {
           const hotel = property.houses === 5;
@@ -234,13 +242,6 @@ export default function ThreeBoard({ game, settings, onSelect, onFallback, onCam
       controls.touches.ONE = enabled ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE;
       reset();
     };
-    const focus = () => {
-      const active = snapshot.current.activePlayerId ? tokens.get(snapshot.current.activePlayerId) : undefined;
-      if (!active) return;
-      const delta = active.to.clone().sub(controls.target);
-      camera.position.add(delta); controls.target.copy(active.to); camera.zoom = 2.1; camera.updateProjectionMatrix(); controls.update(); interaction = performance.now();
-    };
-    const zoom = (factor: number) => { camera.zoom = THREE.MathUtils.clamp(camera.zoom * factor, 1, 3.5); camera.updateProjectionMatrix(); controls.update(); interaction = performance.now(); };
     const resize = new ResizeObserver(() => {
       const width = container.clientWidth, height = container.clientHeight; if (!width || !height) return;
       renderer.setSize(width, height);
@@ -264,7 +265,7 @@ export default function ThreeBoard({ game, settings, onSelect, onFallback, onCam
     renderer.domElement.addEventListener("pointerdown", down);
     renderer.domElement.addEventListener("pointerup", up);
     sync(snapshot.current); top(settings.camera === "top");
-    handle.current = { sync, reset, focus, top, zoom };
+    handle.current = { sync, top };
     const still = prefersStill();
     const draw = (time: number) => {
       frame = requestAnimationFrame(draw);
@@ -312,7 +313,6 @@ export default function ThreeBoard({ game, settings, onSelect, onFallback, onCam
   useEffect(() => { handle.current?.top(settings.camera === "top"); }, [settings.camera]);
   return <section className={`three-board-shell ${settings.theme}`} aria-label={`3D board with ${game.boardSize} tiles`}>
     <div className="three-board-canvas" ref={host} data-models-ready={loaded} />
-    <div className="scene-tools"><button type="button" onClick={() => handle.current?.zoom(1.3)} aria-label="Zoom in">+</button><button type="button" onClick={() => handle.current?.zoom(1 / 1.3)} aria-label="Zoom out">−</button><button type="button" onClick={() => handle.current?.focus()}>My turn close-up</button><button type="button" onClick={() => handle.current?.reset()}>Whole board</button><button type="button" onClick={onCamera}>{settings.camera === "top" ? "3D angle" : "Play camera"}</button></div>
     {game.phase === "awaitingMove" && <div className="scene-roll">Rolling…</div>}
     {game.lastRoll && game.phase !== "awaitingMove" && <div className="scene-dice"><span>{game.lastRoll.dice[0]}</span><span>{game.lastRoll.dice[1]}</span><small>{game.lastRoll.doubles ? "Doubles" : `Total ${game.lastRoll.total}`}</small></div>}
     {failure && <div className="scene-failure"><p>{failure}</p><button className="primary-button" type="button" onClick={onFallback}>Use 2D board</button></div>}

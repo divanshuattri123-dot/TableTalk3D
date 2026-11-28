@@ -14,7 +14,7 @@ import {
 } from "./board";
 import { formatRupees, roundRupees } from "./currency";
 import {
-  AUDIT_FINE, DUEL_VETO_COST, MAYOR_STIPEND, MAX_AUDITS_PER_TERM, CITY_CONTRACTS, CITY_CONTRACT_REWARD, CITY_POLICIES, LOAN_AMOUNT, LOAN_REPAYMENT, TRAIN_FARE, WHEEL_SECTIONS,
+  AUDIT_FINE, DUEL_VETO_COST, MAYOR_STIPEND, MAX_AUDITS_PER_TERM, CITY_CONTRACTS, CITY_CONTRACT_REWARD, CITY_POLICIES, LOAN_AMOUNT, LOAN_REPAYMENT, LOAN_REPAYMENT_TURNS, TRAIN_FARE, WHEEL_SECTIONS,
   advanceCityRound, applyCityLoanPayment, auctionCredit, bookCityLoan, canChallengeCityProject, cityAuditBills, cityAuctionBacking, cityContractReady, cityLoanAvailable, cityLoanTotal,
   cityPolicyAvailable, cityStable, councilSpeaker, councilVoteThreshold, nextAuditFine, nextAuditMiss, mayorAuditsLeft, districtName, fortPosition, newTerm, nextCityTurn,
   MAYOR_MOVE_SPACES, PERMIT_LOCK_COUNT, cityHasSeizedDeeds, cityLoanBalance, citySeizedOwner,
@@ -1749,7 +1749,7 @@ function handleCityAction(original: GameState, action: CityAction): GameState {
     case "CITY_LOAN":
       if (action.round !== desk.round || !cityLoanAvailable(state, id)) return reject(state, "No city loan is available to this seat right now.");
       return civicEvent(fundCityLoan(state, id, LOAN_AMOUNT, LOAN_REPAYMENT),
-        `${player.name} took a ${formatRupees(LOAN_AMOUNT)} city loan. ${formatRupees(LOAN_REPAYMENT)} due within two of their turns.`, "policy",
+        `${player.name} took a ${formatRupees(LOAN_AMOUNT)} city loan. ${formatRupees(LOAN_REPAYMENT)} due within ${LOAN_REPAYMENT_TURNS} of their turns.`, "policy",
         { playerId: id });
     case "CITY_CONTRACT":
       if (!desk.council || !active || desk.round > 2 || seat.contract || (action.contract !== "build" && action.contract !== "transit")) {

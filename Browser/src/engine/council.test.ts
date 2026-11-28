@@ -106,9 +106,12 @@ describe("Council rules (Instant Mayor Decrees & Live Council Voting)", () => {
     expect(won.mayor!.seats.b!.loanAmountDue).toBe(169);
     expect(won.mayor!.treasury).toBe(250);
     expect(openAuction(won, 3).auction?.cityBacking).toBeUndefined();
-    const due = end(end(end(end(end(won)))));
+    const stillOpen = end(end(end(end(end(won)))));
+    expect(stillOpen.mayor!.seats.b).toMatchObject({ loanDue: 3, loanAmountDue: 169 });
+    expect(cash(stillOpen, "b")).toBe(0);
+    const due = end(end(end(stillOpen)));
     expect(due.phase).toBe("awaitingDebt");
-    expect(cash(due, "b")).toBe(-169);
+    expect(cash(due, "b")).toBe(-69); // ₹100 Mayor stipend offsets part of the ₹169 payment.
   });
 
   it("applies Rent Relief instantly, keeps the district blue, and discounts 90 percent without a cap", () => {

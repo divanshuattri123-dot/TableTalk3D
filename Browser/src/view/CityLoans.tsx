@@ -6,6 +6,10 @@ import {cityLoanBalance} from "../engine/mayor";
 import type {CityAction} from "../engine/mayor";
 import type {GameState} from "../engine/types";
 
+export function cityLoanDeadline(turns: number) {
+  return turns <= 1 ? "Due at the end of your next turn." : `Due in ${turns} of your turns.`;
+}
+
 export function CityLoanAccount({game, localId, available, sendAction}: {
   game: GameState; localId: string; available: boolean; sendAction: (action: CityAction) => void;
 }) {
@@ -25,7 +29,7 @@ export function CityLoanAccount({game, localId, available, sendAction}: {
     <p><b>{money(balance)} city loan outstanding</b>. {account.loanStatus === "seized"
       ? "Rent goes toward the loan. Repay to release your unsold deeds."
       : account.loanStatus === "notice" ? "Warning. Pay by the end of your next turn to avoid seizure."
-      : turns <= 1 ? "Due at the end of your next turn." : "Due at the end of your second turn with the loan."}</p>
+      : cityLoanDeadline(turns)}</p>
     <div className="city-project-picker">
       <label>Repayment amount<input type="number" inputMode={classic ? "decimal" : "numeric"} min={step} max={max} step={step}
         placeholder={String(max)} value={amount} onChange={event => setAmount(event.target.value)} /></label>

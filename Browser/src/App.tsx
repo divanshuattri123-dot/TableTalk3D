@@ -34,7 +34,7 @@ import { cityLoanAvailable, citySeizedOwner, cityStable, councilSpeaker, fortPos
 import { presentationInteractionBusy } from "./presentation/timeline";
 import { shouldSendMove } from "./presentation/plan";
 import EventStage, { PlayerPortrait } from "./view/EventStage";
-import { GROUP_COLORS, PLAYER_COLORS } from "./view/palette";
+import { cityTileEffect, GROUP_COLORS, PLAYER_COLORS } from "./view/palette";
 import { useAssets, useViewSettings } from "./assets";
 import type { GameAsset } from "./assets";
 import type { AssetUse } from "./view/AssetStudio";
@@ -322,7 +322,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
   const [copied, setCopied] = useState(false);
   const [unityReady, setUnityReady] = useState(false);
   const [diceToolsOpen,setDiceToolsOpen]=useState(false);
-  const [drawer, setDrawer] = useState<"menu" | "players" | "log">();
+  const [drawer, setDrawer] = useState<"menu" | "players">();
   const [cityOpen, setCityOpen] = useState(false);
   const [cityLoanView, setCityLoanView] = useState(false);
   const seizedAuction = game?.auction?.seizedFromId;
@@ -457,8 +457,6 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
           loansOnly={cityLoanView} open={cityOpen} onOpen={() => { setOpenWheelId(undefined); setCityLoanView(false); setCityOpen(true); }}
           onClose={() => { setCityLoanView(false); setCityOpen(false); }} sendAction={sendAction} />}
         <nav className="hud-navigation desktop-hud-navigation" aria-label="Game menu">
-          <button type="button" onClick={() => setDrawer("players")} aria-label="Players and deeds" aria-haspopup="dialog">♙ <span>Players</span></button>
-          <button type="button" onClick={() => setDrawer("log")} aria-label="Event log" aria-haspopup="dialog">≡ <span>Log</span></button>
           <button type="button" onClick={toggleFullscreen} aria-label={fullscreen ? "Exit full screen" : "Enter full screen"} title={fullscreen ? "Exit full screen" : "Enter full screen"}>⛶</button>
         </nav>
         <button className="mobile-menu-trigger" type="button" aria-label="Open game menu" aria-haspopup="dialog" aria-expanded={drawer === "menu"} onClick={() => { setTablePanel(undefined); setDrawer("menu"); }}><span aria-hidden="true">☰</span> Menu</button>
@@ -491,7 +489,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
         </aside>}
       </section>
 
-{drawer && !(mobileLobby && drawer === "menu") && <div className="hud-drawer-backdrop" onClick={() => setDrawer(undefined)}><section className={`hud-drawer${drawer === "menu" ? " game-menu-drawer" : ""}`} role="dialog" aria-modal="true" aria-labelledby="hud-drawer-title" onClick={event => event.stopPropagation()}><header><h2 id="hud-drawer-title">{drawer === "menu" ? "Game menu" : drawer === "players" ? "At the table" : "Table chatter"}</h2><button type="button" autoFocus onClick={() => setDrawer(undefined)} aria-label="Close panel">×</button></header>{drawer === "menu" ? <GameMenu roomCode={session.roomCode} copied={copied} fullscreen={fullscreen} showFullscreen={!nativeMobileShell()} onPanel={panel => { setDrawer(undefined); setTablePanel(panel); }} onPlayers={() => setDrawer("players")} onHistory={() => setDrawer("log")} onCopy={copyRoomLink} onFullscreen={toggleFullscreen} onLeave={onLeave} onPrivacy={publisher.openPrivacy} /> : drawer === "players" ? <PlayerRoster game={game} localId={session.player.id} /> : <EventLog game={game} />}</section></div>}
+{drawer && !(mobileLobby && drawer === "menu") && <div className="hud-drawer-backdrop" onClick={() => setDrawer(undefined)}><section className={`hud-drawer${drawer === "menu" ? " game-menu-drawer" : ""}`} role="dialog" aria-modal="true" aria-labelledby="hud-drawer-title" onClick={event => event.stopPropagation()}><header><h2 id="hud-drawer-title">{drawer === "menu" ? "Game menu" : "At the table"}</h2><button type="button" autoFocus onClick={() => setDrawer(undefined)} aria-label="Close panel">×</button></header>{drawer === "menu" ? <GameMenu roomCode={session.roomCode} copied={copied} fullscreen={fullscreen} showFullscreen={!nativeMobileShell()} onPanel={panel => { setDrawer(undefined); setTablePanel(panel); }} onCopy={copyRoomLink} onFullscreen={toggleFullscreen} onLeave={onLeave} onPrivacy={publisher.openPrivacy} /> : <PlayerRoster game={game} localId={session.player.id} />}</section></div>}
 
       <EventStage game={game} frame={motion.frame} busy={connection !== "connected" || presentationInteractionBusy(game, motion) || !sceneUsable} localId={session.player.id} sendAction={sendAction} onCardRead={motion.acknowledgeCard} loanTools={mayorLoanButton} counterTools={me && game.pendingTrade ? () => <TradeComposer key={game.pendingTrade!.id} game={game} local={me} sendAction={sendAction} counterTrade={game.pendingTrade!} /> : undefined} financeTools={me && <ClassicFinanceMenu game={game} local={me} available={connection === "connected" && !motion.busy && sceneUsable} sendAction={sendAction} />} />
       {game.mode === "mayor" && <CityHeadline game={game} paused={cityOpen || !!wheelDialog || !!drawer} />}
@@ -553,12 +551,8 @@ function Lobby({
 
 function Board({ game, current, onSelect }: { game: GameState; current?: Player; onSelect: (id: number) => void }) {
   const lastRoll = game.lastRoll;
-  const [zoom, setZoom] = useState(1);
-  const viewport = useRef<HTMLElement>(null);
-  const fit = () => { setZoom(1); viewport.current?.scrollTo({ left: 0, top: 0 }); };
   return (
-    <><nav className="flat-camera-tools" aria-label="2D board camera"><button type="button" onClick={fit} aria-label="Fit 2D board">⌂</button><button type="button" onClick={() => setZoom(value => Math.min(4, value + 1))} disabled={zoom === 4} aria-label="Zoom into 2D board">＋</button><button type="button" onClick={() => setZoom(value => Math.max(1, value - 1))} disabled={zoom === 1} aria-label="Zoom out of 2D board">−</button></nav>
-    <section ref={viewport} className={`board-wrap ${zoom > 1 ? "is-zoomed" : ""}`} style={{ "--flat-zoom": zoom } as CSSProperties} aria-label="Property game board">
+    <section className="board-wrap" aria-label="Property game board">
       <div className="board" style={{ gridTemplateColumns: `repeat(${game.boardSize / 4 + 1}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${game.boardSize / 4 + 1}, minmax(0, 1fr))` }}>
         {getBoard(game.boardSize, game.city).map((tile) => {
           const players = game.players.filter((player) => !player.bankrupt && player.position === tile.position);
@@ -572,14 +566,14 @@ function Board({ game, current, onSelect }: { game: GameState; current?: Player;
           const paused = permitPauseActive(game, tile);
           return (
             <article
-              className={`board-tile ${tile.kind} ${property?.ownerId ? "owned" : ""} ${property?.mortgaged ? "mortgaged" : ""} ${paused ? "permit-pause" : isRelief ? "rent-relief" : ""}`}
+              className={`board-tile ${tile.kind} ${property?.ownerId ? "owned" : ""} ${property?.mortgaged ? "mortgaged" : ""} ${cityTileEffect(paused, isRelief) ?? ""}`}
               data-side={side}
               key={tile.position}
               style={tileStyle}
               title={[tile.name, tile.region, tile.detail, paused ? "Permit Pause active" : "", isRelief ? `Rent Relief active · ${RENT_RELIEF_PERCENT}% off rent` : ""].filter(Boolean).join(" · ")}
               role="button"
               tabIndex={0}
-              aria-label={`Inspect ${tile.name}${tile.region ? `, ${tile.region}` : ""}${tile.detail ? `, ${tile.detail}` : ""}`}
+              aria-label={`Inspect ${tile.name}${tile.region ? `, ${tile.region}` : ""}${tile.detail ? `, ${tile.detail}` : ""}${paused ? ", Permit Pause" : ""}${isRelief ? ", Rent Relief" : ""}`}
               onClick={() => onSelect(tile.position)}
               onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(tile.position); } }}
             >
@@ -595,7 +589,7 @@ function Board({ game, current, onSelect }: { game: GameState; current?: Player;
               {tile.kind === "tax" && <span className="tile-icon">₹</span>}
               {tile.kind === "goToJail" && <span className="tile-icon">⇢</span>}
               {property && propertyLabel(property) && <span className="improvement-mark">{propertyLabel(property)}</span>}
-              {isRelief && <span className="improvement-mark relief-mark">−50%</span>}
+              {isRelief && <span className="improvement-mark relief-mark">−{RENT_RELIEF_PERCENT}%</span>}
               {owner && <span className="owner-marker" title={`Owned by ${owner.name}`} />}
               <span className="token-stack">
                 {players.map((player) => (
@@ -622,7 +616,7 @@ function Board({ game, current, onSelect }: { game: GameState; current?: Player;
           </div>
         </div>
       </div>
-    </section></>
+    </section>
   );
 }
 
@@ -893,15 +887,6 @@ function PropertyChecks({ title, properties, selected, toggle }: { title: string
 
 function JailCardChecks({title,cards,selected,onChange}:{title:string;cards:CardDeck[];selected:CardDeck[];onChange:(cards:CardDeck[])=>void}) {
   return <fieldset className="property-checks"><legend>{title}</legend>{cards.length?cards.map(deck=><label key={deck}><input type="checkbox" checked={selected.includes(deck)} onChange={()=>onChange(selected.includes(deck)?selected.filter(d=>d!==deck):[...selected,deck])}/>{deck==="chance"?"Chance":"Community Chest"} · Get Out of Jail Free</label>):<small>No release cards held</small>}</fieldset>;
-}
-
-function EventLog({ game }: { game: GameState }) {
-  return (
-    <section className="event-log">
-      <p className="eyebrow">Table chatter</p>
-      <ol>{game.eventLog.slice(0, 10).map((event) => <li className={event.kind} key={event.id}>{event.text}</li>)}</ol>
-    </section>
-  );
 }
 
 export default App;

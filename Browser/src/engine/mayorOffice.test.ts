@@ -54,7 +54,10 @@ describe("Mayor office rules", () => {
     const second = step(after,{...grant,targetId:"c"});
     expect(second.mayor?.treasury).toBe(0);
     expect(step(second,{...grant,targetId:"a"}).notice).toBeTruthy();
-    const repaid = round(round(second));
+    const afterTwoTurns = round(round(second));
+    expect(afterTwoTurns.mayor?.seats.b).toMatchObject({ loanDue: 3, loanAmountDue: 225 });
+    expect(player(afterTwoTurns,"b").cash).toBe(1700);
+    const repaid = round(afterTwoTurns);
     expect(player(repaid,"b").cash).toBe(1475);
     expect(repaid.mayor?.treasury).toBe(450);
     const reissued = step(repaid,{...grant,playerId:"b",term:2});
@@ -131,12 +134,14 @@ describe("Custom city loans and jail releases", () => {
     expect(step(state,{...grant,amount:3.5}).notice).toBeTruthy();
     const loan=step(state,grant);
     const empty=changePlayer(loan,"b",{cash:0});
-    return round(round(empty));
+    const stillOpen = round(round(empty));
+    expect(stillOpen.mayor?.seats.b?.loanStatus).toBeUndefined();
+    return round(stillOpen);
   }
 
   it("warns once, seizes after the extra turn, credits rent and releases collateral after repayment", () => {
     const warned=overdue(137);
-    expect(warned.mayor?.seats.b).toMatchObject({loanAmountDue:155,loanStatus:"notice",loanDue:3});
+    expect(warned.mayor?.seats.b).toMatchObject({loanAmountDue:155,loanStatus:"notice",loanDue:4});
     expect(warned.eventLog.some(event=>event.text.includes("one more turn"))).toBe(true);
     const seized=round(warned);
     expect(seized.phase).toBe("awaitingRoll");
@@ -162,7 +167,7 @@ describe("Custom city loans and jail releases", () => {
     const state=round(overdue(250));
     const estate: GameState={...state,bankHouses:30,properties:{...state.properties,
       1:{ownerId:"b",houses:2,mortgaged:false},5:{ownerId:"b",houses:0,mortgaged:true}}};
-    const open={type:"CITY_AUCTION_SEIZED",playerId:"b",term:2,propertyId:1} as const;
+    const open={type:"CITY_AUCTION_SEIZED",playerId:state.mayor!.mayorId,term:state.mayor!.term,propertyId:1} as const;
     expect(step(estate,{...open,playerId:"a"}).notice).toBeTruthy();
     const auction=step(estate,open);
     expect(auction.auction?.eligiblePlayerIds).toEqual(["a","b","c"]);

@@ -6,6 +6,7 @@ import type { AuctionState, ColorGroup, GameState, Player, Tile } from "./types"
 export const TRAIN_FARE = 75;
 export const LOAN_AMOUNT = 200;
 export const LOAN_REPAYMENT = 225;
+export const LOAN_REPAYMENT_TURNS = 3;
 export const LOAN_CASH_LIMIT = 1000;
 export const AUCTION_CREDIT_CASH_LIMIT = 400;
 export const AUDIT_FINE = 25;
@@ -399,7 +400,7 @@ export function applyCityLoanPayment(state: GameState, id: string, amount: numbe
 export function bookCityLoan(state: GameState, id: string, principal: number, amountDue: number) {
   if (!state.mayor) return state;
   return updateCitySeat({ ...state, mayor: { ...state.mayor, treasury: state.mayor.treasury - principal } }, id,
-    seat => ({ ...seat, borrowed: true, loanDue: seat.loanDue ?? seat.turns + 2,
+    seat => ({ ...seat, borrowed: true, loanDue: seat.loanDue ?? seat.turns + LOAN_REPAYMENT_TURNS,
       loanAmountDue: cityLoanBalance(state, id) + amountDue }));
 }
 

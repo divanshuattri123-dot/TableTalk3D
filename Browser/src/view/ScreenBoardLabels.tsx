@@ -8,6 +8,7 @@ import { paintProjectedLabel } from "./labelPaint";
 import type { ProjectedLabelLayout } from "./labelPaint";
 import type { LabelPacket } from "./readability";
 import { boardSymbol, printedBoardLabel } from "./boardSigns";
+import { cityTileEffect } from "./palette";
 
 export default memo(function ScreenBoardLabels({ size,city,reliefDistrict,permitDistrict,pausedDeeds,wheelPosition,onWheel }: { size: BoardSize; city?:CityId; reliefDistrict?: ColorGroup; permitDistrict?: ColorGroup; pausedDeeds?: readonly number[]; wheelPosition?: number; onWheel?: () => void }) {
   const root = useRef<HTMLDivElement>(null), nodes = useRef(new Map<number, HTMLDivElement>());
@@ -79,12 +80,15 @@ export default memo(function ScreenBoardLabels({ size,city,reliefDistrict,permit
     return () => { disposed = true; window.removeEventListener("tabletalk-unity", receive); observer.disconnect(); };
   }, [size, board, wheelPosition]);
   return <div className="screen-board-labels" ref={root}>
-    {board.map(tile => <div className={`screen-tile-label${isPurchasableTile(tile) ? " has-price" : ""}${tile.kind === "property"
-      ? tile.group === permitDistrict || pausedDeeds?.includes(tile.position) ? " is-permit-pause" : tile.group === reliefDistrict ? " is-rent-relief" : ""
-      : ""}`} key={tile.position} hidden aria-hidden="true" ref={node => { if (node) nodes.current.set(tile.position, node); else nodes.current.delete(tile.position); }}>
+    {board.map(tile => {
+      const effect = tile.kind === "property" ? cityTileEffect(
+        tile.group === permitDistrict || pausedDeeds?.includes(tile.position) === true, tile.group === reliefDistrict
+      ) : undefined;
+      return <div className={`screen-tile-label${isPurchasableTile(tile) ? " has-price" : ""}${effect ? ` is-${effect}` : ""}`} key={tile.position} hidden aria-hidden="true" ref={node => { if (node) nodes.current.set(tile.position, node); else nodes.current.delete(tile.position); }}>
       <svg className="screen-tile-name" aria-label={printedBoardLabel(tile)}>{boardSymbol(tile) && <image href={`${import.meta.env.BASE_URL}board-icons/${boardSymbol(tile)}.svg`} preserveAspectRatio="xMidYMid meet" />}{[0, 1, 2].map(line => <text key={line} x="50%" textAnchor="middle" dominantBaseline="central" lengthAdjust="spacingAndGlyphs" />)}</svg>
       {isPurchasableTile(tile) && <strong className="screen-tile-price"><i>₹</i>{tile.price}</strong>}
-    </div>)}
+      </div>;
+    })}
     {wheelPosition !== undefined && <button type="button" ref={wheelPin} className={`board-wheel-pin${onWheel ? " ready" : ""}`} aria-label="Open the Fort wheel" aria-hidden={!onWheel} disabled={!onWheel} hidden onClick={onWheel}>✦</button>}
   </div>;
 });

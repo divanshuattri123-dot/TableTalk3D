@@ -238,6 +238,8 @@ describe("Mayor rules (Classic 40-space + Overpowered Mayor)", () => {
     expect(wash.notice).toContain("Repay your city loan");
     state = send(state, { type: "CITY_DEFER_TAX", playerId: "p2", round: 1 });
     state = end(end(end(state)));
+    state = end(end(end(state)));
+    expect(state.mayor!.seats.p2!.loanAmountDue).toBe(225);
     state = patchPlayer(state, "p2", { cash: 15 });
     state = { ...state, properties: { ...state.properties, 39: { ownerId: "p2", houses: 0, mortgaged: false }, 37: { ownerId: "p2", houses: 0, mortgaged: false } } };
     state = end(state);

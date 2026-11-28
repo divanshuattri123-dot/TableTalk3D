@@ -1,17 +1,14 @@
 export type TablePanel = "settings" | "help" | "prices";
 
-export default function GameMenu({ roomCode, copied, fullscreen, showFullscreen = true, onPanel, onPlayers, onHistory, onCopy, onFullscreen, onLeave, onPrivacy }: {
+export default function GameMenu({ roomCode, copied, fullscreen, showFullscreen = true, onPanel, onCopy, onFullscreen, onLeave, onPrivacy }: {
   roomCode: string; copied: boolean; fullscreen: boolean; showFullscreen?: boolean;
-  onPanel: (panel: TablePanel) => void; onPlayers: () => void; onHistory: () => void;
+  onPanel: (panel: TablePanel) => void;
   onCopy: () => void; onFullscreen: () => void; onLeave: () => void; onPrivacy:()=>void;
 }) {
   return <div className="mobile-game-menu">
     <p className="menu-room">Room <strong>{roomCode}</strong><span>Your confirmed moves stay saved.</span></p>
     <div className="game-menu-actions">
       <button type="button" onClick={() => onPanel("settings")}>Settings</button>
-      <button type="button" onClick={onPlayers}>Players &amp; deeds</button>
-      <button type="button" onClick={() => onPanel("prices")}>Property guide</button>
-      <button type="button" onClick={onHistory}>Game history</button>
       <button type="button" onClick={() => onPanel("help")}>Rules &amp; help</button>
       <button type="button" onClick={onPrivacy}>Privacy &amp; support</button>
       {showFullscreen && <button type="button" onClick={onFullscreen}>{fullscreen ? "Exit full screen" : "Enter full screen"}</button>}
