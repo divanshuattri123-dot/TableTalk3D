@@ -41,6 +41,7 @@ import type { AssetUse } from "./view/AssetStudio";
 import BoardStage from "./view/BoardStage";
 import GameMenu from "./view/GameMenu";
 import type { TablePanel } from "./view/GameMenu";
+import { MinimiseTrade, ReopenTrade } from "./view/TradeViewToggle";
 import WelcomeMenu from "./view/WelcomeMenu";
 import BrowserHome, { BrowserMenuDialog } from "./view/BrowserHome";
 import MobileWelcome from "./view/MobileWelcome";
@@ -322,6 +323,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
   const [copied, setCopied] = useState(false);
   const [unityReady, setUnityReady] = useState(false);
   const [diceToolsOpen,setDiceToolsOpen]=useState(false);
+  const [financeTradeMinimised, setFinanceTradeMinimised] = useState(false);
   const [drawer, setDrawer] = useState<"menu" | "players">();
   const [cityOpen, setCityOpen] = useState(false);
   const [cityLoanView, setCityLoanView] = useState(false);
@@ -491,7 +493,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
 
 {drawer && !(mobileLobby && drawer === "menu") && <div className="hud-drawer-backdrop" onClick={() => setDrawer(undefined)}><section className={`hud-drawer${drawer === "menu" ? " game-menu-drawer" : ""}`} role="dialog" aria-modal="true" aria-labelledby="hud-drawer-title" onClick={event => event.stopPropagation()}><header><h2 id="hud-drawer-title">{drawer === "menu" ? "Game menu" : "At the table"}</h2><button type="button" autoFocus onClick={() => setDrawer(undefined)} aria-label="Close panel">×</button></header>{drawer === "menu" ? <GameMenu roomCode={session.roomCode} copied={copied} fullscreen={fullscreen} showFullscreen={!nativeMobileShell()} onPanel={panel => { setDrawer(undefined); setTablePanel(panel); }} onCopy={copyRoomLink} onFullscreen={toggleFullscreen} onPrivacy={publisher.openPrivacy} /> : <PlayerRoster game={game} localId={session.player.id} />}</section></div>}
 
-      <EventStage game={game} frame={motion.frame} busy={connection !== "connected" || presentationInteractionBusy(game, motion) || !sceneUsable} localId={session.player.id} sendAction={sendAction} onCardRead={motion.acknowledgeCard} loanTools={mayorLoanButton} counterTools={me && game.pendingTrade ? () => <TradeComposer key={game.pendingTrade!.id} game={game} local={me} sendAction={sendAction} counterTrade={game.pendingTrade!} /> : undefined} financeTools={me && <ClassicFinanceMenu game={game} local={me} available={connection === "connected" && !motion.busy && sceneUsable} sendAction={sendAction} />} />
+      <EventStage game={game} frame={motion.frame} busy={connection !== "connected" || presentationInteractionBusy(game, motion) || !sceneUsable} localId={session.player.id} sendAction={sendAction} onCardRead={motion.acknowledgeCard} loanTools={mayorLoanButton} counterTools={me && game.pendingTrade ? <TradeComposer key={game.pendingTrade.id} game={game} local={me} sendAction={sendAction} counterTrade={game.pendingTrade} /> : undefined} financeTradeMinimised={financeTradeMinimised} financeTools={me && <ClassicFinanceMenu game={game} local={me} available={connection === "connected" && !motion.busy && sceneUsable} sendAction={sendAction} tradeMinimised={financeTradeMinimised} onTradeMinimised={setFinanceTradeMinimised} />} />
       {game.mode === "mayor" && <CityHeadline game={game} paused={cityOpen || !!wheelDialog || !!drawer} />}
       {wheelDialog && <FortWheel key={wheelDialog.id} game={game} decision={wheelDialog} localId={session.player.id}
         available={cityAvailable} onClose={() => setOpenWheelId(undefined)} sendAction={sendAction} />}
@@ -682,8 +684,10 @@ function Controls({
   presenting: boolean;
   sendAction: (action: GameAction) => void;
 }) {
-  const [showBuild, setShowBuild] = useState(false);
-  const [showTrade, setShowTrade] = useState(false);
+  const [tool, setTool] = useState<"build" | "trade" | "minimised-trade">();
+  const showBuild = tool === "build";
+  const tradeMinimised = tool === "minimised-trade";
+  const showTrade = tool === "trade" || tradeMinimised;
   useEffect(()=>{onToolsOpen(showBuild||showTrade);return()=>onToolsOpen(false);},[showBuild,showTrade,onToolsOpen]);
   const [confirmBankruptcy, setConfirmBankruptcy] = useState(false);
   const debt = game.debts?.[0], settling = debt?.playerId === local.id;
@@ -692,8 +696,8 @@ function Controls({
   const managing = available && !local.bankrupt && (usesClassicRules(game) ? canClassicManage(game, local.id) : normalTurn && isCurrent);
   const canSurrender = !usesClassicRules(game) || classicLiquidationValue(game, local.id) < 0;
   useEffect(() => {
-    if (settling && game.phase === "awaitingDebt") { setShowBuild(true); setShowTrade(false); }
-    if (!debt) { setShowBuild(false); setShowTrade(false); setConfirmBankruptcy(false); }
+    if (settling && game.phase === "awaitingDebt") setTool("build");
+    if (!debt) { setTool(undefined); setConfirmBankruptcy(false); }
   }, [game.phase, debt?.playerId, local.id]);
   const ownProperties = useMemo(
     () => getBoard(game.boardSize, game.city).filter((tile) => isPurchasableTile(tile) && game.properties[tile.position]?.ownerId === local.id),
@@ -732,8 +736,8 @@ function Controls({
 
       {managing && (
         <div className="utility-actions">
-          <button className="secondary-button" type="button" onClick={() => { setShowBuild((value) => !value); setShowTrade(false); }}>{settling ? "Sell / mortgage" : "Build / mortgage"}</button>
-          <button className="secondary-button" type="button" onClick={() => { setShowTrade((value) => !value); setShowBuild(false); }}>Trade</button>
+          <button className="secondary-button" type="button" onClick={() => setTool(showBuild ? undefined : "build")}>{settling ? "Sell / mortgage" : "Build / mortgage"}</button>
+          <button className="secondary-button" type="button" onClick={() => setTool(tool === "trade" ? undefined : "trade")}>Trade</button>
           {!settling && cityLoanAvailable(game, local.id) && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={() => sendAction({ type: "CITY_LOAN", playerId: local.id, round: game.mayor!.round })}>Borrow ₹200 · repay ₹225</button>}
           {!settling && onOpenCity && game.mayor && local.id === game.mayor.mayorId && cityStable(game) && (game.mayor.office || (!game.mayor.proposalUsed && !game.mayor.proposal)) && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={onOpenCity}>{game.mayor.office ? "Mayor powers" : "Mayor · Propose project"}</button>}
           {!settling && onOpenCity && game.mayor?.council && cityStable(game) && game.mayor.round <= 2 && !game.mayor.seats[local.id]?.contract && <button type="button" className="secondary-button city-turn-button" disabled={showTrade || showBuild} onClick={onOpenCity}>Pick ₹150 Contract</button>}
@@ -746,17 +750,58 @@ function Controls({
       {confirmBankruptcy && settling && isCurrent && createPortal(<div className="bankruptcy-backdrop" onClick={() => setConfirmBankruptcy(false)}><div className="bankruptcy-confirm" role="alertdialog" aria-modal="true" aria-label="Confirm bankruptcy" onClick={event => event.stopPropagation()}><p>Leave the match and give your assets to the creditor?</p><button type="button" onClick={() => sendAction({ type: "BANKRUPT", playerId: local.id })}>Yes, declare bankruptcy</button><button type="button" autoFocus onClick={() => setConfirmBankruptcy(false)}>Keep raising money</button></div></div>, document.body)}
 
       {settling && !canSurrender && <p className="waiting-note">Your available building-sale and mortgage proceeds can cover this debt. Raise those funds first, or arrange a rescue trade.</p>}
-      {(showBuild || showTrade) && managing && <div className="tool-sheet"><header><b>{showBuild ? "Manage your property" : "Make a trade"}</b><button type="button" onClick={() => { setShowBuild(false); setShowTrade(false); }} aria-label="Close property tools">×</button></header>{showBuild ? <PropertyTools game={game} player={local} properties={ownProperties} sendAction={sendAction} /> : <TradeComposer game={game} local={local} sendAction={sendAction} />}</div>}
+      {tool && <div className="tool-sheet" hidden={!managing || tradeMinimised}>
+        <header>
+          <b>{showBuild ? "Manage your property" : "Make a trade"}</b>
+          <div className="trade-view-actions">
+            {showTrade && <MinimiseTrade onClick={() => setTool("minimised-trade")} />}
+            <button type="button" onClick={() => setTool(undefined)} aria-label="Close property tools">×</button>
+          </div>
+        </header>
+        {showBuild ? <PropertyTools game={game} player={local} properties={ownProperties} sendAction={sendAction} /> : <TradeComposer game={game} local={local} sendAction={sendAction} />}
+      </div>}
+      {tradeMinimised && managing && <ReopenTrade label="Reopen trade draft" onClick={() => setTool("trade")} />}
     </section>
   );
 }
 
-function ClassicFinanceMenu({game,local,available,sendAction}:{game:GameState;local:Player;available:boolean;sendAction:(action:GameAction)=>void}) {
-  const [tool,setTool]=useState<"build"|"trade">();
-  useEffect(()=>{if(!tool)return;const close=(event:KeyboardEvent)=>{if(event.key==="Escape")setTool(undefined);};window.addEventListener("keydown",close);return()=>window.removeEventListener("keydown",close);},[tool]);
-  if(!usesClassicRules(game) || !available || !canClassicManage(game,local.id))return null;
-  const properties=getBoard(game.boardSize, game.city).filter(t=>isPurchasableTile(t) && game.properties[t.position]!.ownerId===local.id);
-  return <div className="classic-finance-menu"><button className="event-secondary" type="button" onClick={()=>setTool("build")}>Manage deeds</button><button className="event-secondary" type="button" onClick={()=>setTool("trade")}>Propose trade</button>{tool && createPortal(<div className="finance-backdrop" onClick={()=>setTool(undefined)}><section className="finance-sheet" role="dialog" aria-modal="true" aria-label={tool==="build"?"Manage deeds during a decision":"Propose a trade during a decision"} onClick={e=>e.stopPropagation()}><header><h2>{tool==="build"?"Your property desk":"Make a deal"}</h2><button autoFocus type="button" aria-label="Close finance desk" onClick={()=>setTool(undefined)}>×</button></header>{tool==="build"?<PropertyTools game={game} player={local} properties={properties} sendAction={sendAction}/>:<TradeComposer game={game} local={local} sendAction={sendAction}/>}</section></div>,document.body)}</div>;
+function ClassicFinanceMenu({ game, local, available, sendAction, tradeMinimised, onTradeMinimised }: {
+  game: GameState; local: Player; available: boolean; sendAction: (action: GameAction) => void;
+  tradeMinimised: boolean; onTradeMinimised: (value: boolean) => void;
+}) {
+  const [tool, setTool] = useState<"build" | "trade">();
+  useEffect(() => () => onTradeMinimised(false), [onTradeMinimised]);
+  useEffect(() => {
+    if (!tool || tradeMinimised) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setTool(undefined); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [tool, tradeMinimised]);
+  if (!usesClassicRules(game) || !canClassicManage(game, local.id)) return null;
+  const building = tool === "build";
+  const properties = getBoard(game.boardSize, game.city).filter(tile => isPurchasableTile(tile) && game.properties[tile.position]!.ownerId === local.id);
+  return <div className="classic-finance-menu">
+    {available && <>
+      <button className="event-secondary" type="button" onClick={() => setTool("build")}>Manage deeds</button>
+      <button className="event-secondary" type="button" onClick={() => setTool("trade")}>Propose trade</button>
+    </>}
+    {tool && createPortal(
+      <div className="finance-backdrop" hidden={!available || tradeMinimised} onClick={() => setTool(undefined)}>
+        <section className="finance-sheet" role="dialog" aria-modal="true" aria-label={building ? "Manage deeds during a decision" : "Propose a trade during a decision"} onClick={event => event.stopPropagation()}>
+          <header>
+            <h2>{building ? "Your property desk" : "Make a deal"}</h2>
+            <div className="trade-view-actions">
+              {!building && <MinimiseTrade onClick={() => onTradeMinimised(true)} />}
+              <button autoFocus type="button" aria-label="Close finance desk" onClick={() => setTool(undefined)}>×</button>
+            </div>
+          </header>
+          {building ? <PropertyTools game={game} player={local} properties={properties} sendAction={sendAction} /> :
+            <TradeComposer game={game} local={local} sendAction={sendAction} />}
+        </section>
+      </div>, document.body
+    )}
+    {tradeMinimised && available && <ReopenTrade label="Reopen trade draft" onClick={() => onTradeMinimised(false)} />}
+  </div>;
 }
 
 function PropertyTools({

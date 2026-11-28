@@ -9,6 +9,7 @@ import "./india.css";
 import "./immersive.css";
 import "./classic.css";
 import "./mobileHud.css";
+import "./trade.css";
 import "./application.css";
 import "./mobileMenu.css";
 import "./view/celebration.css";

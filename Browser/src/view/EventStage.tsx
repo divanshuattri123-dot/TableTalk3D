@@ -13,6 +13,7 @@ import { GROUP_COLORS } from "./palette";
 import RollReadout from './RollReadout';
 import {rollDice} from '../network/random';
 import TapDice from './TapDice';
+import { MinimiseTrade, ReopenTrade } from "./TradeViewToggle";
 
 const money = formatRupees;
 const tradeNotes = {
@@ -90,16 +91,27 @@ function MortgageDecision({game,localId,sendAction,loanTools}:{game:GameState;lo
   </section></div>;
 }
 
-export default function EventStage({ game, frame, busy, localId, sendAction, onCardRead, financeTools, counterTools, loanTools }: {
+type EventStageProps = {
   game: GameState; frame?: PresentationFrame; busy: boolean; localId: string; sendAction: (action: GameAction) => boolean | void;
   onCardRead: (id: string) => void;
   financeTools?: ReactNode;
+  financeTradeMinimised?: boolean;
   loanTools?: ReactNode;
-  counterTools?: () => ReactNode;
-}) {
+  counterTools?: ReactNode;
+};
+
+export default function EventStage(props: EventStageProps) {
+  const { game, frame, busy, localId, sendAction, counterTools, loanTools } = props;
+  const trade = game.pendingTrade;
+  return <>
+    <EventPresentation {...props} />
+    {trade && <PendingTrade game={game} trade={trade} localId={localId} sendAction={sendAction}
+      visible={!busy && frame?.kind !== "card" && frame?.kind !== "dice"} counterTools={counterTools} loanTools={loanTools} />}
+  </>;
+}
+
+function EventPresentation({ game, frame, busy, localId, sendAction, onCardRead, financeTools, financeTradeMinimised, loanTools }: EventStageProps) {
   const [bid, setBid] = useState("");
-  const [counterOpen,setCounterOpen]=useState(false);
-  useEffect(()=>setCounterOpen(false),[game.pendingTrade?.id]);
   const [buildTarget,setBuildTarget]=useState("");
   useEffect(() => {
     setBid("");
@@ -117,7 +129,7 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
   if(game.phase === "awaitingMortgageDecision" && !busy)return <MortgageDecision key={game.mortgageTransfers![0]!.playerId+":"+game.mortgageTransfers![0]!.propertyIds.join(",")} game={game} localId={localId} sendAction={sendAction} loanTools={loanTools}/>;
   if(game.phase === "awaitingUtilityRoll" && !busy) {
     const rent=game.pendingUtility!, tile=getPurchasableTile(rent.propertyId, game.boardSize, game.city)!;
-    return <div className="event-backdrop"><section className="utility-stage" role="dialog" aria-modal="true" aria-label="Utility rent roll"><p className="eyebrow">Classic · utility rent</p><h1>{tile.name}</h1><p>{current?.name} must roll two fresh dice. Rent is <b>{rent.multiplier} × the total</b>. This roll never moves the token or earns an extra turn.</p>{acting?<TapDice utility onThrow={()=>sendAction({type:"ROLL",playerId:localId,dice:rollDice()})}/>:<p>Waiting for {current?.name} to roll for rent.</p>}{financeTools}{loanTools}</section></div>;
+    return <div className="event-backdrop" hidden={financeTradeMinimised}><section className="utility-stage" role="dialog" aria-modal="true" aria-label="Utility rent roll"><p className="eyebrow">Classic · utility rent</p><h1>{tile.name}</h1><p>{current?.name} must roll two fresh dice. Rent is <b>{rent.multiplier} × the total</b>. This roll never moves the token or earns an extra turn.</p>{acting?<TapDice utility onThrow={()=>sendAction({type:"ROLL",playerId:localId,dice:rollDice()})}/>:<p>Waiting for {current?.name} to roll for rent.</p>}{financeTools}{loanTools}</section></div>;
   }
   if (auction && !game.pendingTrade && (!busy||frame?.kind==='bid'||frame?.kind==='sold') && (game.phase === "awaitingAuction" || frame?.kind === "sold")) {
     const sold = frame?.kind === "sold", winner = game.players.find(p => p.id === (sold ? frame.playerId : auction.highestBidderId));
@@ -134,7 +146,7 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
     const doBid = (amount: number) => {
       if (sendAction({ type: "AUCTION_BID", playerId: localId, auctionId: auction.id, amount, ...(building ? { propertyId: chosenTarget } : {}) }) !== false) setBid("");
     };
-    return <div className="event-backdrop auction-backdrop" style={{ "--auction-color": tile?.kind === "property" ? GROUP_COLORS[tile.group] : "#7695a8" } as CSSProperties}>
+    return <div className="event-backdrop auction-backdrop" hidden={financeTradeMinimised} style={{ "--auction-color": tile?.kind === "property" ? GROUP_COLORS[tile.group] : "#7695a8" } as CSSProperties}>
       <section className={`auction-stage ${sold ? "is-sold" : ""}`} role="dialog" aria-modal="true" aria-label="Live property auction">
         <header className="auction-heading"><span>{auction.seizedFromId ? "CITY SEIZURE AUCTION" : `LIVE ${building ? auction.kind?.toUpperCase() : "PROPERTY"} AUCTION`}</span><h1>{sold ? "SOLD!" : building?`Who wants the last ${auction.kind}?`:"Who wants the deed?"}</h1><p>{sold ? frame.text : usesClassicRules(game)?"Opens at ₹10. Higher bids reopen bidding to previous passers.":"Bid higher, or pass. The last bidder wins."}</p></header>
         <div className="auctioneer"><div className="auction-speech" key={frame?.id ?? auction.currentBid}>{sold ? `${winner?.name} takes it!` : frame?.kind === "bid" ? frame.text : auction.currentBid ? `${money(auction.currentBid)}. Any higher?` : "Let’s open the bidding!"}</div><Character pose={sold ? "sold" : "waiting"} /><Character pose="hammer" className={frame?.kind === "bid" || sold ? "auction-hammer striking" : "auction-hammer"} /></div>
@@ -153,16 +165,12 @@ export default function EventStage({ game, frame, busy, localId, sendAction, onC
   }
   if (game.pendingPurchase && !game.pendingTrade && game.phase === "awaitingBuy" && !busy) {
     const position = game.pendingPurchase.propertyId, tile = getPurchasableTile(position, game.boardSize, game.city)!;
-    return <div className="event-backdrop purchase-backdrop"><section className="purchase-stage" role="dialog" aria-modal="true" aria-label={`Purchase ${tile.name}`}>
+    return <div className="event-backdrop purchase-backdrop" hidden={financeTradeMinimised}><section className="purchase-stage" role="dialog" aria-modal="true" aria-label={`Purchase ${tile.name}`}>
       <div className="sale-intro"><p className="event-ribbon" style={{ background: current?.color }}>FOR SALE</p><h1>{tile.name}</h1><p>{current?.name} landed here.</p><Character pose="presenting" /></div><TitleDeed game={game} position={position} />
       <div className="sale-actions"><p>Bank price<strong>{money(tile.price)}</strong></p>{acting ? <><button className="event-primary" type="button" disabled={(me?.cash ?? 0) < tile.price} onClick={() => sendAction({ type: "BUY", playerId: localId, propertyId: position })}>Buy property</button><button className="event-secondary" type="button" onClick={() => sendAction({ type: "DECLINE_BUY", playerId: localId })}>Start auction</button><small>Your cash: {money(me?.cash ?? 0)}<br />Declining opens bidding to everybody.</small></> : <p className="auction-waiting">Waiting for {current?.name} to buy or auction.</p>}{financeTools}{loanTools}</div>
     </section></div>;
   }
-  if (game.pendingTrade && !busy) {
-    const trade = game.pendingTrade, from = game.players.find(p => p.id === trade.fromPlayerId)!, to = game.players.find(p => p.id === trade.toPlayerId)!;
-    if (counterOpen && localId === to.id && counterTools) return <div className="finance-backdrop"><section className="finance-sheet counter-offer-sheet" role="dialog" aria-modal="true" aria-label="Write a counter-offer"><header><h2>Your counter-offer</h2><button type="button" aria-label="Cancel counter-offer" onClick={()=>setCounterOpen(false)}>×</button></header><p>Edit what you give and receive. Nothing changes hands until the other player accepts.</p>{counterTools()}{loanTools}</section></div>;
-return <div className="event-backdrop trade-backdrop"><section className="trade-stage" role="dialog" aria-modal="true" aria-label="Trade offer"><h1>{trade.counterOfId ? "A counter-offer." : "Let’s make a deal."}</h1><p>{from.name} made an offer to {to.name}.</p>{from.bot && trade.botNote && tradeNotes[trade.botNote] && <p>“{tradeNotes[trade.botNote]}”</p>}<div className="trade-comparison">{[{ player: from, cash: trade.offeredCash, deeds: trade.offeredPropertyIds, cards:trade.offeredJailCards }, { player: to, cash: trade.requestedCash, deeds: trade.requestedPropertyIds, cards:trade.requestedJailCards }].map(side => <article key={side.player.id} style={{ "--player-color": side.player.color } as CSSProperties}><PlayerPortrait player={side.player} /><h2>{side.player.name} gives</h2><strong>{money(side.cash)}</strong><ul>{side.deeds.length ? side.deeds.map(id => <li key={id}>{getTile(id, game.boardSize, game.city).name}{game.properties[id]!.mortgaged?" · mortgaged":""}</li>) : <li>No properties</li>}{side.cards?.map(deck=><li key={deck}>{deck==="chance"?"Chance":"Community Chest"} release card</li>)}</ul></article>)}</div>{usesClassicRules(game) && <p>{game.rulesEdition === "hasbro-2025" ? "Received mortgages may be kept at no immediate cost, or redeemed for principal + 10%." : "Received mortgages require an immediate 10% interest or principal + 10% redemption decision after acceptance."}</p>}{localId === to.id ? <div className="trade-decision"><button className="event-primary" type="button" onClick={() => sendAction({ type: "TRADE_ACCEPT", playerId: localId, offerId: trade.id })}>Accept deal</button><button className="event-secondary" type="button" onClick={() => sendAction({ type: "TRADE_DECLINE", playerId: localId, offerId: trade.id })}>Decline</button>{counterTools && <button className="event-secondary" type="button" onClick={()=>setCounterOpen(true)}>Counter offer</button>}</div> : localId === from.id ? <div className="trade-decision"><p>Waiting for {to.name}’s decision.</p><button className="event-secondary" type="button" onClick={() => sendAction({ type: "TRADE_DECLINE", playerId: localId, offerId: trade.id })}>Withdraw offer</button></div> : <p>Waiting for {to.name}’s decision.</p>}{loanTools}</section></div>;
-  }
+  if (game.pendingTrade && !busy) return null;
   if (!frame) return null;
   if (frame.kind === "set") return <div className="motion-event colour-set-event" key={frame.id} style={{ "--event-color": eventColor } as CSSProperties} aria-live="polite">
     <div className="motion-banner">{actor && <PlayerPortrait player={actor} />}<div><small>COMPLETE COLOUR SET</small><strong>{frame.text}</strong></div></div>
@@ -177,4 +185,66 @@ return <div className="event-backdrop trade-backdrop"><section className="trade-
     {frame.kind === "money" && <div className="money-burst"><strong>{money(frame.amount ?? 0)}</strong>{Array.from({ length: 12 }, (_, i) => <i key={i} style={{ "--coin": i } as CSSProperties}>₹</i>)}</div>}
     {frame.kind === "winner" && <div className="winner-sparkles">{Array.from({ length: 30 }, (_, i) => <i key={i} style={{ "--coin": i } as CSSProperties} />)}</div>}
   </div>;
+}
+
+function PendingTrade({ game, trade, localId, sendAction, visible, counterTools, loanTools }: {
+  game: GameState; trade: NonNullable<GameState["pendingTrade"]>; localId: string;
+  sendAction: EventStageProps["sendAction"]; visible: boolean; counterTools?: ReactNode; loanTools?: ReactNode;
+}) {
+  const [minimised, setMinimised] = useState(false);
+  const [counterId, setCounterId] = useState<string>();
+  const from = game.players.find(player => player.id === trade.fromPlayerId);
+  const to = game.players.find(player => player.id === trade.toPlayerId);
+  if (!from || !to) return null;
+
+  const writingCounter = counterId === trade.id && localId === to.id && Boolean(counterTools);
+  const hidden = !visible || minimised;
+  const minimise = () => setMinimised(true);
+  const sides = [
+    { player: from, cash: trade.offeredCash, deeds: trade.offeredPropertyIds, cards: trade.offeredJailCards },
+    { player: to, cash: trade.requestedCash, deeds: trade.requestedPropertyIds, cards: trade.requestedJailCards }
+  ];
+
+  return <>
+    {writingCounter ? <div className="finance-backdrop" hidden={hidden}>
+      <section className="finance-sheet counter-offer-sheet" role="dialog" aria-modal="true" aria-label="Write a counter-offer">
+        <header>
+          <h2>Your counter-offer</h2>
+          <div className="trade-view-actions">
+            <MinimiseTrade onClick={minimise} />
+            <button type="button" aria-label="Cancel counter-offer" onClick={() => setCounterId(undefined)}>×</button>
+          </div>
+        </header>
+        <p>Edit what you give and receive. Nothing changes hands until the other player accepts.</p>
+        {counterTools}{loanTools}
+      </section>
+    </div> : <div className="event-backdrop trade-backdrop" hidden={hidden}>
+      <section className="trade-stage" role="dialog" aria-modal="true" aria-label="Trade offer">
+        <header className="trade-offer-heading">
+          <h1>{trade.counterOfId ? "A counter-offer." : "Let’s make a deal."}</h1>
+          <MinimiseTrade onClick={minimise} />
+        </header>
+        <p>{from.name} made an offer to {to.name}.</p>
+        {from.bot && trade.botNote && tradeNotes[trade.botNote] && <p>“{tradeNotes[trade.botNote]}”</p>}
+        <div className="trade-comparison">{sides.map(side => <article key={side.player.id} style={{ "--player-color": side.player.color } as CSSProperties}>
+          <PlayerPortrait player={side.player} /><h2>{side.player.name} gives</h2><strong>{money(side.cash)}</strong>
+          <ul>
+            {side.deeds.length ? side.deeds.map(id => <li key={id}>{getTile(id, game.boardSize, game.city).name}{game.properties[id]?.mortgaged ? " · mortgaged" : ""}</li>) : <li>No properties</li>}
+            {side.cards?.map(deck => <li key={deck}>{deck === "chance" ? "Chance" : "Community Chest"} release card</li>)}
+          </ul>
+        </article>)}</div>
+        {usesClassicRules(game) && <p>{game.rulesEdition === "hasbro-2025" ? "Received mortgages may be kept at no immediate cost, or redeemed for principal + 10%." : "Received mortgages require an immediate 10% interest or principal + 10% redemption decision after acceptance."}</p>}
+        {localId === to.id ? <div className="trade-decision">
+          <button className="event-primary" type="button" onClick={() => sendAction({ type: "TRADE_ACCEPT", playerId: localId, offerId: trade.id })}>Accept deal</button>
+          <button className="event-secondary" type="button" onClick={() => sendAction({ type: "TRADE_DECLINE", playerId: localId, offerId: trade.id })}>Decline</button>
+          {counterTools && <button className="event-secondary" type="button" onClick={() => setCounterId(trade.id)}>Counter offer</button>}
+        </div> : localId === from.id ? <div className="trade-decision">
+          <p>Waiting for {to.name}’s decision.</p>
+          <button className="event-secondary" type="button" onClick={() => sendAction({ type: "TRADE_DECLINE", playerId: localId, offerId: trade.id })}>Withdraw offer</button>
+        </div> : <p>Waiting for {to.name}’s decision.</p>}
+        {loanTools}
+      </section>
+    </div>}
+    {visible && minimised && <ReopenTrade label={writingCounter ? "Reopen counter-offer" : "Reopen trade"} onClick={() => setMinimised(false)} />}
+  </>;
 }
