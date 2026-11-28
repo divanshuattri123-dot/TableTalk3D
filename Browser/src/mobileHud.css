@@ -69,7 +69,6 @@
 .immersive-game.touch-table .hud-drawer-backdrop { padding: max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); }
 .immersive-game.touch-table .game-menu-drawer { width: min(480px,100%); padding: 16px; }
 .immersive-game.touch-table .hud-drawer > header button { min-height: 44px; min-width: 44px; }
-.immersive-game.touch-table .hud-drawer .event-log { display: block; }
 .immersive-game.touch-table .preferences-surface { display: grid; place-items: center; position: fixed; z-index: 75; inset: 0; padding: 12px; background: #253f3b88; backdrop-filter: blur(3px); }
 .immersive-game.touch-table .table-preferences { position: static; inset: auto; width: min(560px,100%); max-height: calc(100dvh - 24px); margin: 0; padding: 16px; }
 .immersive-game.touch-table .table-preferences select { font-size: 16px; }

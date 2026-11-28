@@ -112,7 +112,7 @@ body.in-game { overflow: hidden; overscroll-behavior: none; }
 .immersive-game .table-preferences p { color: #6b7859; }
 .settings-log { grid-column: 1 / -1; }
 .settings-log summary { min-height: 44px; padding: 11px 12px; cursor: pointer; border-radius: 8px; background: #edf0dc; font-weight: 800; }
-.settings-log .event-log { max-height: 190px; padding: 0 4px; }
+.settings-log .event-log { display: block; max-height: 190px; padding: 0 4px; background: transparent; border: 0; box-shadow: none; }
 .immersive-game .side-rail { position: absolute; z-index: 15; left: 50%; right: auto; bottom: max(20px, env(safe-area-inset-bottom)); top: auto; transform: translateX(-50%); display: block; width: min(580px, calc(100% - 40px)); height: auto; max-height: none; margin: 0; padding: 0; overflow: visible; pointer-events: none; }
 .immersive-game .side-rail > * { pointer-events: auto; }
 .immersive-game .side-rail > .controls-panel { position: relative; inset: auto; display: grid; grid-template-columns: 138px 1fr; gap: 7px 12px; width: 100%; max-height: none; overflow: visible; margin: 0; padding: 13px 16px; background: #fffaf0f5; border: 1px solid #ffffff; border-top: 4px solid var(--seat-color); border-radius: 17px; box-shadow: 0 5px 0 #4c624e66, 0 14px 34px #253c3b40; }
