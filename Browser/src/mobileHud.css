@@ -49,13 +49,12 @@
 .immersive-game.touch-table .desktop-hud-navigation, .immersive-game.touch-table .game-header .wordmark,
 .immersive-game.touch-table .connection-pill, .immersive-game.touch-table .table-toolbar,
 .immersive-game.touch-table .touch-guide, .immersive-game.touch-table .landing-ribbon, .immersive-game.touch-table .table-caption,
-.immersive-game.touch-table .my-piece-strip, .immersive-game.touch-table .desktop-play-help { display: none; }
+.immersive-game.touch-table .desktop-play-help { display: none; }
 .immersive-game.touch-table:not([data-phase="lobby"]) .room-ticket { display: none; }
 .immersive-game.touch-table .game-header { justify-content: flex-end; pointer-events: none; }
 .immersive-game.touch-table[data-phase="lobby"] .game-header { justify-content: space-between; }
 .immersive-game.touch-table .game-header > * { pointer-events: auto; }
-.immersive-game.touch-table .mobile-menu-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 82px; min-height: 44px; padding: 8px 12px; border: 1px solid #fffef0; border-radius: 12px; color: #294e38; background: #fffaf0f2; box-shadow: 0 3px 10px #2e4b3426; font: 800 13px "Trebuchet MS",sans-serif; }
-.immersive-game.touch-table .play-turn-banner { top: max(10px,env(safe-area-inset-top)); left: max(10px,env(safe-area-inset-left)); width: min(260px,calc(100% - 120px)); min-height: 44px; padding: 7px 10px; }
+.immersive-game.touch-table .play-turn-banner { top: max(10px,env(safe-area-inset-top)); left: max(10px,env(safe-area-inset-left)); max-width: min(210px, calc(100% - 110px)); min-height: 38px; padding: 5px 8px; }
 .immersive-game.touch-table[data-phase="lobby"] .play-turn-banner { display: none; }
 .immersive-game.touch-table .lobby-panel .text-input { width: 100%; min-width: 0; padding: 8px; font-size: 16px; color: #2e503b; background: #f3f3e7; border-color: #b8c9ac; }
 .immersive-game.touch-table .lobby-panel .primary-button { position: static; }
@@ -85,7 +84,8 @@
   .welcome-shell .colour-room-status, .welcome-shell .inline-error { grid-column: 1 / -1; }
 }
 @media (pointer: coarse) and (orientation: landscape) and (max-width: 600px) {
-  .immersive-game .side-rail, .immersive-game .live-seats, .immersive-game .play-turn-banner { width: 145px; }
+  .immersive-game .side-rail, .immersive-game .live-seats { width: 145px; }
+  .immersive-game.touch-table .play-turn-banner { max-width: 145px; }
 }
 .deed-row .deed-rule-note { display:block; max-width:30rem; margin-top:5px; white-space:normal; font-size:.78rem; line-height:1.35; color:#516c61; }
 .unity-loading button { min-width:150px; min-height:44px; padding:10px 18px; border:1px solid #739d89; border-radius:14px; background:#1c5442; color:#fffdf1; font-family:inherit; font-weight:700; font-size:16px; line-height:1.2; cursor:pointer; }

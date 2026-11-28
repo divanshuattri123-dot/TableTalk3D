@@ -82,7 +82,7 @@
 .immersive-game.mobile-lobby-mode .game-header { justify-content:space-between; }
 .mobile-lobby-back { pointer-events:auto; }
 .mobile-lobby-mode .room-ticket > span,.mobile-lobby-mode .room-ticket > button { display:none; }
-.mobile-lobby-mode .game-header .mobile-menu-trigger { box-shadow:0 3px #ae192d; border:1px solid #e7eaeb; border-radius:24px; color:#354953; }
+.mobile-lobby-mode .game-header .game-menu-trigger { box-shadow:0 3px #ae192d; border:1px solid #e7eaeb; border-radius:24px; color:#354953; }
 .mobile-lobby-mode .game-layout { display:block; height:100dvh; padding:0; }
 .mobile-lobby-content { display:grid; grid-template-rows:auto minmax(130px,1fr) auto; gap:12px; min-height:100dvh; padding:80px max(18px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left)); }
 .mobile-lobby-title { position:fixed; z-index:46; top:12px; left:50%; transform:translateX(-50%); color:white; text-align:center; pointer-events:none; }

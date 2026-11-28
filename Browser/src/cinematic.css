@@ -12,7 +12,7 @@
 .unity-loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 25px; text-align: center; background: #cfe8d9; color: #284137; }
 .unity-loading h2, .unity-loading p { margin: 0; }.unity-loading progress { width: min(300px, 80%); accent-color: #e33248; height: 12px; }.unity-loading small { max-width: 320px; color: #547561; }
 .landing-ribbon { flex-shrink: 0; padding: 9px 3px 4px; min-height: 53px; border: 0; }.landing-ribbon small { color: #557461; }.landing-ribbon b { color: #253e32; }.landing-ribbon span { color: #577362; }.landing-ribbon button { background: #fffdf3; color: #284d3a; border-color: #a7c0aa; }
-.table-caption, .my-piece-strip { display: none; }.side-rail { max-height: 100%; padding: 0 2px 8px; scrollbar-color: #b1c9b8 transparent; }.side-rail > .turn-status { display: none; }
+.table-caption { display: none; }.side-rail { max-height: 100%; padding: 0 2px 8px; scrollbar-color: #b1c9b8 transparent; }.side-rail > .turn-status { display: none; }
 .side-rail .controls-panel, .side-rail .lobby-panel, .side-rail .event-log { color: #2c4639; background: #f6f8ee; border-color: #adc9b5; border-radius: 11px; box-shadow: 0 4px 0 #bdd1bd; }
 .side-rail .eyebrow, .side-rail .hand-heading b { color: #ba3041; }.side-rail .hand-heading span, .side-rail .net-worth-line, .side-rail .waiting-note, .side-rail .event-log li { color: #5a7365; }.side-rail .player-roster { order: 0; }
 .side-rail .lobby-panel h2 { color: #2c4939; }.lobby-panel .map-size-note { background: #e0ebd9; border-color: #abc0a5; }.lobby-panel .map-size-note b { color: #4f7347; }.lobby-panel .map-size-note span, .lobby-panel .map-size-note small { color: #6b8160; }

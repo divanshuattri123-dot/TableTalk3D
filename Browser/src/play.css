@@ -32,8 +32,6 @@
 .table-caption { display: flex; justify-content: flex-start; padding: 9px 0; }
 .tile-jump { min-width: 0; width: 100%; max-width: none; }
 .tile-jump select { min-height: 36px; font-size: .7rem; }
-.my-piece-strip { border-top: 0; padding-top: 0; gap: 5px 15px; }
-.my-piece-strip button { min-height: 32px; font-size: .65rem; }
 .side-rail { display: flex; flex-direction: column; gap: 10px; max-height: calc(100svh - 80px); overflow: auto; padding: 1px 5px 12px 0; scrollbar-width: thin; scrollbar-color: #456373 transparent; }
 .side-rail > * { flex-shrink: 0; }
 .turn-status { order: 0; display: block; padding: 12px 15px; }
@@ -75,7 +73,6 @@
   .landing-ribbon b { font-size: 1rem; }
   .landing-ribbon button { font-size: .6rem; padding: 8px; }
   .table-caption { padding: 8px 0 4px; }
-  .my-piece-strip { display: none; }
   .side-rail { width: 100%; max-height: none; overflow: visible; padding: 0; }
   .side-rail > .turn-status { display: none; }
   .side-rail > .controls-panel { position: fixed; left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); width: auto; z-index: 20; padding: 12px; max-height: 48svh; overflow: auto; border: 1px solid #486575; border-top: 3px solid var(--seat-color); box-shadow: 0 -5px 30px #071322aa; border-radius: 10px; }
@@ -128,7 +125,7 @@
   .scene-tools { position: fixed; left: calc(100svh + 12px); right: 8px; bottom: 6px; z-index: 8; border-radius: 6px; }
   .landing-ribbon { position: fixed; top: 92px; left: calc(100svh + 12px); right: 10px; min-height: 60px; padding: 8px; border: 1px solid #496b6b; border-radius: 6px; background: #1a303e; }
   .landing-ribbon b { font-size: .9rem; }.landing-ribbon span { font-size: .65rem; }
-  .table-caption, .my-piece-strip { display: none; }
+  .table-caption { display: none; }
   .side-rail { margin-top: 164px; height: calc(100svh - 214px); overflow: auto; max-height: none; padding: 0 5px 4px 0; gap: 8px; }
   .side-rail > .controls-panel { position: static; width: auto; max-height: none; overflow: visible; flex-shrink: 0; padding: 10px; box-shadow: none; border-radius: 6px; }
   .side-rail > .turn-status, .event-log { display: none; }

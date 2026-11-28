@@ -9,7 +9,7 @@ const render = (patch: Partial<ViewSettings> = {}) => renderToStaticMarkup(creat
 
 it("keeps pre-game settings and appearance inside a named closeable menu", () => {
   const html = render();
-  for (const text of ['role="dialog"', 'aria-modal="true"', 'aria-label="Close game menu"', "Game menu", "Settings", "Change token", "Change dice"]) expect(html).toContain(text);
+  for (const text of ['role="dialog"', 'aria-modal="true"', 'aria-label="Close game menu"', "Game menu", "Settings", "Select pieces", "Change dice"]) expect(html).toContain(text);
   expect(html).not.toMatch(/Explore|Browse all|model-preview|ROLL|Zoom|End turn/);
 });
 it("shows the existing personal graphics, board and sound choices", () => {

@@ -28,7 +28,7 @@ export function WelcomeMenuPanel({ settings, onUpdate, onCustomize, onClose }: M
         <label className="welcome-sound-setting"><input type="checkbox" checked={settings.sound} onChange={event => onUpdate({ sound: event.target.checked })} />Game sounds</label>
         <label>Volume<input type="range" min="0" max="1" step="0.05" value={settings.volume} onChange={event => onUpdate({ volume: Number(event.target.value) })} /></label>
       </fieldset>
-      <div className="welcome-menu-appearance"><button type="button" onClick={() => onCustomize("token")}>Change token</button><button type="button" onClick={() => onCustomize("dice")}>Change dice</button></div>
+      <div className="welcome-menu-appearance"><button type="button" onClick={() => onCustomize("token")}>Select pieces</button><button type="button" onClick={() => onCustomize("dice")}>Change dice</button></div>
       <p>Your settings apply when you enter a table. They do not change anyone else’s view.</p>
       <button type="button" className="publisher-link" onClick={publisher.openPrivacy}>Privacy &amp; support</button>
     </section>
