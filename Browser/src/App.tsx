@@ -476,7 +476,7 @@ function GameRoom({ session, onLeave, onChooseColor,preferredMap }: { session: S
       <section className="game-layout">
         {mobileLobby ? <MobileLobby configuringMap={configuringMap} game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} onCopy={copyRoomLink} copied={copied} colorPicker={<TokenColorPicker color={me?.color ?? session.player.color} players={game.players} localId={session.player.id} onChoose={color=>sendAction({type:'SET_APPEARANCE',playerId:session.player.id,color})}/>}/> : <BoardStage diceEnabled={isCurrent&&game.phase==="awaitingRoll"&&!diceToolsOpen&&!drawer&&!tablePanel&&!cityOpen&&!wheelDialog} onWheel={openWheel} onThrow={()=>{if(isCurrent&&me&&game.phase==="awaitingRoll")sendAction({type:"ROLL",playerId:me.id,dice:dice()});}} panel={tablePanel} onPanelChange={setTablePanel} onLeave={onLeave} game={game} shown={motion.shown ?? game} target={motion.target ?? game} frame={motion.frame} syncVersion={motion.syncVersion} onComplete={motion.complete} onReady={setUnityReady} onPlayable={setSceneUsable} localId={session.player.id} sendAction={sendAction} render2D={(onSelect) => <Board game={motion.shown ?? game} current={current} onSelect={onSelect} />} />}
         {game.phase !== "lobby" && <div className="live-seats" aria-label="Live player balances">{game.players.map(player => <button type="button" key={player.id} className={`${player.id === decisionPlayerId(game) ? "seat-active" : ""} ${player.bankrupt ? "seat-out" : ""}`} style={{ "--player-color": player.color } as CSSProperties} onClick={() => setDrawer("players")}><PlayerPortrait player={player} /><span><b>{player.name}{player.id === session.player.id ? " · you" : ""}</b><strong>{player.bankrupt ? "Out" : `${game.mayor && player.id !== session.player.id ? "≈" : ""}${formatMoney(player.cash)}`}</strong>{player.id === game.mayor?.mayorId && <small className="seat-mayor">Mayor</small>}{player.id === speakerId && <small className="seat-speaker">Speaker</small>}{player.inJail && <small>In jail</small>}</span></button>)}</div>}
-        {!mobileLobby && <aside className="side-rail" aria-label="Game controls and status">
+        {!mobileLobby && <aside className="side-rail" aria-label="Game controls and status" hidden={financeTradeMinimised}>
           {game.phase === "lobby" ? (
             <Lobby configuringMap={configuringMap} game={game} localId={session.player.id} isHost={isHost} sendAction={sendAction} />
           ) : (
@@ -705,7 +705,7 @@ function Controls({
   );
 
   return (
-    <section className="controls-panel" style={{ "--seat-color": local.color } as CSSProperties}>
+    <section className="controls-panel" data-trade-minimised={tradeMinimised || undefined} style={{ "--seat-color": local.color } as CSSProperties}>
       {presenting && <p className="animation-wait" role="status">Playing the table event…</p>}
       <div className="hand-heading"><b>{settling ? "Debt must be settled" : isCurrent ? "Your turn" : game.phase === "awaitingAuction" ? "Auction open" : game.pendingTrade?.toPlayerId === local.id ? "Trade offer for you" : "Watching the table"}</b><span>{local.name} · {formatMoney(local.cash)}</span></div>
       <p className="eyebrow">Your hand</p>

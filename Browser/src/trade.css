@@ -1,4 +1,6 @@
-.trade-backdrop[hidden], .finance-backdrop[hidden], .event-backdrop[hidden], .tool-sheet[hidden] { display: none; }
+.finance-backdrop[hidden], .event-backdrop[hidden], .tool-sheet[hidden],
+.immersive-game .side-rail[hidden], .immersive-game[data-phase="awaitingTradeResponse"] .side-rail,
+.immersive-game .side-rail > .controls-panel[data-trade-minimised] { display: none; }
 .trade-view-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .trade-offer-heading { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
 .trade-offer-heading h1 { grid-column: 2; }
