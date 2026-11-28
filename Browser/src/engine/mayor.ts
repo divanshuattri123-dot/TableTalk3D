@@ -194,6 +194,11 @@ export function trainOffer(state: GameState, playerId: string) {
 const maskedTaxPaid = (seat?: CitySeat) =>
   (seat?.privateTaxPaid ?? 0) + (seat?.bills.reduce((sum, bill) => sum + (bill.status === "paid" ? bill.amount : 0), 0) ?? 0);
 
+export function cityPublicCash(state: GameState, player: Player) {
+  const masked = maskedTaxPaid(state.mayor?.seats[player.id]);
+  return masked ? roundRupees(player.cash + masked) : player.cash;
+}
+
 export function cityLoanAvailable(state: GameState, playerId: string) {
   const desk = state.mayor;
   const player = state.players.find(candidate => candidate.id === playerId);
@@ -463,8 +468,8 @@ export function projectCityState(state: GameState, seatId?: string): GameState {
   }
   const players = state.players.map(player => {
     if (player.id === seatId) return player;
-    const unposted = maskedTaxPaid(desk.seats[player.id]);
-    return unposted ? { ...player, cash: roundRupees(player.cash + unposted) } : player;
+    const publicCash = cityPublicCash(state, player);
+    return publicCash === player.cash ? player : { ...player, cash: publicCash };
   });
   return {
     ...state, players,

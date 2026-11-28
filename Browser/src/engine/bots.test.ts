@@ -1,6 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {createInitialState,reduceGame} from './reducer';
 import {nextBotAction,botStyle} from './bots';
+import {TRAINED_PRO} from './proStrategy';
 import {PLAYER_COLORS} from './playerColors';
 import {boardSizeForPlayers} from './board';
 import {makeStartAction} from '../network/startAction';
@@ -76,6 +77,56 @@ describe('AI decisions obey ordinary rules',()=>{
     const agreed = apply(next, {type:'TRADE_ACCEPT',playerId:'p0',offerId:second.offerId});
     expect(agreed.properties[3]?.ownerId).toBe('p0');
     expect(bot(agreed).cash).toBe(bot(pro).cash+second.requestedCash);
+  });
+
+  it('protects cash from a nearby hotel even when the same purchase would be affordable on a quiet board', () => {
+    const s = started('classic');
+    s.phase = 'awaitingBuy';
+    s.pendingPurchase = { playerId: 'ai-1', propertyId: 8 };
+    bot(s).botLevel = 'pro';
+    bot(s).position = 8;
+    bot(s).cash = 340;
+    expect(decision(s).type).toBe('BUY');
+    s.properties[16] = {ownerId:'p0', houses:5, mortgaged:false};
+    expect(decision(s).type).toBe('DECLINE_BUY');
+  });
+
+  it('can finance the final deed of a district with a low-value mortgage', () => {
+    let s = started('classic');
+    s.phase = 'awaitingBuy';
+    s.pendingPurchase = { playerId: 'ai-1', propertyId: 3 };
+    bot(s).botLevel = 'pro';
+    bot(s).position = 3;
+    bot(s).cash = 55;
+    for (const id of [1,12]) s.properties[id]!.ownerId = 'ai-1';
+    expect(decision(s)).toMatchObject({type:'MORTGAGE',propertyId:12,mortgage:true});
+    s = apply(s, decision(s));
+    expect(decision(s)).toMatchObject({type:'BUY',propertyId:3});
+  });
+
+  it('prefers a third house over redeeming a low-yield mortgage', () => {
+    const s = started('classic');
+    s.phase = 'awaitingEndTurn';
+    bot(s).botLevel = 'pro';
+    s.properties[12] = {ownerId:'ai-1',houses:0,mortgaged:true};
+    for (const id of [1,3]) s.properties[id] = {ownerId:'ai-1',houses:2,mortgaged:false};
+    expect(decision(s)).toMatchObject({type:'BUILD',operation:'build'});
+  });
+
+  it('reinvests a low-yield deed in a third house when opponents are approaching', () => {
+    let s = started('classic');
+    s.phase = 'awaitingEndTurn';
+    bot(s).botLevel = 'pro';
+    bot(s).position = 20;
+    bot(s).cash = 80;
+    s.players[0]!.position = 36;
+    for (const id of [1,3]) s.properties[id] = {ownerId:'ai-1',houses:2,mortgaged:false};
+    s.properties[12] = {ownerId:'ai-1',houses:0,mortgaged:false};
+    const profile = () => ({...TRAINED_PRO, financeBuilds:true});
+    const action = nextBotAction(s,[1,2],profile);
+    expect(action).toMatchObject({type:'MORTGAGE',propertyId:12,mortgage:true});
+    s = apply(s, action!);
+    expect(nextBotAction(s,[1,2],profile)).toMatchObject({type:'BUILD',operation:'build'});
   });
 
   it('bids or passes but waits when a human is the only remaining responder',()=>{

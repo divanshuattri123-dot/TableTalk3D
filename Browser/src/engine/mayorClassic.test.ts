@@ -181,6 +181,23 @@ describe("City Hall on the Classic table", () => {
     expect(s.mayor!.seats.p2!.rent).toBe(110);
   });
 
+  it("bridges a third house with an idle utility without immediately undoing the mortgage", () => {
+    let s = table();
+    s.phase = "awaitingEndTurn";
+    s.mayor!.mayorId = "p2";
+    s.mayor!.seats.p1!.contract = "build";
+    s.mayor!.seats.p1!.contractPaid = true;
+    s.players[0] = { ...s.players[0]!, bot: true, botLevel: "pro", position: 20, cash: 135 };
+    s.players[1]!.position = 36;
+    for (const id of [1,3]) s.properties[id] = { ownerId: "p1", houses: 2, mortgaged: false };
+    s.properties[12] = { ownerId: "p1", houses: 0, mortgaged: false };
+    const mortgage = nextBotAction(s);
+    expect(mortgage).toMatchObject({ type: "MORTGAGE", playerId: "p1", propertyId: 12, mortgage: true });
+    s = apply(s, mortgage!);
+    expect(s.players[0]!.cash).toBe(210);
+    expect(nextBotAction(s)).toMatchObject({ type: "BUILD", playerId: "p1", operation: "build" });
+  });
+
   it("taxes rent at 50%, 60%, and 70% across the three bands without a ₹200 cap", () => {
     expect([0, 50, 100, 150, 200, 300, 500].map(rent => cityTax(rent, true))).toEqual([0, 25, 50, 80, 110, 180, 320]);
     let state = table();
